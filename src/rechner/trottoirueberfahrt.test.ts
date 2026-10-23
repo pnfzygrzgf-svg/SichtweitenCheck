@@ -5,7 +5,7 @@
 // Phase Trottoir: D' = 3,00 m hinter dem hinteren Rand (Fahrersitz 0,50 m links), Gehlinie 0,50 m vor dem hinteren Trottoirrand.
 
 import { describe, expect, it } from 'vitest'
-import { wgs, type P } from '../geo'
+import { wgs, dist, imPolygon, type P } from '../geo'
 import type { OsmDaten, OsmWeg } from '../daten/osm'
 import type { AvFlaeche } from '../daten/av'
 import type { Hindernis } from './hindernisse'
@@ -369,5 +369,39 @@ describe('K0: Gehlinie vor dem hinteren Rand der Überfahrt, Abstand D\' – Geh
     const d = rechne(osm(), [fahrbahn], { zufahrt: '1:1:-1', eingaben: eg(TUE) })
     expect(d.trottoirueberfahrt!.durchgehend).toBe(true)
     expect(d.hinweise.join(' | ')).toContain('Ziffer 14.2')
+  })
+})
+
+describe('K0: Hauptstrasse mit Knick am Knoten (Review 2 von bb84cfd): Gehlinie nie auf der Fahrbahn', () => {
+  // Arm Ost gerade (y = 0), Arm West um 15° nach Süden abgeknickt: u = (−cos 15°; −sin 15°), Seite der Zufahrt n = (sin 15°; −cos 15°).
+  // Fahrbahn je Arm 6 m (±3 m), Trottoir je Arm 3 … 5 m auf der Seite der Zufahrt. Erwartung: Gehlinie je Arm 4,5 m neben seiner Achse
+  // (1,50 m hinter seinem Fahrbahnrand), kein Zielpunkt ab 5 m auf der Fahrbahn der Hauptstrasse, D' auf der Achse mindestens 3,50 m hinter der Gehlinie
+  const w = 15 * Math.PI / 180, u: P = [-Math.cos(w), -Math.sin(w)], nW: P = [Math.sin(w), -Math.cos(w)]
+  const pw = (s: number, t: number): P => lv(s * u[0] + t * nW[0], s * u[1] + t * nW[1])
+  const o: OsmDaten = { ...osm(), wege: [
+    weg(1, [[13, 200, 0], [12, 0, 0]], { highway: 'unclassified', name: 'Hauptstrasse', maxspeed: '30' }),
+    weg(3, [[12, 0, 0], [10, 200 * u[0], 200 * u[1]]], { highway: 'unclassified', name: 'Hauptstrasse', maxspeed: '30' }),
+    weg(2, [[12, 0, 0], [20, 0, -200]], { highway: 'residential', name: 'Nebenstrasse', maxspeed: '30' })] }
+  const fbOst = flaeche('Strasse_Weg', [lv(0, -3), lv(200, -3), lv(200, 3), lv(0, 3)])
+  const fbWest = flaeche('Strasse_Weg', [pw(-2, -3), pw(200, -3), pw(200, 3), pw(-2, 3)])
+  const fbNeben = flaeche('Strasse_Weg', [lv(-2.5, -1), lv(2.5, -1), lv(2.5, -200), lv(-2.5, -200)])
+  const trOst = flaeche('Trottoir', [lv(2.5, -5), lv(200, -5), lv(200, -3), lv(2.5, -3)])
+  const trWest = flaeche('Trottoir', [pw(5, 3), pw(200, 3), pw(200, 5), pw(5, 5)])
+  const strasse = [fbOst, fbWest, fbNeben]
+  it('Gehlinie 1,50 m hinter dem Fahrbahnrand je Arm, nicht auf der Fahrbahn; D\' mindestens 3,50 m dahinter', () => {
+    const e = rechne(o, [...strasse, trOst, trWest], { zufahrt: '2:0:1', eingaben: eg(TUE) })
+    const t = e.trottoirueberfahrt!
+    expect([t.breiteQuelle, t.breite]).toEqual(['av_neben', expect.closeTo(2, 2)])
+    const tp = e.trottoirPruefung!
+    const links = tp.richtungen.find(r => r.richtung === 'links')!
+    for (const p of links.sichtpunkte.slice(5)) {
+      // Fahrbahn der Hauptstrasse (die Einmündung selbst ist im Planungsfall Strasse in der AV)
+      expect([fbOst, fbWest].some(f => imPolygon(p, f.ringe)), `Zielpunkt ${rel(p)} auf der Fahrbahn`).toBe(false)
+      // Abstand zur Achse des Arms West: Projektion auf nW
+      const [x, y] = rel(p)
+      expect(x * nW[0] + y * nW[1]).toBeCloseTo(4.5, 1)
+    }
+    for (const r of tp.richtungen) expect(dist(tp.Dachse, r.K)).toBeGreaterThanOrEqual(3.5 - 0.05)
+    expect(tp.achseQuelle).toContain('nach links 0,50 m vor dem hinteren Rand der Überfahrt, 1,50 m hinter dem Fahrbahnrand')
   })
 })

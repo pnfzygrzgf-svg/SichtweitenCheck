@@ -249,7 +249,8 @@ entlang der Gehlinie). Breite der Überfahrt in dieser Reihenfolge (Ziffer 16): 
 Zufahrt, das schmalere angrenzende AV-Trottoir links bzw. rechts, begrenzt auf 2,00 bis 3,50 m (an vielen Einmündungen ist die Zufahrt in
 der AV durchgehend Strasse, der Planungsfall), sonst 2,00 m als Annahme. Hinterer Rand der Überfahrt beidseits gleich weit hinter dem
 Fahrbahnrand (Breite, bei einem AV-Trottoir hinter Radweg bzw. Grünstreifen plus dieser Vorlauf), auf der Zufahrtsachse Länge = Abstand /
-sin α; die Gehlinie beidseits 0,50 m vor diesem hinteren Rand der Überfahrt (D' 3,00 m dahinter, Abstand D' – Gehlinie also 3,50 m). Kurze Hinweise nur, wenn sie zutreffen: ausserorts (Ziffer 14.1), Zufahrt auf der durchgehenden
+sin α (Strasse in einer Kurve: Schnitt des hinteren Rands je Arm mit der Achse, der weitere); die Gehlinie je Arm 0,50 m vor diesem
+hinteren Rand, ab dem Fahrbahnrand des Arms (D' 3,00 m hinter dem Rand auf der Achse, Abstand D' – Gehlinie mindestens 3,50 m). Kurze Hinweise nur, wenn sie zutreffen: ausserorts (Ziffer 14.1), Zufahrt auf der durchgehenden
 Strasse (14.2), Tempo über 50 km/h (14.3.1), Winkel unter 45° bzw. über 135° (14.3.4), Velos auf dem Trottoir nach OSM (15.4.2). Ergebnis je Phase (Status, nicht erfüllte Teile) im Panel, auf der Karte (Band von der
 Bordkante zum hinteren Rand, Sichtdreiecke von D und D') und im Bericht. Die Gehlinie gilt nur in diesem Modus; Knoten und
 Grundstückzufahrten ohne Häkchen rechnen wie 0.5.0 (Trottoirachse, Nullpunkt an der Trottoirhinterkante). In der Stadt Bern (AV-Gemeinde
