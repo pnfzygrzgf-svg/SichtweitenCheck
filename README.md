@@ -238,6 +238,34 @@ Zwischenwert bei Hauptverkehrsstrassen (Mittel des Bereichs, so rechnet der Kant
   Hinweise, Quellen mit Abrufdatum, Normbezüge, Version, Haftungshinweis. Status zusätzlich als Zeichen (✓, (✓), ✗, –) und im Bild
   als Strichart.
 
+### Trottoirüberfahrt und amtliches Tempo (0.6.0, Etappe K0)
+
+Häkchen «Trottoirüberfahrt» (Block «Zufahrt», je Zufahrt; Fall-Datei Version 7, Feld `eingaben.trottoirueberfahrt` mit `breite`):
+kein Rechtsvortritt (VSS 40 242 Ziffer 12.3; Vorgabe Vortritt bzw. Stop aus OSM, «Rechtsvortritt» wird wie Vortritt gerechnet) und die
+Sicht in zwei Phasen nach Ziffer 14.4 mit den Werten der VSS 40 273: Phase Fahrbahn mit B ab der Bordkante (vorderer Rand der
+Überfahrt; Haltelinie und Radweg nach Ziffer 12 gehen vor), Motorfahrzeuge Tab. 1, Velo Tab. 3; Phase Trottoir mit D' 3,00 m hinter dem
+hinteren Rand der Überfahrt und Zielpunkten auf der Gehlinie 0,50 m vor dem hinteren Trottoirrand, Tab. 2 nach der Längsneigung (Profil
+entlang der Gehlinie). Breite der Überfahrt in dieser Reihenfolge: AV-Fläche Trottoir quer über die Zufahrt, Breite des angrenzenden
+AV-Trottoirs links bzw. rechts (Mittel; an vielen Einmündungen ist die Zufahrt in der AV durchgehend Strasse, der Planungsfall), Eingabe
+von Hand, sonst 2,00 m als Annahme (kleinste Breite nach Ziffer 16). Hinterer Trottoirrand je Seite aus dem AV-Trottoir der Seite, sonst
+parallel zur Strasse im Abstand der Breite. Ergebnis je Phase (Status, nicht erfüllte Teile) im Panel, auf der Karte (Band von der
+Bordkante zum hinteren Rand, Sichtdreiecke von D und D') und im Bericht. Die Gehlinie gilt nur in diesem Modus; Knoten und
+Grundstückzufahrten ohne Häkchen rechnen wie 0.5.0 (Trottoirachse, Nullpunkt an der Trottoirhinterkante). In der Stadt Bern (AV-Gemeinde
+unter dem Knoten bzw. Zufahrtspunkt, BFS 351) holt die App die signalisierte Höchstgeschwindigkeit des Geoportals (map.bern.ch, Layer
+`Signalisierte_Hoechstgeschwindigkeit`, Feld V_sig, ±150 m; Quellenangabe «Geodaten Stadt Bern») und rechnet je Richtung mit der Mehrheit
+entlang des Arms (nächste Linie bis 8 m, längs, höchstens 35° Abweichung; liegt nicht mehr als die Hälfte der Punkte an einer Linie mit
+Wert, gilt OSM); Herkunft «Geoportal Stadt Bern» beim Tempo, Hinweis bei Abweichung von OSM; Tempo von Hand geht vor, ausserhalb Berns
+und bei einem Fehler des Dienstes OSM. Schnittstelle des Kerns (für die Kopie in fgsCheck) im Kopf von `rechner/rechnen.ts`; Band und
+Gehlinie in `rechner/trottoirueberfahrt.ts`, Zuordnung des Tempos in `rechner/tempo.ts`, Abruf in `daten/vsig.ts`; Tests
+`rechner/trottoirueberfahrt.test.ts` und `rechner/tempoamtlich.test.ts`. Grenzen: Velos auf dem Trottoir (Ziffer 15.4.2) nicht geprüft,
+Zurücksetzen des hinteren Rands bei Trottoirs unter 2,00 m (Ziffer 16) nur als Hinweis, Trottoir nicht in den Massnahmen; Vortrittsvorgabe
+und «ausserorts» weiter nach OSM.
+
+### Versionen
+
+- 0.6.0 (23.10.2026): Trottoirüberfahrt (VSS 40 242 Ziffern 12.3, 14.4) und amtliches Tempo der Stadt Bern (V_sig), Fall-Datei Version 7.
+- 0.5.0: Beta, Stand nach E4a (Bericht und Hilfe).
+
 ### Prüffälle
 
 Daten vom 16.10.2026, amtliche Parkfelder an. Hallerstrasse / Alpeneggstrasse (`?knoten=30949365`, Tempo 30): links 27,5 m, rechts
@@ -327,7 +355,7 @@ Browser. Der Browser fragt direkt an (die Dienste sehen technisch die IP-Adresse
 | api3.geo.admin.ch (swisstopo) | Ortssuche: der eingegebene Suchbegriff; Flugjahr der 1-km-Kachel (Bericht); Höhenprofile: bis vier Linien je Fall (Fahrstreifenachsen, Zufahrt, Trottoir) |
 | geodienste.ch (AV-WFS) | Rechteck ±150 m um den Knoten bzw. Zufahrtspunkt, nach Bedarf bis ±400 m |
 | Overpass: overpass.osm.ch, ersatzweise overpass-api.de, overpass.kumi.systems, overpass.private.coffee | Kartenausschnitt (Knoten und Strassennamen) mit Rand bzw. Umkreis 300 m um den Knoten |
-| map.bern.ch (nur Stadt Bern) | Rechteck ±150 m (amtliche Parkfelder, auf Wunsch Baumkataster) |
+| map.bern.ch (nur Stadt Bern) | Rechteck ±150 m (amtliche Parkfelder, auf Wunsch Baumkataster; signalisierte Höchstgeschwindigkeit) |
 
 Der eigene Standort wird nur im Browser ermittelt und angezeigt, nicht gespeichert und nicht gesendet. Eine Nutzungsstatistik mit
 GoatCounter (sichtweiten.goatcounter.com; nur Seitenaufrufe und der Aufruf der Prüfung als Pfad «pruefen», ohne Cookies und ohne Speicherung der IP-Adresse).
@@ -337,6 +365,7 @@ GoatCounter (sichtweiten.goatcounter.com; nur Seitenaufrufe und der Aufruf der P
 - Bodenbedeckung: Amtliche Vermessung, Kanton (je nach Ort), über geodienste.ch; Panel, Fall-Datei und Bericht nennen den Kanton
 - Strassennetz, Tempo, Veloführung: © OpenStreetMap-Mitwirkende, ODbL (Overpass API)
 - Parkfelder und Bäume Stadt Bern: Geodaten Stadt Bern (Parkplätze öffentlich, Baumkataster)
+- Tempo Stadt Bern: Geodaten Stadt Bern (Signalisierte Höchstgeschwindigkeit, Geoportal)
 - Normbezüge: VSS 40 273:2024 (Ziffern 5 und 10 bis 18, Tab. 1 bis 3, Abb. 3 bis 6), VSS 40 090b (Abb. 2); nur Nummern, Ziffern und
   Zahlenwerte, kein Normtext
 - Polygon-Operationen: polygon-clipping (MIT)
