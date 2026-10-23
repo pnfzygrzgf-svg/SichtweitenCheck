@@ -15,7 +15,8 @@ import { type Box, type CacheEintrag, enthaelt, abfrageBox, zuGross, imCache, au
 import { KEINE_ALLE_EINGABEN, KEINE_HINDERNISSE, REGELUNGEN, TEMPO_ARTEN, TEMPO_MIN, TEMPO_MAX, type Eingaben, type Ergebnis,
   type HindernisEingaben, type HindernisStand, type Rechnung, type Regelung, type Richtung, type RichtungErgebnis, type StrasseErgebnis,
   type TempoArt, type TempoEingabe, type ZufahrtspunktEingabe, type HoehenVorgabe, type SichtTeil, type TrottoirPruefung,
-  type RechtsvortrittErgebnis, type RvArm, type RvStatus } from './rechner/typen'
+  type RechtsvortrittErgebnis, type RvArm, type RvStatus, type TempoAmtlichDaten, type TempoAmtlichLinie, type TueErgebnis,
+  type TuePhase, TUE_BREITE_MIN, TUE_BREITE_MAX } from './rechner/typen'
 import { WAHRNEHMBARKEITEN, WAHRNEHMBARKEIT_TEXT, WAHRNEHMBARKEIT_VORGABE, ABB6, ABB6_SPALTEN, ZUSTAND_TEXT, RV_TEMPO, RV_B_M, RV_A_M,
   RV_A_MIN_M, SCHMAL_M, PAAR_LAENGE_M, PAAR_SCHRITT_M, type Wahrnehmbarkeit } from './rechner/rechtsvortritt'
 import { VELOFUEHRUNGEN, VELOFUEHRUNG_TEXT, TAB3, TAB3_SPALTEN, TAB3_EBIKE, TAB3_GRENZE, TAB2, TAB2_SPALTEN, D_VELO_M, RADSTREIFEN_M,
@@ -33,7 +34,7 @@ import { ANHALTESICHT, ANHALTESICHT_I, ANHALTESICHT_STUFEN } from './rechner/anh
 import { FAHRERSITZ_M, B_INNERORTS_M, B_AUSSERORTS_M, TROTTOIR_BIS_M, TROTTOIR_MAX_M } from './rechner/beobachtung'
 import { D_MFZ_M } from './rechner/hauptachsen'
 import { Anleitung, Datenschutz, Fusszeile } from './Hilfe'
-import { f1, f2, fi, STATUS_TEXT, rvStatusText, RV_STATUS_TEXT, STATUS_TEXT_TEIL } from './texte'
+import { f1, f2, fi, STATUS_TEXT, rvStatusText, RV_STATUS_TEXT, STATUS_TEXT_TEIL, TUE_BREITE_KURZ, tuePhaseText } from './texte'
 import Bericht from './Bericht'
 import Info from './Info'
 import type { QuellenStand } from './berichtbild'
@@ -41,6 +42,8 @@ import { type Fall, leererFall, fallMerken, fallErinnern, fallErinnernZufahrt, f
   ergebnisAuszug, BEGRUENDUNG_MAX } from './fall'
 import { parkQuelleFuer, istParkId, type ParkQuelle, type KatasterFeld } from './daten/parkkataster'
 import { baumQuelleFuer, type BaumQuelle, type KatasterBaum } from './daten/baumkataster'
+import { ladeVsigBern, bernZustaendig, vsigRechnung, VSIG_QUELLENANGABE } from './daten/vsig'
+import { TUE_GEHLINIE_M, TUE_BREITE_ANNAHME_M } from './rechner/trottoirueberfahrt'
 import { BAUM_STAMM_M, LAENGS_BREITE_M, LINIE_PUFFER_M, KLASSE_TEXT, type Hindernis, type ParkKlasse } from './rechner/hindernisse'
 import { PALISADE_MIN_M } from './rechner/sicht'
 
@@ -84,6 +87,8 @@ let zaehler = 0
 const neueId = (p: string) => `${p}-${Date.now().toString(36)}-${(zaehler++).toString(36)}`
 /** amtliche Parkfelder und Baumkataster: Ausschnitt um den Knoten wie die AV (±150 m) */
 interface ParkStand { quelle: ParkQuelle; nr: number; lat: number; lon: number; felder: KatasterFeld[] | null; laedt?: boolean; fehler?: string }
+/** K0: signalisierte Höchstgeschwindigkeit Stadt Bern (Geoportal) um den Ladeort (mitte LV95), nur in Bern */
+interface VsigStand { nr: number; lat: number; lon: number; mitte: P; linien: TempoAmtlichLinie[] | null; laedt?: boolean; fehler?: string }
 interface BaumStand { quelle: BaumQuelle; nr: number; lat: number; lon: number; baeume: KatasterBaum[] | null; laedt?: boolean; fehler?: string }
 const WIRKUNG_TEXT: Record<string, string> = { voll: 'verdeckt', palisade: 'Palisade', hinweis: 'nur Hinweis' }
 
@@ -282,8 +287,8 @@ function TeilSpalte({ name, farbe, zusatz, stand, A, Aquelle, t, herleitung, lee
 }
 
 /** Ergebnis einer Richtung (Schritt 4): Überschrift mit Tempo, darunter Auto, Velo und (mit Trottoir) Trottoir nebeneinander */
-function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo }: { r: RichtungErgebnis; t: TrottoirRichtung | null; mitTrottoir: boolean
-  achseQuelle: string; velo: boolean }) {
+function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false }: { r: RichtungErgebnis; t: TrottoirRichtung | null
+  mitTrottoir: boolean; achseQuelle: string; velo: boolean; gehlinie?: boolean }) {
   const v = r.velo
   const nichtGeprueft = rvNichtGeprueft(r)
   // Rechtsvortritt, Verkehr von links bzw. Gegenverkehr: nur die graue Statuszeile, keine Spalten (ausser ein Trottoir ist geprüft)
@@ -347,8 +352,11 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo }: { r: RichtungEr
           herleitung={t ? <>
             <p>Trottoir: Fussgänger und fahrzeugähnliche Geräte, die von dieser Seite auf dem Trottoir zur Zufahrt kommen (Tab. 2).</p>
             <ul>
+              {gehlinie ? <li>Trottoirüberfahrt, Phase Trottoir (VSS 40 242 Ziffer 14.4): D' {velo ? 'auf der Veloachse' : 'am Fahrersitz'}{' '}
+                {f2(B_INNERORTS_M)} m hinter dem hinteren Rand der Überfahrt; Zielpunkte auf der Gehlinie {f2(TUE_GEHLINIE_M)} m vor dem
+                hinteren Trottoirrand ({achseQuelle}).</li> :
               <li>D' {velo ? 'auf der Veloachse' : 'am Fahrersitz'} {f2(B_INNERORTS_M)} m hinter der Trottoirhinterkante; Zielpunkte auf der
-                Trottoirachse ({achseQuelle}).</li>
+                Trottoirachse ({achseQuelle}).</li>}
               <li>Längsneigung in Gehrichtung zur Zufahrt {fi(t.neigung)} % ({t.neigungQuelle}).</li>
               <li>Erforderliche Sichtweite A {t.A} m ({t.text}).</li>
               <SichtHerleitung t={t} />
@@ -759,8 +767,10 @@ function RegelungAbschnitt({ e, eingaben, setEingaben }: { e: Ergebnis | null; e
               <span className="warnung">({annahmeText(e.regelungQuelle)})</span>}</div>
             {regelung === 'rechtsvortritt' && e?.zufahrtspunkt && <div className="klein warnung">Gilt an einer Grundstückzufahrt nicht:
               gerechnet wie «Vortritt».</div>}
+            {eingaben.regelung === 'rechtsvortritt' && eingaben.trottoirueberfahrt && !e?.zufahrtspunkt && <div className="klein warnung">Gilt an
+              einer Trottoirüberfahrt nicht (VSS 40 242 Ziffer 12.3): gerechnet wie «Vortritt».</div>}
           </td></tr>
-          {regelung === 'rechtsvortritt' && !e?.zufahrtspunkt && <tr><td>Wahrnehmbarkeit des Knotens<Info titel="Wahrnehmbarkeit">
+          {regelung === 'rechtsvortritt' && !e?.zufahrtspunkt && !eingaben.trottoirueberfahrt && <tr><td>Wahrnehmbarkeit des Knotens<Info titel="Wahrnehmbarkeit">
             <p>{WAHRNEHMBARKEIT_HILFE}</p>
             <p>Vorgabe «{WAHRNEHMBARKEIT_TEXT[WAHRNEHMBARKEIT_VORGABE]}» ohne Eingabe: vor Ort beurteilen. Der Zustand nach Abb. 6 folgt
               aus Wahrnehmbarkeit und vorhandener Sichtweite.</p>
@@ -776,6 +786,56 @@ function RegelungAbschnitt({ e, eingaben, setEingaben }: { e: Ergebnis | null; e
           </td></tr>}
       </tbody>
     </table>
+  )
+}
+
+/** Breite der Trottoirüberfahrt von Hand [m] (K0): übernommen beim Verlassen des Felds bzw. mit Enter; leer = ohne Eingabe */
+const breiteLesen = (t: string): number | null | undefined => {
+  const x = t.trim().replace(',', '.')
+  if (!x) return null
+  const v = Number(x)
+  return Number.isFinite(v) && v >= TUE_BREITE_MIN && v <= TUE_BREITE_MAX ? Math.round(v * 100) / 100 : undefined
+}
+function TueBreiteFeld({ wert, onWert }: { wert: number | null; onWert: (v: number | null) => void }) {
+  const [text, setText] = useState(wert === null ? '' : f2(wert))
+  useEffect(() => { setText(t => (breiteLesen(t) === wert ? t : wert === null ? '' : f2(wert))) }, [wert])
+  const v = breiteLesen(text)
+  const uebernehmen = () => { if (v !== undefined && v !== wert) onWert(v) }
+  return <>
+    <input type="text" inputMode="decimal" size={5} aria-label="Breite der Trottoirüberfahrt in Metern" placeholder="leer" value={text}
+      className={v === undefined ? 'falsch' : ''} onChange={e => setText(e.target.value)} onBlur={uebernehmen}
+      onKeyDown={e => { if (e.key === 'Enter') uebernehmen() }} /> m
+    {v === undefined && <span className="fehler klein"> Zahl zwischen {f2(TUE_BREITE_MIN)} und {f2(TUE_BREITE_MAX)} m oder leer</span>}
+  </>
+}
+
+/** Trottoirüberfahrt im Ergebnis (K0): Breite mit Herkunft, Vortritt, Status je Phase */
+function TueBlock({ t }: { t: TueErgebnis }) {
+  const zeile = (name: string, p: TuePhase, was: string) => <li>
+    <span className="richtungsname"><span className="farbe rund" style={{ background: STATUS_FARBE[p.status] }} />{name}:{' '}
+      <span className="klein">{was}</span></span>
+    <span className="felder"><Feld s={{ feld: tuePhaseText(p), kurz: '', farbe: STATUS_FARBE[p.status] }} /></span></li>
+  return (
+    <div className="tue">
+      <h3>Trottoirüberfahrt<Info titel="Trottoirüberfahrt (VSS 40 242)">
+        <p>Sicht in zwei Phasen (VSS 40 242 Ziffer 14.4, Werte nach VSS 40 273):</p>
+        <ul>
+          <li>Phase Trottoir: D' {f2(B_INNERORTS_M)} m hinter dem hinteren Rand der Überfahrt, Zielpunkte auf der Gehlinie{' '}
+            {f2(TUE_GEHLINIE_M)} m vor dem hinteren Trottoirrand (Tab. 2, nach der Längsneigung des Trottoirs). Spalte «Trottoir» unten.</li>
+          <li>Phase Fahrbahn: B ab der Bordkante (vorderer Rand der Überfahrt), Motorfahrzeuge Tab. 1, Velo Tab. 3. Spalten «Auto» und
+            «Velo» unten.</li>
+        </ul>
+        <p>{t.regelungText}.</p>
+        <p>Breite: {t.breiteText}. Reihenfolge: AV-Trottoir quer über die Zufahrt, angrenzendes AV-Trottoir, Eingabe von Hand,
+          sonst {f2(TUE_BREITE_ANNAHME_M)} m (Annahme).</p></Info></h3>
+      <p className="klein">Breite {f2(t.breite)} m <span className={t.breiteQuelle === 'annahme' ? 'warnung' : ''}>
+        ({TUE_BREITE_KURZ[t.breiteQuelle]})</span>, hinterer Rand {f2(t.laenge)} m hinter der Bordkante entlang der Zufahrtsachse;{' '}
+        {t.regelungText.split(':')[0]}.</p>
+      <ul className="gesamtstatus">
+        {zeile('Phase Trottoir', t.phaseTrottoir, `ab dem hinteren Rand, Gehlinie ${f2(t.gehlinie)} m vor dem hinteren Trottoirrand`)}
+        {zeile('Phase Fahrbahn', t.phaseFahrbahn, 'ab der Bordkante (vorderer Rand)')}
+      </ul>
+    </div>
   )
 }
 
@@ -817,12 +877,32 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
               <button className="zweit klein" onClick={() => werkzeugWaehlen(null)}>Abbrechen</button></div>}
             {dWarnungen(e).map(w => <div key={w} className="klein warnung">{w}</div>)}
           </td></tr>
+          <tr><td>Trottoirüberfahrt<Info titel="Trottoirüberfahrt (VSS 40 242)">
+            <p>Häkchen, wenn über diese Einmündung eine Trottoirüberfahrt führt bzw. geplant ist. Dann gilt kein Rechtsvortritt (die Zufahrt
+              ist vortrittsbelastet, VSS 40 242 Ziffer 12.3), und die Sicht wird in zwei Phasen geprüft (Ziffer 14.4): aufs Trottoir ab dem
+              hinteren Rand der Überfahrt (D' {f2(B_INNERORTS_M)} m dahinter, Gehlinie {f2(TUE_GEHLINIE_M)} m vor dem hinteren Trottoirrand,
+              Tab. 2), auf die Fahrbahn ab der Bordkante (B ab dem vorderen Rand, Tab. 1 und Tab. 3).</p>
+            <p>Breite der Überfahrt: AV-Trottoir quer über die Zufahrt, sonst das angrenzende AV-Trottoir links bzw. rechts (an vielen
+              Einmündungen ist die Zufahrt in der AV durchgehend Strasse), sonst die Eingabe, sonst {f2(TUE_BREITE_ANNAHME_M)} m als
+              Annahme.</p></Info></td><td>
+            <label><input type="checkbox" checked={!!eingaben.trottoirueberfahrt}
+              onChange={ev => { const v = ev.target.checked; setEingaben(x => ({ ...x, trottoirueberfahrt: v ? { breite: null } : null })) }} />
+              {' '}über diese Einmündung</label>
+            {e.trottoirueberfahrt && <>{' '}<span className="klein">(Breite {f2(e.trottoirueberfahrt.breite)} m,{' '}
+              <span className={e.trottoirueberfahrt.breiteQuelle === 'annahme' ? 'warnung' : ''}>{TUE_BREITE_KURZ[e.trottoirueberfahrt.breiteQuelle]}</span>)</span></>}
+            {eingaben.trottoirueberfahrt && <div className="klein">Breite von Hand{' '}
+              <TueBreiteFeld wert={eingaben.trottoirueberfahrt.breite}
+                onWert={b => setEingaben(x => ({ ...x, trottoirueberfahrt: { breite: b } }))} />{' '}
+              (gilt nur, wenn die AV keine Breite liefert)</div>}
+          </td></tr>
           <tr><td>Trottoir<Info titel="Trottoir">
             <p>Wählbar, wenn die AV ein Trottoir quer über die Zufahrt zeigt (Beginn höchstens {String(TROTTOIR_BIS_M).replace('.', ',')} m
               hinter der Kante, höchstens {TROTTOIR_MAX_M} m lang).{e.trottoir ? ` AV: Trottoir ${f1(e.trottoir.breite)} m zwischen Zufahrt und ` +
               'Vortrittsstrasse.' : ` Hier nicht wählbar: ${e.trottoirGrund}.`}</p>
             <p>Ohne Häkchen wartet F<sub>B</sub> vor dem Trottoir, B ab der Trottoirhinterkante; mit Häkchen («Trottoir ohne Hindernisse»)
               an der Bordkante, B ab der Bordkante (Ziffer 13.1). Eine Haltelinie geht vor.</p></Info></td><td>
+            {e.trottoirueberfahrt ? <span className="klein">Trottoirüberfahrt: F<sub>B</sub> an der Bordkante (Phase Fahrbahn), D' hinter
+              dem hinteren Rand (Phase Trottoir); das Häkchen «ohne Hindernisse» gilt hier nicht.</span> : <>
             <label style={e.trottoir ? undefined : { opacity: 0.55 }}>
               <input type="checkbox" disabled={!e.trottoir && !eingaben.trottoirFrei} checked={eingaben.trottoirFrei}
                 onChange={ev => { const v = ev.target.checked; setEingaben(x => ({ ...x, trottoirFrei: v })) }} /> ohne Hindernisse:
@@ -830,7 +910,7 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
             {' '}<span className="klein">({e.trottoir ? `AV: ${f1(e.trottoir.breite)} m` : 'keines nach AV'})</span>
             {eingaben.trottoirFrei && !e.trottoir && <div className="klein warnung">Häkchen ohne Wirkung: kein Trottoir nach AV.</div>}
             {eingaben.trottoirFrei && e.trottoir && e.haltelinie && <div className="klein warnung">Häkchen ohne Wirkung auf B: die Haltelinie
-              geht vor.</div>}
+              geht vor.</div>}</>}
           </td></tr>
           <tr><td>Tempo je Richtung<Info titel="Tempo">
             <p>Welches Tempo massgebend ist, regelt Ziffer 10 (signalisiert, Projektierungsgeschwindigkeit VP, V85 bzw. fahrbares Tempo);
@@ -929,7 +1009,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     }
   }, [])
 
-  const rechnen = useCallback(async (d: Daten, ziel: Ziel, eg: Eingaben, hg: HindernisEingaben, hoehen: HoehenVorgabe | null) => {
+  const rechnen = useCallback(async (d: Daten, ziel: Ziel, eg: Eingaben, hg: HindernisEingaben, hoehen: HoehenVorgabe | null,
+    tempoAmtlich: TempoAmtlichDaten | null) => {
     const nr = ++auftrag.current
     const w = workerRef.current ?? neuerWorker()
     if (!w) return
@@ -946,7 +1027,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
       w.addEventListener('message', h)
       w.addEventListener('error', fe)
       w.postMessage({ id: nr, osm: d.osm, av: d.av, avRadius: d.avRadius, avZentrum: d.ort, knoten: ziel.knoten, zufahrt: ziel.zufahrt,
-        zufahrtspunkt: ziel.zufahrtspunkt, eingaben: eg, hindernisse: hg, hoehen })
+        zufahrtspunkt: ziel.zufahrtspunkt, eingaben: eg, hindernisse: hg, hoehen, tempoAmtlich })
     })
     if (nr !== auftrag.current) return
     setRechnet(false)
@@ -977,6 +1058,11 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   const ladeNr = useRef(0)
   const [parkKat, setParkKat] = useState<ParkStand | null>(null)
   const [baumKat, setBaumKat] = useState<BaumStand | null>(null)
+  const [vsigKat, setVsigKat] = useState<VsigStand | null>(null)
+  // K0: amtliches Tempo für die Rechnung (nur geladene Linien des aktuellen Ladevorgangs)
+  const vsigLinien = vsigKat?.linien ?? null, vsigMitte = vsigKat?.mitte ?? null
+  const tempoAmtlich = useMemo<TempoAmtlichDaten | null>(() => (vsigLinien && vsigMitte ? vsigRechnung(vsigLinien, vsigMitte, KATASTER_RADIUS_M) :
+    null), [vsigLinien, vsigMitte])
   const parkFelder = parkKat?.felder ?? null, parkAngabe = parkKat?.quelle.quellenangabe ?? ''
   const baeume = baumKat?.baeume ?? null, baumAngabe = baumKat?.quelle.quellenangabe ?? ''
   const fHind = fall?.hindernisse, fVorschl = fall?.vorschlaege, fPark = fall?.parkkataster !== false, fBaum = !!fall?.baumkataster
@@ -994,8 +1080,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     if (!hoehen.sig.startsWith(basis)) return null
     return (ziel.zufahrt === null ? hoehen.vorschlag : ziel.zufahrt === hoehen.sig.slice(basis.length)) ? hoehen.stand : null
   }, [hoehen, daten, ziel])
-  useEffect(() => { if (daten && ziel) rechnen(daten, ziel, eingaben, hindEingaben, hoehenVorgabe) },
-    [daten, ziel, eingaben, hindEingaben, hoehenVorgabe, rechnen])
+  useEffect(() => { if (daten && ziel) rechnen(daten, ziel, eingaben, hindEingaben, hoehenVorgabe, tempoAmtlich) },
+    [daten, ziel, eingaben, hindEingaben, hoehenVorgabe, tempoAmtlich, rechnen])
   // andere Zufahrt: andere Vortrittsstrasse und andere Achse, die Eingaben (E1, E2b) gelten nicht mehr
   const zAktuell = useRef<string | null>(null)              // gerechnete bzw. gewählte Zufahrt (unten gesetzt)
   const zufahrtWaehlen = useCallback((z: string | null) => {
@@ -1096,7 +1182,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     auftrag.current++
     setRechnung(null); setAv(null); setDaten(null); setRechnet(false); setNochmals(null); setBerichtOffen(false)
     const nr = ++ladeNr.current
-    setFall(null); setFallHinweis(null); setParkKat(null); setBaumKat(null); setWerkzeug(null); setZeichnung([]); setBearbeiten(null)
+    setFall(null); setFallHinweis(null); setParkKat(null); setBaumKat(null); setVsigKat(null); setWerkzeug(null); setZeichnung([]); setBearbeiten(null)
     setKnotenWerkzeug(null); setZufahrtErster(null); setHoehen(null); hoehenLaeuft.current = null; setHervor(null)
     const zp = typeof wahl === 'object' && 'zufahrtspunkt' in wahl ? wahl.zufahrtspunkt : null
     const fallSetzen = (lat: number, lon: number, kid: number | null) => {
@@ -1155,6 +1241,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
       const bfs = avF.map(f => f.bfs), pq = parkQuelleFuer(bfs), bq = baumQuelleFuer(bfs)
       setParkKat(pq ? { quelle: pq, nr, lat, lon, felder: null } : null)
       setBaumKat(bq ? { quelle: bq, nr, lat, lon, baeume: null } : null)
+      // K0: signalisierte Höchstgeschwindigkeit, wenn die AV-Fläche unter dem Knoten bzw. Zufahrtspunkt zur Stadt Bern gehört
+      setVsigKat(bernZustaendig([e, n], avF) ? { nr, lat, lon, mitte: [e, n], linien: null } : null)
       // Quellenstand im Fall (Fall-Datei)
       setFall(f => (f ? { ...f, quellen: { ...f.quellen, osm: `OpenStreetMap über ${ro.quelle}`, av: `Amtliche Vermessung über ${ra.quelle}, ` +
         `Kanton ${[...new Set(avF.map(x => x.kanton).filter(x => x))].join(', ') || '?'}`, geladen: new Date().toISOString().slice(0, 10) } } : f))
@@ -1276,6 +1364,26 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
       setzeQuelle('parkkataster', { name, fehler: `${(err as Error).message} (Dienst bzw. Zugriff aus dem Browser gesperrt?)` })
     })
   }, [parkAus, parkKat])
+  // K0: signalisierte Höchstgeschwindigkeit Stadt Bern (Geoportal); bis sie da ist bzw. bei einem Fehler rechnet die App mit OSM
+  useEffect(() => {
+    if (!vsigKat || vsigKat.linien || vsigKat.fehler || vsigKat.laedt || vsigKat.nr !== ladeNr.current) return
+    const ctrl = abbruchRef.current, { nr } = vsigKat
+    const name = `Signalisierte Höchstgeschwindigkeit Stadt Bern (Geoportal, ±${KATASTER_RADIUS_M} m)`
+    const hier = (k: VsigStand | null) => !!k && k.nr === nr && ladeNr.current === nr && !ctrl?.signal.aborted
+    setVsigKat(k => (hier(k) ? { ...k!, laedt: true } : k))
+    setzeQuelle('vsig', { name })
+    ladeVsigBern(vsigKat.lat, vsigKat.lon, KATASTER_RADIUS_M, ctrl?.signal).then(r => {
+      if (ctrl?.signal.aborted || ladeNr.current !== nr) return
+      setVsigKat(k => (hier(k) ? { ...k!, linien: r.daten, laedt: false } : k))
+      setzeQuelle('vsig', { name, objekte: `${r.daten.length} Abschnitte (${r.daten.filter(l => l.vSig !== null).length} mit Wert)`, ms: r.ms,
+        bytes: r.bytes, server: r.quelle })
+      setFall(f => (f ? { ...f, quellen: { ...f.quellen, vsig: VSIG_QUELLENANGABE } } : f))
+    }, err => {
+      if (istAbbruch(err) || ctrl?.signal.aborted || ladeNr.current !== nr) return
+      setVsigKat(k => (hier(k) ? { ...k!, laedt: false, fehler: (err as Error).message } : k))
+      setzeQuelle('vsig', { name, fehler: `${(err as Error).message}: Tempo aus OSM` })
+    })
+  }, [vsigKat])
   const baumAn = !!fall?.baumkataster
   useEffect(() => {
     if (!baumAn || !baumKat || baumKat.baeume || baumKat.fehler || baumKat.laedt || baumKat.nr !== ladeNr.current) return
@@ -1408,8 +1516,9 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     if (!e || !d || !z || !ctrl || ctrl.signal.aborted) return
     if (rechnungFuer.current !== `${datenKey(d)}|${JSON.stringify(z)}`) return     // Rechnung zu einem früheren Ziel
     const sig = `${datenKey(d)}|${zpSig(z.zufahrtspunkt)}|${e.zufahrt}`
-    // dazu die Arme links und rechts: beim Rechtsvortritt (E3c) können sie für dieselbe Zufahrt andere sein
-    const arme = e.vortritt.join(','), lauf = `${sig}#${arme}`
+    // dazu die Arme links und rechts: beim Rechtsvortritt (E3c) können sie für dieselbe Zufahrt andere sein; K0: mit dem Häkchen
+    // «Trottoirüberfahrt» kommt bzw. geht das Profil des Trottoirs (Gehlinie) für dieselbe Zufahrt
+    const arme = e.vortritt.join(',') + (e.trottoirProfil.length >= 2 ? '|trottoir' : ''), lauf = `${sig}#${arme}`
     if ((hoehen?.sig === sig && hoehen.arme === arme) || hoehenLaeuft.current === lauf) return
     if (suche.current.ctrl || umkreisVorrang.laeuft()) {                            // Overpass läuft: später
       const t = setTimeout(() => setHoehenTakt(x => x + 1), 500)
@@ -1497,9 +1606,9 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     const h = erg.haltelinie
     const halte = h ? `${f1(Math.abs(h.abstand))} m ${h.abstand >= 0 ? 'hinter' : 'vor'} der Kante` : eingaben.haltelinie ? 'nicht gerechnet' : 'keine'
     const zufahrtStand = [`Haltelinie: ${halte}`, `D: ${erg.Dhand ? 'verschoben' : 'Vorgabe'}`,
-      ...(erg.trottoir ? [`Trottoir: ${eingaben.trottoirFrei ? 'Bordkante' : 'Hinterkante'}`] : []),
+      ...(erg.trottoirueberfahrt ? ['Trottoirüberfahrt'] : erg.trottoir ? [`Trottoir: ${eingaben.trottoirFrei ? 'Bordkante' : 'Hinterkante'}`] : []),
       rv ? `Tempo ${RV_TEMPO}` : `Tempo ${rs.map(r => (r.status === 'keine_zufahrt' ? '–' : r.tempo)).join('/')}`].join(' · ')
-    const zufahrtHand = eingaben.haltelinie !== null || eingaben.D !== null || eingaben.trottoirFrei ||
+    const zufahrtHand = eingaben.haltelinie !== null || eingaben.D !== null || eingaben.trottoirFrei || !!eingaben.trottoirueberfahrt ||
       (!rv && (eingaben.tempo.links !== null || eingaben.tempo.rechts !== null))
     const neigung = `i ${rs.map(r => fi(eingaben.neigung[r.richtung] ?? r.neigungVorgabe)).join(' / ')} %`
     const ungunst = erg.strasse.ungunst.fahrstreifen || erg.strasse.ungunst.neigung || erg.strasse.ungunst.schwerverkehr
@@ -1654,7 +1763,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
             <p className="leitsatz">Sicht aus der {erg.zufahrtspunkt ? 'Grundstückzufahrt Z' : `Zufahrt ${erg.zufahrtName}`}{' '}
               {erg.richtungen.some(r => r.lage === 'gegenueber') ? erg.richtungen.map(lageNach).join(' und ') : 'nach links und rechts'}<Info titel="Ergebnis">
                 <p>Je Richtung drei Teile: Motorfahrzeuge (Tab. 1, beim Rechtsvortritt Abb. 6), Velo (Tab. 3) und Trottoir (Tab. 2, nur mit
-                  einem Trottoir quer über die Zufahrt). Der Punkt vor der Zeile zeigt den schlechtesten Teil.</p>
+                  einem Trottoir quer über die Zufahrt bzw. mit dem Häkchen «Trottoirüberfahrt»). Der Punkt vor der Zeile zeigt den schlechtesten Teil.</p>
+                <p>Trottoirüberfahrt: Trottoir = Phase Trottoir (ab dem hinteren Rand), Auto und Velo = Phase Fahrbahn (ab der Bordkante).</p>
                 <p>Grün: erfüllt (≥ oberer Wert); gelb: massgebender Wert erfüllt (Rechtsvortritt: bedingt, zulässig als Ausnahme); rot:
                   nicht erfüllt; grau: kein Verkehr bzw. nicht geprüft.</p>
                 <p>Unten je Richtung die erforderliche und die vorhandene Sichtweite, Status und der erste Verdecker; die Herleitung steht im Info-Zeichen des
@@ -1674,6 +1784,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
                     kurz: '', farbe: GRAU }} /> :
                   <><Feld s={autoStand(r)} /><Feld s={veloStand(r)} /><Feld s={trottoirStand(t)} /></>}</span></li>
             })}{erg.seiteOhneArm === 'rechts' && <OhneArm seite="rechts" />}</ul>
+            {erg.trottoirueberfahrt && <TueBlock t={erg.trottoirueberfahrt} />}
             <table className="zahlen kopf">
               <tbody>
                 <tr><td>Zufahrt</td><td>{erg.zufahrtName}</td></tr>
@@ -1690,7 +1801,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
             </table>
             {erg.rechtsvortritt && <RvAlle rv={erg.rechtsvortritt} armWaehlen={zufahrtWaehlen} />}
             {erg.richtungen.map(r => <RichtungZeile key={r.richtung} r={r} velo={!!erg.zufahrtVelo} mitTrottoir={!!erg.trottoirPruefung}
-              t={erg.trottoirPruefung?.richtungen.find(t => t.richtung === r.richtung) ?? null} achseQuelle={erg.trottoirPruefung?.achseQuelle ?? ''} />)}
+              t={erg.trottoirPruefung?.richtungen.find(t => t.richtung === r.richtung) ?? null} achseQuelle={erg.trottoirPruefung?.achseQuelle ?? ''}
+              gehlinie={!!erg.trottoirPruefung?.gehlinie} />)}
             <Block titel={`Hinweise und Annahmen (${erg.hinweise.length + erg.annahmen.length})`} offen={offen.hinweise}
               setOffen={o => setOffen('hinweise', o)}>
               {erg.hinweise.length > 0 && <>
@@ -1745,7 +1857,9 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
             <li><span className="farbe" style={{ background: TROTTOIR_FARBE }} />Sichtdreiecke Trottoir von D' (Bernstein; rot: verdeckt bis A),
               D' als Bernstein-Punkt mit dunklem Rand</li>
             <li><span className="farbe rund" style={{ background: '#ffffff', border: `3px solid ${TROTTOIR_FARBE}` }} />Fussgänger am Ende von A
-              auf der Trottoirachse (Punkt mit Ring)</li>
+              auf der Trottoirachse (Punkt mit Ring; Trottoirüberfahrt: auf der Gehlinie {f2(TUE_GEHLINIE_M)} m vor dem hinteren Trottoirrand)</li>
+            <li><span className="farbe" style={{ background: TROTTOIR_FARBE }} />Trottoirüberfahrt: breiter Bernstein-Strich auf der Zufahrtsachse
+              von der Bordkante bis zum hinteren Rand, dort eine gestrichelte Querlinie</li>
             <li><span className="farbe" style={{ background: VERDECKT_FARBE }} />Sichtdreieck verdeckt (ab der ersten Verdeckung bis A) und verdeckendes Gebäude</li>
             <li><span className="farbe" style={{ background: SPAETER_FARBE }} />Gebäude bzw. Hindernis, das erst ausserhalb von A verdeckt</li>
             <li><span className="farbe" style={{ background: 'transparent', border: `3px solid ${TREFFER_FARBE.voll}` }} />Verdecker im Sichtdreieck

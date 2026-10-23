@@ -6,7 +6,9 @@ import type { OsmKnoten, Strassenname } from './daten/osm'
 import type { Rechnung, ArmInfo } from './rechner/typen'
 import { armText, nrLage, NR_ABSTAND_M } from './rechner/knoten'
 import { lageNach, lageText, lageWort } from './rechner/lage'
-import { wgs, lv95, add, dist, type P } from './geo'
+import { wgs, lv95, add, dist, sub, einheit, type P } from './geo'
+import { querlinie, B_INNERORTS_M } from './rechner/beobachtung'
+import { TUE_BREITE_KURZ, f2 } from './texte'
 import { hindernisRing, artText, quelleText, type Hindernis } from './rechner/hindernisse'
 import { abschneiden as abschneidenM } from './rechner/netz'
 import Ortssuche from './Ortssuche'
@@ -511,7 +513,19 @@ export default function Karte(props: {
         }
       }
       L.circleMarker(ll(tp.D), { radius: 5, color: '#111827', weight: 2, fillColor: TROTTOIR_FARBE, fillOpacity: 1, pane: OBEN_PANE })
-        .bindTooltip("Beobachtungspunkt D' für das Trottoir").addTo(eb.sicht)
+        .bindTooltip(tp.gehlinie ? "Beobachtungspunkt D' der Phase Trottoir (3,00 m hinter dem hinteren Rand der Trottoirüberfahrt)" :
+          "Beobachtungspunkt D' für das Trottoir").addTo(eb.sicht)
+    }
+    // Trottoirüberfahrt (K0): Band vom vorderen Rand (Bordkante) zum hinteren Rand auf der Zufahrtsachse, Querlinie am hinteren Rand
+    const tue = e.trottoirueberfahrt
+    if (tue) {
+      const t = einheit(sub(tue.hinterkante, tue.vorderkante))
+      const text = `Trottoirüberfahrt, Breite ${f2(tue.breite)} m (${TUE_BREITE_KURZ[tue.breiteQuelle]})`
+      L.polyline([tue.vorderkante, tue.hinterkante].map(ll), { color: TROTTOIR_FARBE, weight: 6, opacity: 0.8, pane: OBEN_PANE })
+        .bindTooltip(text, { sticky: true }).addTo(eb.sicht)
+      if (t[0] || t[1]) L.polyline(querlinie(tue.hinterkante, t, 2).map(ll), { color: '#111827', weight: 2, dashArray: '4 3', pane: OBEN_PANE })
+        .bindTooltip(`hinterer Rand der Trottoirüberfahrt: Nullpunkt der Phase Trottoir (D' ${f2(B_INNERORTS_M)} m dahinter)`, { sticky: true })
+        .addTo(eb.sicht)
     }
     L.polyline(e.zufahrtAchse.map(ll), { color: ZUFAHRT_FARBE, weight: 2, dashArray: '6 5', interactive: false, pane: OBEN_PANE }).addTo(eb.sicht)
     // Haltelinie (E2b): Querlinie an der Vorderkante, weiss mit dunklem Rand
@@ -523,7 +537,7 @@ export default function Karte(props: {
     }
     L.circleMarker(ll(e.rand), { radius: 3, color: ZUFAHRT_FARBE, weight: 2, fillColor: '#ffffff', fillOpacity: 1, pane: OBEN_PANE })
       .bindTooltip(`Kante des Fahrstreifens mit Vortritt${dist(e.rand, e.nullpunkt) < 0.05 ? ' (Beginn der Beobachtungsdistanz B)' : ''}`).addTo(eb.sicht)
-    if (e.trottoir && dist(e.trottoir.hinterkante, e.nullpunkt) >= 0.05)
+    if (e.trottoir && !e.trottoirueberfahrt && dist(e.trottoir.hinterkante, e.nullpunkt) >= 0.05)
       L.circleMarker(ll(e.trottoir.hinterkante), { radius: 3, color: '#64748b', weight: 2, fillColor: '#ffffff', fillOpacity: 1, pane: OBEN_PANE })
         .bindTooltip(`Trottoirhinterkante (AV), Trottoir ${f1(e.trottoir.breite)} m`).addTo(eb.sicht)
     if (dist(e.rand, e.nullpunkt) >= 0.05)

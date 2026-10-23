@@ -3,7 +3,7 @@
 // Aus App.tsx herausgelöst, damit Panel und Bericht dieselben Wörter brauchen. Der Bericht setzt vor jeden Status ein Zeichen
 // (statusMarke), damit er auch schwarz-weiss gedruckt lesbar bleibt.
 
-import type { RichtungErgebnis, RvStatus } from './rechner/typen'
+import type { RichtungErgebnis, RvStatus, TueBreiteQuelle, TuePhase } from './rechner/typen'
 
 export const f1 = (x: number) => x.toFixed(1).replace('.', ',')
 export const f2 = (x: number) => x.toFixed(2).replace('.', ',')
@@ -26,6 +26,13 @@ export const rvStatusText = (r: RichtungErgebnis, st: string) =>
 export const RV_STATUS_TEXT: Record<RvStatus, string> = { erfuellt: 'erfüllt', bedingt: 'bedingt', nicht_erfuellt: 'nicht erfüllt', keine: 'keine Prüfung' }
 /** Status einer Sicht von D bzw. D' (Velo, Trottoir; E3b) */
 export const STATUS_TEXT_TEIL: Record<string, string> = { erfuellt: 'erfüllt', nicht_erfuellt: 'nicht erfüllt' }
+
+/** Trottoirüberfahrt (K0): Herkunft der Breite kurz und Status einer Phase (Panel und Bericht) */
+export const TUE_BREITE_KURZ: Record<TueBreiteQuelle, string> = {
+  av_quer: 'AV, Trottoir quer über die Zufahrt', av_neben: 'AV, wie das angrenzende Trottoir', eingabe: 'von Hand', annahme: 'Annahme',
+}
+export const tuePhaseText = (p: TuePhase) => (p.status === 'keine_zufahrt' ? 'nicht geprüft' : p.fehlt.length ?
+  `nicht erfüllt (${p.fehlt.join(', ')})` : STATUS_TEXT[p.status])
 
 /** Status Motorfahrzeuge einer Richtung als Text (Tab. 1 bzw. Abb. 6, ohne Zusätze) */
 export const autoText = (r: RichtungErgebnis) => r.status === 'keine_zufahrt' ? r.keinGrund ?? STATUS_TEXT.keine_zufahrt :

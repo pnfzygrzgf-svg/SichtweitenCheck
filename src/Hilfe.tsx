@@ -25,6 +25,11 @@ export function Anleitung() {
           die Karte erklärt die «Legende».</li>
         <li><b>Massnahmen:</b> reicht die Sicht nicht, zeigt das Panel Varianten; «übernehmen» setzt sie als Eingabe.</li>
       </ol>
+      <p><b>Trottoirüberfahrt:</b> führt (bzw. soll) ein Trottoir durchgehend über die Einmündung, im Block «Zufahrt» das Häkchen
+        «Trottoirüberfahrt» setzen. Dann gilt kein Rechtsvortritt, und die App prüft zwei Phasen: die Sicht aufs Trottoir ab dem hinteren
+        Rand der Überfahrt (Fussgänger 0,50 m vor dem hinteren Trottoirrand) und die Sicht auf die Fahrbahn ab der Bordkante. Die
+        Breite kommt aus der AV (Trottoir quer über die Zufahrt, sonst das angrenzende Trottoir), sonst aus der Eingabe, sonst gelten
+        2,00 m als Annahme. In der Stadt Bern rechnet die App mit dem signalisierten Tempo des Geoportals (OSM nur, wo es fehlt).</p>
       <p><b>Bericht und Fall:</b> «Bericht drucken / als PDF» für die Druckansicht, «Fall speichern» und «Fall laden» für die Datei.</p>
     </details>
   )
@@ -54,8 +59,8 @@ export function Datenschutz() {
               Zielpunkten bis ±{AV_MAX_M} m.</li>
             <li>Overpass (OpenStreetMap): Kartenausschnitt (Knoten und Strassennamen) mit Rand bzw. Umkreis {OSM_RADIUS_M} m um den
               Knoten; Server {erster} (Swiss OpenStreetMap Association), bei Störung ersatzweise {weitere.join(', ')}.</li>
-            <li>map.bern.ch (Geodaten Stadt Bern), nur in der Stadt Bern: Rechteck ±{KATASTER_RADIUS_M} m für die öffentlichen Parkfelder
-              und, wenn zugeschaltet, das Baumkataster.</li>
+            <li>map.bern.ch (Geodaten Stadt Bern), nur in der Stadt Bern: Rechteck ±{KATASTER_RADIUS_M} m für die öffentlichen Parkfelder,
+              die signalisierte Höchstgeschwindigkeit und, wenn zugeschaltet, das Baumkataster.</li>
           </ul>
           Der eigene Standort (Standort-Knopf) wird nur im Browser ermittelt und angezeigt, nicht gespeichert und nicht gesendet.</li>
         <li>Nutzungsstatistik: Seitenaufrufe werden mit GoatCounter gezählt, ohne Cookies und ohne Speicherung der IP-Adresse. Erfasst

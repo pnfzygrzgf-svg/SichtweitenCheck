@@ -25,7 +25,8 @@ import { wmsBildUrl, ladeFlugjahr, LUFTBILD_QUELLE } from './daten/luftbild'
 import { NR_GEWAEHLT_FARBE, AV_FARBEN, STATUS_FARBE, FREI_FARBE, VERDECKT_FARBE, D_FARBE, D_RAND_FARBE, D_HAND_FARBE, ZUFAHRT_FARBE, FB_FARBE, FA_FARBE, VELO_FARBE, TROTTOIR_FARBE,
   TREFFER_FARBE, hindernisFarbe, hindernisText } from './Karte'
 import { ausschnitt, bildPixel, svgAbbildung, massstab, berichtPunkte, imAusschnitt, schilder, VB, type QuellenStand } from './berichtbild'
-import { f1, f2, fi, autoText, gesamtText, statusMarke, STATUS_TEXT_TEIL, RV_STATUS_TEXT } from './texte'
+import { f1, f2, fi, autoText, gesamtText, statusMarke, STATUS_TEXT_TEIL, RV_STATUS_TEXT, TUE_BREITE_KURZ, tuePhaseText } from './texte'
+import { TUE_GEHLINIE_M } from './rechner/trottoirueberfahrt'
 import { REGELUNG_TEXT, TEMPO_ART_TEXT } from './rechner/rechnen'
 import { STRASSENTYP_TEXT, UNGUNST_TEXT, NEIGUNG_EBEN_PROZENT } from './rechner/sichtweite'
 import { VELOFUEHRUNG_TEXT } from './rechner/velo'
@@ -130,6 +131,9 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
               strokeWidth={2} strokeDasharray={STRICH_VERDECKT} />}
             <polyline points={linie(t.achse)} fill="none" stroke={TROTTOIR_FARBE} strokeWidth={2} strokeDasharray="3 5" />
           </g>)}
+          {/* Trottoirüberfahrt (K0): Band von der Bordkante zum hinteren Rand auf der Zufahrtsachse */}
+          {e.trottoirueberfahrt && <polyline points={linie([e.trottoirueberfahrt.vorderkante, e.trottoirueberfahrt.hinterkante])} fill="none"
+            stroke={TROTTOIR_FARBE} strokeWidth={6} strokeOpacity={0.8} />}
           {/* Hindernisse in den Kartenfarben */}
           {hind.map(({ h, ring }) => <path key={'h' + h.id} d={pfad([ring])} fill={hindernisFarbe(h)} fillOpacity={0.4}
             stroke={hindernisFarbe(h)} strokeWidth={2} />)}
@@ -257,7 +261,8 @@ function ErgebnisTabelle({ e }: { e: Ergebnis }) {
       <thead><tr><th></th>{rs.map(r => <th key={r.richtung}>{lageText(r)}: {r.strasse}<div className="klein">{r.spur === 'nah' ? 'nahe' : 'ferne'} Fahrspur</div></th>)}</tr></thead>
       <tbody>
         {!rv && <>
-          <tr className="bericht-zwischen"><td colSpan={rs.length + 1}><b>Motorfahrzeuge</b> (VSS 40 273 Tab. 1)</td></tr>
+          <tr className="bericht-zwischen"><td colSpan={rs.length + 1}><b>Motorfahrzeuge</b> (VSS 40 273 Tab. 1){e.trottoirueberfahrt ?
+            ' – Trottoirüberfahrt, Phase Fahrbahn (ab der Bordkante)' : ''}</td></tr>
           {zeile('Tempo', auto(r => <>{r.tempo} km/h<div className="klein">{r.tempoArt ? `von Hand: ${TEMPO_ART_TEXT[r.tempoArt]}` +
             `${r.tempoBegruendung ? ` («${r.tempoBegruendung}»)` : ''}; Vorgabe ${r.tempoVorgabe} km/h (${r.tempoVorgabeQuelle})` :
             `${r.tempoQuelle}${r.tempoAnnahme ? ' (Annahme)' : ''}`}</div></>))}
@@ -271,14 +276,16 @@ function ErgebnisTabelle({ e }: { e: Ergebnis }) {
           {zeile('Status', auto(r => <><b>{statusMarke(r.status)} {autoText(r)}</b>{r.statusZusatz.length > 0 &&
             <div className="klein">{r.statusZusatz.join('; ')}</div>}</>))}
         </>}
-        <tr className="bericht-zwischen"><td colSpan={rs.length + 1}><b>Veloverkehr</b> (Tab. 3)</td></tr>
+        <tr className="bericht-zwischen"><td colSpan={rs.length + 1}><b>Veloverkehr</b> (Tab. 3){e.trottoirueberfahrt ?
+          ' – Phase Fahrbahn' : ''}</td></tr>
         {zeile('Veloführung', r => <>{VELOFUEHRUNG_TEXT[r.veloFuehrung]}<div className="klein">{r.veloGewaehlt ?
           `von Hand; Vorgabe ${VELOFUEHRUNG_TEXT[r.veloVorgabe]} (${r.veloVorgabeQuelle})` : r.veloVorgabeQuelle}</div></>)}
         {zeile('A Velo', r => r.velo ? <><b>{r.velo.A} m</b><div className="klein">{r.velo.text}; {r.velo.tempo} km/h, i {fi(r.velo.neigung)} %
           {r.velo.ebike ? '; schnelle E-Bikes verboten' : ''}; {r.velo.lageText}</div></> : leer('keine Prüfung'), 'A Velo')}
         {zeile('A vorhanden Velo', r => r.velo ? <b>{vorhandenText(r.velo.vorhanden, r.velo.bisEnde)}</b> : leer('–'), 'vV')}
         {zeile('Status Velo', r => r.velo ? <b>{statusMarke(r.velo.status)} {STATUS_TEXT_TEIL[r.velo.status]}</b> : leer('–'), 'sV')}
-        <tr className="bericht-zwischen"><td colSpan={rs.length + 1}><b>Trottoir</b> (Tab. 2, von D')</td></tr>
+        <tr className="bericht-zwischen"><td colSpan={rs.length + 1}><b>Trottoir</b> (Tab. 2, von D'){e.trottoirueberfahrt ?
+          ` – Trottoirüberfahrt, Phase Trottoir (D' hinter dem hinteren Rand, Gehlinie ${f2(TUE_GEHLINIE_M)} m vor dem hinteren Trottoirrand)` : ''}</td></tr>
         {e.trottoirPruefung ? <>
           {zeile('Längsneigung Trottoir', r => { const t = tr(r); return t ? <>{fi(t.neigung)} %<div className="klein">{t.neigungQuelle}</div></> : leer('–') }, 'iT')}
           {zeile('A Trottoir', r => { const t = tr(r); return t ? <><b>{t.A} m</b><div className="klein">{t.text}</div></> : leer('–') }, 'AT')}
@@ -414,6 +421,8 @@ export function eingabenListe(fall: Fall, e: Ergebnis): string[] {
   if (e.Dhand) aus.push(`Beobachtungspunkt D von Hand: ${f2(e.Dlage.laengs)} m hinter der ${e.nullpunktText}, ${f2(Math.abs(e.Dlage.seitlich))} m ` +
     `${e.Dlage.seitlich >= 0 ? 'links' : 'rechts'} der Achse`)
   if (g.trottoirFrei) aus.push('Trottoir ohne Hindernisse: FB wartet an der Bordkante (Ziffer 13.1)')
+  if (g.trottoirueberfahrt) aus.push(`Trottoirüberfahrt über diese Einmündung (VSS 40 242)${g.trottoirueberfahrt.breite !== null ?
+    `, Breite von Hand ${f2(g.trottoirueberfahrt.breite)} m${e.trottoirueberfahrt?.breiteQuelle === 'eingabe' ? '' : ' (ohne Wirkung: Breite aus der AV)'}` : ''}`)
   if (g.ebikeVerboten) aus.push('Schnelle E-Bikes verboten (Tab. 3)')
   if (g.wahrnehmbarkeit) aus.push(`Wahrnehmbarkeit des Knotens: ${WAHRNEHMBARKEIT_TEXT[g.wahrnehmbarkeit]}`)
   if (g.alleArme) aus.push('Rechtsvortritt: alle Arme geprüft')
@@ -550,6 +559,9 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
               {e.nullpunktText}; D {e.Dhand ? 'von Hand' : e.zufahrtVelo ? 'beim Velofahrer auf der Achse des Velogegenverkehrs' :
                 `am Fahrersitz, ${f2(FAHRERSITZ_M)} m links der Achse`}; Einbiegewinkel rund
               {' '}{Math.round(e.einbiegewinkel)}°</td></tr>
+            {e.trottoirueberfahrt && <tr><td>Trottoirüberfahrt</td><td>Breite {f2(e.trottoirueberfahrt.breite)} m
+              ({TUE_BREITE_KURZ[e.trottoirueberfahrt.breiteQuelle]}), hinterer Rand {f2(e.trottoirueberfahrt.laenge)} m hinter der Bordkante;{' '}
+              {e.trottoirueberfahrt.regelungText}<div className="klein">{e.trottoirueberfahrt.breiteText}</div></td></tr>}
             <tr><td>Daten geladen</td><td>{datumIso(fall.quellen.geladen)}</td></tr>
           </tbody></table>
         </section>
@@ -565,6 +577,12 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
             {e.seiteOhneArm === 'rechts' && <li>rechts: kein Arm</li>}</ul>
           <p className="klein">Gesamtstatus je Richtung: schlechtester Teil (Motorfahrzeuge, Velo, Trottoir). ✓ erfüllt, (✓) bedingt, ✗ nicht
             erfüllt, – keine Prüfung.</p>
+          {e.trottoirueberfahrt && <ul className="bericht-status">
+            <li>Trottoirüberfahrt, Phase Trottoir (ab dem hinteren Rand):{' '}
+              <b>{statusMarke(e.trottoirueberfahrt.phaseTrottoir.status)} {tuePhaseText(e.trottoirueberfahrt.phaseTrottoir)}</b></li>
+            <li>Trottoirüberfahrt, Phase Fahrbahn (ab der Bordkante):{' '}
+              <b>{statusMarke(e.trottoirueberfahrt.phaseFahrbahn.status)} {tuePhaseText(e.trottoirueberfahrt.phaseFahrbahn)}</b></li>
+          </ul>}
         </section>
         {rv && <RvBerichtBlock e={e} />}
         <section className="bericht-block">
@@ -600,6 +618,7 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
             <li>Strassennetz, Tempo, Veloführung: © OpenStreetMap-Mitwirkende, ODbL{fall.quellen.osm ? ` (${fall.quellen.osm})` : ''}{abruf('osm')}</li>
             {fall.quellen.parkkataster && <li>Parkfelder: {fall.quellen.parkkataster}{abruf('parkkataster')}</li>}
             {fall.quellen.baumkataster && <li>Bäume: {fall.quellen.baumkataster}{abruf('baumkataster')}</li>}
+            {fall.quellen.vsig && <li>Tempo: {fall.quellen.vsig} (Geoportal Stadt Bern, vor OSM){abruf('vsig')}</li>}
           </ul>
         </section>
 
@@ -609,6 +628,7 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
             <li>VSS 40 273:2024, Ziffern 5 und 10 bis 18; Tab. 1 (Motorfahrzeuge), Tab. 2 (Trottoir), Tab. 3 (Velo); Abb. 3 (Hindernisse),
               Abb. 4 bis 6 (Rechtsvortritt).</li>
             <li>VSS 40 090b, Abb. 2 (Anhaltesichtweite), angewendet ab |i| über {NEIGUNG_EBEN_PROZENT} %.</li>
+            {e.trottoirueberfahrt && <li>VSS 40 242:2019, Ziffern 12.3 (Vortritt), 14.4 (Sicht in zwei Phasen, Gehlinie) und 16 (Breite).</li>}
             <li>Nur Nummern und Zahlenwerte; der Normtext ist im Original nachzulesen.</li>
           </ul>
         </section>
