@@ -74,12 +74,26 @@ describe('K0: amtliches Tempo in der Rechnung (vor OSM, von Hand geht vor)', () 
     const e = rechne(osm(), { tempoAmtlich: daten([linie('ost', 30, [0, 0], [200, 0]), linie('west', null, [0, 0], [-200, 0])]) })
     expect([seite(e, 'links').tempo, seite(e, 'rechts').tempo]).toEqual([50, 30])
     expect(seite(e, 'links').tempoQuelle).toBe('OSM maxspeed')
-    expect(seite(e, 'links').hinweise.join(' | ')).toContain('keine signalisierte Höchstgeschwindigkeit')
+    expect(seite(e, 'links').hinweise.join(' | ')).toMatch(/Geoportal Stadt Bern: 0 von \d+ Punkten an einer Linie mit Wert: Tempo aus OSM/)
   })
   it('nur der Arm Ost hat eine Linie: die Punkte am Knoten (bis 8 m) entscheiden nicht, nach links OSM', () => {
     const e = rechne(osm(), { tempoAmtlich: daten([linie('ost', 30, [0, 0], [200, 0])]) })
     expect([seite(e, 'links').tempo, seite(e, 'rechts').tempo]).toEqual([50, 30])
-    expect(seite(e, 'links').hinweise.join(' | ')).toContain('keine Linie bzw. ausserhalb des geladenen Bereichs')
+    expect(seite(e, 'links').hinweise.join(' | ')).toContain('Geoportal Stadt Bern: entlang dieser Richtung keine Linie: Tempo aus OSM')
+  })
+  it('Punkte bis 8 m vom Knoten stimmen nicht mit; Punkte ausserhalb des Bereichs zählen nicht', () => {
+    // Ost: 0 … 6 m eine Linie 30 (nur am Knoten), dahinter 50: Ergebnis 50, nicht 30
+    const e = rechne(osm(), { tempoAmtlich: daten([linie('k', 30, [0, 0], [6, 0]), linie('w', 50, [6, 0], [200, 0]),
+      linie('west', 50, [0, 0], [-200, 0])]) })
+    expect(seite(e, 'rechts').tempo).toBe(50)
+    // Bereich ±40 m: von den Punkten bis 50 m liegen nur die bis 32 m im Bereich; sie tragen 30 -> 30 (nicht OSM 50 wegen der Punkte aussen)
+    const b = rechne(osm(), { tempoAmtlich: daten([linie('a', 30, [-200, 0], [200, 0])], 40) })
+    expect([seite(b, 'links').tempo, seite(b, 'rechts').tempo]).toEqual([30, 30])
+    // ganz ausserhalb: OSM mit Hinweis
+    const c = rechne(osm(), { tempoAmtlich: { linien: [linie('a', 30, [-200, 0], [200, 0])], bereich: { mitte: [O[0] + 1000, O[1]], radiusM: 100 },
+      quelle: GEOPORTAL_BERN } })
+    expect(seite(c, 'links').tempo).toBe(50)
+    expect(seite(c, 'links').hinweise.join(' | ')).toContain('Richtung ausserhalb des geladenen Bereichs')
   })
   it('ohne OSM-Angabe: V_sig ersetzt die Annahme 50 km/h', () => {
     const e = rechne(osm({}), { tempoAmtlich: daten([linie('a', 30, [-200, 0], [200, 0])]) })

@@ -65,8 +65,8 @@ export interface KnotenEingaben {
   // K0, fehlt in älteren Fällen (= kein Modus)
   trottoirueberfahrt?: TrottoirueberfahrtEingabe | null   // Trottoirüberfahrt über diese Einmündung (VSS 40 242 Ziffer 14.4)
 }
-/** Trottoirüberfahrt über die Einmündung der Zufahrt (K0): gesetzt = Modus an. breite: Breite der Überfahrt von Hand [m]; gilt nur,
- *  wenn die AV keine Breite liefert (Reihenfolge: AV-Trottoir quer über die Zufahrt, angrenzendes AV-Trottoir, Eingabe, Annahme) */
+/** Trottoirüberfahrt über die Einmündung der Zufahrt (K0): gesetzt = Modus an. breite: Breite der Überfahrt von Hand [m]; geht der
+ *  AV vor (Reihenfolge: Eingabe, AV-Trottoir quer über die Zufahrt, schmaleres angrenzendes AV-Trottoir, Annahme; trottoirueberfahrt.ts) */
 export interface TrottoirueberfahrtEingabe { breite: number | null }
 /** Breite der Trottoirüberfahrt von Hand: zulässiger Bereich [m] */
 export const TUE_BREITE_MIN = 1
@@ -219,8 +219,8 @@ export interface TrottoirPruefung {
   gehlinie?: boolean          // K0, Trottoirüberfahrt: Zielpunkte auf der Gehlinie 0,50 m vom hinteren Trottoirrand statt auf der Achse
 }
 
-/** Herkunft der Breite einer Trottoirüberfahrt (K0), in dieser Reihenfolge: AV-Fläche Trottoir quer über die Zufahrt, Breite des
- *  angrenzenden AV-Trottoirs links bzw. rechts der Zufahrt, Eingabe, Annahme 2,00 m */
+/** Herkunft der Breite einer Trottoirüberfahrt (K0), in dieser Reihenfolge: Eingabe, AV-Fläche Trottoir quer über die Zufahrt, das
+ *  schmalere angrenzende AV-Trottoir links bzw. rechts (begrenzt auf 2,00 bis 3,50 m), Annahme 2,00 m */
 export type TueBreiteQuelle = 'av_quer' | 'av_neben' | 'eingabe' | 'annahme'
 /** Phase der Sicht an einer Trottoirüberfahrt (VSS 40 242 Ziffer 14.4): schlechtester Status der Richtungen und die nicht erfüllten
  *  Teile je Richtung (z. B. «links: Auto»); keine_zufahrt = in keiner Richtung geprüft */
@@ -228,10 +228,10 @@ export interface TuePhase { status: RichtungStatus; fehlt: string[] }
 /** Trottoirüberfahrt (K0): Band zwischen vorderem Rand (Bordkante = Fahrbahnrand) und hinterem Rand auf der Zufahrtsachse; Phase
  *  Trottoir = trottoirPruefung (D' 3,00 m hinter dem hinteren Rand, Gehlinie), Phase Fahrbahn = richtungen (Auto, Velo; B ab der Bordkante) */
 export interface TueErgebnis {
-  breite: number              // Breite der Überfahrt [m]: bei av_quer entlang der Zufahrtsachse, sonst quer zur Vortrittsstrasse
+  breite: number              // Breite der Überfahrt quer zur Vortrittsstrasse [m] (hinterer Rand beidseits so weit hinter dem Fahrbahnrand)
   breiteQuelle: TueBreiteQuelle
   breiteText: string          // Herkunft der Breite als Satz
-  laenge: number              // Abstand vorderer – hinterer Rand entlang der Zufahrtsachse [m]
+  laenge: number              // Abstand vorderer – hinterer Rand entlang der Zufahrtsachse [m] = breite / sin α
   vorderkante: P              // Bordkante (Fahrbahnrand der Vortrittsstrasse) auf der Zufahrtsachse: Nullpunkt der Phase Fahrbahn
   hinterkante: P              // hinterer Rand der Überfahrt auf der Zufahrtsachse: Nullpunkt der Phase Trottoir
   gehlinie: number            // Abstand der Gehlinie vom hinteren Trottoirrand [m] (0,50)

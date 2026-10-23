@@ -108,13 +108,16 @@ export const AMTLICH_SUCH_M = 8
 /** höchste Abweichung der Linie von der Fahrtrichtung [°] (wie fgsCheck VSIG_WINKEL) */
 export const AMTLICH_WINKEL = 35
 
+/** Punkte der Spur so nah am Knoten (Anfang der Spur) zählen nicht: dort trifft die Suche noch die Linie des anderen Arms [m] */
+export const AMTLICH_KNOTEN_M = AMTLICH_SUCH_M
+
 /** nächste Linie bei p (bis AMTLICH_SUCH_M, höchstens AMTLICH_WINKEL zur Fahrtrichtung) mit ihrem Wert (v null = Linie ohne Wert);
- *  null ohne Linie bzw. ausserhalb des Bereichs */
-export function amtlichNaechste(d: TempoAmtlichDaten): (p: P, richtung: P) => { v: number | null } | null {
+ *  null ohne Linie, 'aussen' ausserhalb des geladenen Bereichs */
+export function amtlichNaechste(d: TempoAmtlichDaten): (p: P, richtung: P) => { v: number | null } | null | 'aussen' {
   const cos = Math.cos(AMTLICH_WINKEL * Math.PI / 180)
   const b = d.bereich
   return (p, richtung) => {
-    if (b && Math.max(Math.abs(p[0] - b.mitte[0]), Math.abs(p[1] - b.mitte[1])) > b.radiusM - AMTLICH_SUCH_M + 1e-9) return null
+    if (b && Math.max(Math.abs(p[0] - b.mitte[0]), Math.abs(p[1] - b.mitte[1])) > b.radiusM - AMTLICH_SUCH_M + 1e-9) return 'aussen'
     let best: [number, number | null] | null = null
     for (const l of d.linien) for (const z of l.teile) for (let i = 1; i < z.length; i++) {
       const a = z[i - 1], w = sub(z[i], a), l2 = dot(w, w)
@@ -134,23 +137,33 @@ export function amtlichNaechste(d: TempoAmtlichDaten): (p: P, richtung: P) => { 
  */
 export function amtlichBei(d: TempoAmtlichDaten): (p: P, richtung: P) => number | null {
   const n = amtlichNaechste(d)
-  return (p, richtung) => { const x = n(p, richtung); return x && x.v !== null ? tempoStufe(x.v) : null }
+  return (p, richtung) => { const x = n(p, richtung); return x && x !== 'aussen' && x.v !== null ? tempoStufe(x.v) : null }
 }
 
 /**
- * Amtliches Tempo entlang der Spur: Mehrheit der Punkte mit Wert wie tempoEntlang (Start tempo0, das Tempo aus OSM). Gilt nur, wenn
- * über die Länge des Ergebnisses mehr als die Hälfte der Punkte an einer Linie mit Wert liegt; sonst OSM («leere Linie -> OSM», auch
- * ohne Linie: sonst entschieden die wenigen Punkte am Knoten, die noch die Linie des anderen Arms treffen). -> Tempo, Treffer, Punkte
- * an einer Linie mit bzw. ohne Wert
+ * Amtliches Tempo entlang der Spur (weg beginnt am Knoten): Mehrheit der Punkte mit Wert wie tempoEntlang (Start tempo0, das Tempo
+ * aus OSM). Punkte bis AMTLICH_KNOTEN_M vom Knoten stimmen nicht mit (dort trifft die Suche noch die Linie des anderen Arms), Punkte
+ * ausserhalb des geladenen Bereichs bzw. ohne Linie zählen nicht. Gilt nur, wenn über die längere der Längen zu OSM-Tempo und Ergebnis
+ * mehr Punkte an einer Linie mit Wert liegen als an einer Linie ohne Wert («leere Linie -> OSM»); ohne Linie ausserhalb des Knotens
+ * gilt OSM. -> Tempo, Treffer, Punkte an einer Linie mit bzw. ohne Wert, Punkte im Bereich (ohne Knoten)
  */
 export function amtlichEntlang(netz: OsmNetz, weg: P[], tempo0: number, h: number, laenge: (tempo: number) => number, d: TempoAmtlichDaten):
-  { tempo: number; treffer: boolean; wert: number; leer: number } {
+  { tempo: number; treffer: boolean; wert: number; leer: number; innen: number } {
   const n = amtlichNaechste(d)
-  const [t, treffer] = tempoEntlang(netz, weg, tempo0, h, laenge, (q, r) => { const x = n(q, r); return x && x.v !== null ? tempoStufe(x.v) : null })
+  const k0 = weg[0]
+  const bei = (q: P, r: P) => (dist(q, k0) <= AMTLICH_KNOTEN_M + 1e-9 ? 'knoten' as const : n(q, r))
+  const [t, treffer] = tempoEntlang(netz, weg, tempo0, h, laenge, (q, r) => {
+    const x = bei(q, r)
+    return x && typeof x === 'object' && x.v !== null ? tempoStufe(x.v) : null
+  })
   const abst: number[] = []
-  for (let k = 0; k <= Math.floor(laenge(t) / 2); k++) abst.push(h + k * 2)
-  let wert = 0, leer = 0
-  const pkte = punkteAufSpur(weg, abst)
-  for (const [q, r] of pkte) { const x = n(q, r); if (x) { if (x.v === null) leer++; else wert++ } }
-  return { tempo: t, treffer: treffer && 2 * wert > pkte.length, wert, leer }
+  for (let k = 0; k <= Math.floor(Math.max(laenge(t), laenge(tempo0)) / 2); k++) abst.push(h + k * 2)
+  let wert = 0, leer = 0, innen = 0
+  for (const [q, r] of punkteAufSpur(weg, abst)) {
+    const x = bei(q, r)
+    if (x === 'knoten' || x === 'aussen') continue
+    innen++
+    if (x) { if (x.v === null) leer++; else wert++ }
+  }
+  return { tempo: t, treffer: treffer && wert > leer, wert, leer, innen }
 }

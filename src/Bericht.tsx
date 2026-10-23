@@ -628,7 +628,7 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
             <li>VSS 40 273:2024, Ziffern 5 und 10 bis 18; Tab. 1 (Motorfahrzeuge), Tab. 2 (Trottoir), Tab. 3 (Velo); Abb. 3 (Hindernisse),
               Abb. 4 bis 6 (Rechtsvortritt).</li>
             <li>VSS 40 090b, Abb. 2 (Anhaltesichtweite), angewendet ab |i| über {NEIGUNG_EBEN_PROZENT} %.</li>
-            {e.trottoirueberfahrt && <li>VSS 40 242:2019, Ziffern 12.3 (Vortritt), 14.4 (Sicht in zwei Phasen, Gehlinie) und 16 (Breite).</li>}
+            {e.trottoirueberfahrt && <li>VSS 40 242:2019, Ziffern 12.3 (Vortritt), 14.1 bis 14.4 (Anordnung, Sicht in zwei Phasen, Gehlinie), 15.4.2 und 16 (Breite).</li>}
             <li>Nur Nummern und Zahlenwerte; der Normtext ist im Original nachzulesen.</li>
           </ul>
         </section>

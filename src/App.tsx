@@ -826,8 +826,9 @@ function TueBlock({ t }: { t: TueErgebnis }) {
             «Velo» unten.</li>
         </ul>
         <p>{t.regelungText}.</p>
-        <p>Breite: {t.breiteText}. Reihenfolge: AV-Trottoir quer über die Zufahrt, angrenzendes AV-Trottoir, Eingabe von Hand,
-          sonst {f2(TUE_BREITE_ANNAHME_M)} m (Annahme).</p></Info></h3>
+        <p>Breite: {t.breiteText}. Reihenfolge: von Hand, AV-Trottoir quer über die Zufahrt, schmaleres angrenzendes AV-Trottoir
+          (2,00 bis 3,50 m), sonst {f2(TUE_BREITE_ANNAHME_M)} m (Annahme). Hinterer Rand beidseits gleich weit hinter dem Fahrbahnrand;
+          auf der Zufahrtsachse Breite / sin α.</p></Info></h3>
       <p className="klein">Breite {f2(t.breite)} m <span className={t.breiteQuelle === 'annahme' ? 'warnung' : ''}>
         ({TUE_BREITE_KURZ[t.breiteQuelle]})</span>, hinterer Rand {f2(t.laenge)} m hinter der Bordkante entlang der Zufahrtsachse;{' '}
         {t.regelungText.split(':')[0]}.</p>
@@ -882,9 +883,9 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
               ist vortrittsbelastet, VSS 40 242 Ziffer 12.3), und die Sicht wird in zwei Phasen geprüft (Ziffer 14.4): aufs Trottoir ab dem
               hinteren Rand der Überfahrt (D' {f2(B_INNERORTS_M)} m dahinter, Gehlinie {f2(TUE_GEHLINIE_M)} m vor dem hinteren Trottoirrand,
               Tab. 2), auf die Fahrbahn ab der Bordkante (B ab dem vorderen Rand, Tab. 1 und Tab. 3).</p>
-            <p>Breite der Überfahrt: AV-Trottoir quer über die Zufahrt, sonst das angrenzende AV-Trottoir links bzw. rechts (an vielen
-              Einmündungen ist die Zufahrt in der AV durchgehend Strasse), sonst die Eingabe, sonst {f2(TUE_BREITE_ANNAHME_M)} m als
-              Annahme.</p></Info></td><td>
+            <p>Breite der Überfahrt: von Hand, sonst AV-Trottoir quer über die Zufahrt, sonst das schmalere angrenzende AV-Trottoir links
+              bzw. rechts, begrenzt auf 2,00 bis 3,50 m (an vielen Einmündungen ist die Zufahrt in der AV durchgehend Strasse), sonst
+              {' '}{f2(TUE_BREITE_ANNAHME_M)} m als Annahme.</p></Info></td><td>
             <label><input type="checkbox" checked={!!eingaben.trottoirueberfahrt}
               onChange={ev => { const v = ev.target.checked; setEingaben(x => ({ ...x, trottoirueberfahrt: v ? { breite: null } : null })) }} />
               {' '}über diese Einmündung</label>
@@ -893,7 +894,7 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
             {eingaben.trottoirueberfahrt && <div className="klein">Breite von Hand{' '}
               <TueBreiteFeld wert={eingaben.trottoirueberfahrt.breite}
                 onWert={b => setEingaben(x => ({ ...x, trottoirueberfahrt: { breite: b } }))} />{' '}
-              (gilt nur, wenn die AV keine Breite liefert)</div>}
+              (geht der AV vor)</div>}
           </td></tr>
           <tr><td>Trottoir<Info titel="Trottoir">
             <p>Wählbar, wenn die AV ein Trottoir quer über die Zufahrt zeigt (Beginn höchstens {String(TROTTOIR_BIS_M).replace('.', ',')} m

@@ -245,21 +245,22 @@ kein Rechtsvortritt (VSS 40 242 Ziffer 12.3; Vorgabe Vortritt bzw. Stop aus OSM,
 Sicht in zwei Phasen nach Ziffer 14.4 mit den Werten der VSS 40 273: Phase Fahrbahn mit B ab der Bordkante (vorderer Rand der
 Überfahrt; Haltelinie und Radweg nach Ziffer 12 gehen vor), Motorfahrzeuge Tab. 1, Velo Tab. 3; Phase Trottoir mit D' 3,00 m hinter dem
 hinteren Rand der Überfahrt und Zielpunkten auf der Gehlinie 0,50 m vor dem hinteren Trottoirrand, Tab. 2 nach der Längsneigung (Profil
-entlang der Gehlinie). Breite der Überfahrt in dieser Reihenfolge: AV-Fläche Trottoir quer über die Zufahrt, Breite des angrenzenden
-AV-Trottoirs links bzw. rechts (Mittel; an vielen Einmündungen ist die Zufahrt in der AV durchgehend Strasse, der Planungsfall), Eingabe
-von Hand, sonst 2,00 m als Annahme (kleinste Breite nach Ziffer 16). Hinterer Trottoirrand je Seite aus dem AV-Trottoir der Seite, sonst
-parallel zur Strasse im Abstand der Breite. Ergebnis je Phase (Status, nicht erfüllte Teile) im Panel, auf der Karte (Band von der
+entlang der Gehlinie). Breite der Überfahrt in dieser Reihenfolge (Ziffer 16): Eingabe von Hand, AV-Fläche Trottoir quer über die
+Zufahrt, das schmalere angrenzende AV-Trottoir links bzw. rechts, begrenzt auf 2,00 bis 3,50 m (an vielen Einmündungen ist die Zufahrt in
+der AV durchgehend Strasse, der Planungsfall), sonst 2,00 m als Annahme. Hinterer Rand der Überfahrt beidseits gleich weit hinter dem
+Fahrbahnrand, auf der Zufahrtsachse Länge = Breite / sin α; die Gehlinie je Seite vor dem eigenen hinteren Trottoirrand (AV-Trottoir der
+Seite, sonst Fahrbahnrand plus Breite). Kurze Hinweise nur, wenn sie zutreffen: ausserorts (Ziffer 14.1), Zufahrt auf der durchgehenden
+Strasse (14.2), Tempo über 50 km/h (14.3.1), Winkel unter 45° bzw. über 135° (14.3.4), Velos auf dem Trottoir nach OSM (15.4.2). Ergebnis je Phase (Status, nicht erfüllte Teile) im Panel, auf der Karte (Band von der
 Bordkante zum hinteren Rand, Sichtdreiecke von D und D') und im Bericht. Die Gehlinie gilt nur in diesem Modus; Knoten und
 Grundstückzufahrten ohne Häkchen rechnen wie 0.5.0 (Trottoirachse, Nullpunkt an der Trottoirhinterkante). In der Stadt Bern (AV-Gemeinde
 unter dem Knoten bzw. Zufahrtspunkt, BFS 351) holt die App die signalisierte Höchstgeschwindigkeit des Geoportals (map.bern.ch, Layer
 `Signalisierte_Hoechstgeschwindigkeit`, Feld V_sig, ±150 m; Quellenangabe «Geodaten Stadt Bern») und rechnet je Richtung mit der Mehrheit
-entlang des Arms (nächste Linie bis 8 m, längs, höchstens 35° Abweichung; liegt nicht mehr als die Hälfte der Punkte an einer Linie mit
-Wert, gilt OSM); Herkunft «Geoportal Stadt Bern» beim Tempo, Hinweis bei Abweichung von OSM; Tempo von Hand geht vor, ausserhalb Berns
+entlang des Arms (nächste Linie bis 8 m, längs, höchstens 35° Abweichung; Punkte bis 8 m vom Knoten und ausserhalb des geladenen
+Bereichs zählen nicht; liegen nicht mehr Punkte an einer Linie mit Wert als an einer ohne Wert bzw. keine Linie, gilt OSM); Herkunft «Geoportal Stadt Bern» beim Tempo, Hinweis bei Abweichung von OSM; Tempo von Hand geht vor, ausserhalb Berns
 und bei einem Fehler des Dienstes OSM. Schnittstelle des Kerns (für die Kopie in fgsCheck) im Kopf von `rechner/rechnen.ts`; Band und
 Gehlinie in `rechner/trottoirueberfahrt.ts`, Zuordnung des Tempos in `rechner/tempo.ts`, Abruf in `daten/vsig.ts`; Tests
-`rechner/trottoirueberfahrt.test.ts` und `rechner/tempoamtlich.test.ts`. Grenzen: Velos auf dem Trottoir (Ziffer 15.4.2) nicht geprüft,
-Zurücksetzen des hinteren Rands bei Trottoirs unter 2,00 m (Ziffer 16) nur als Hinweis, Trottoir nicht in den Massnahmen; Vortrittsvorgabe
-und «ausserorts» weiter nach OSM.
+`rechner/trottoirueberfahrt.test.ts` und `rechner/tempoamtlich.test.ts`. Grenzen: Velos auf dem Trottoir (Ziffer 15.4.2) nur als Hinweis,
+Trottoir nicht in den Massnahmen; Vortrittsvorgabe und «ausserorts» weiter nach OSM.
 
 ### Versionen
 
@@ -366,7 +367,8 @@ GoatCounter (sichtweiten.goatcounter.com; nur Seitenaufrufe und der Aufruf der P
 - Strassennetz, Tempo, Veloführung: © OpenStreetMap-Mitwirkende, ODbL (Overpass API)
 - Parkfelder und Bäume Stadt Bern: Geodaten Stadt Bern (Parkplätze öffentlich, Baumkataster)
 - Tempo Stadt Bern: Geodaten Stadt Bern (Signalisierte Höchstgeschwindigkeit, Geoportal)
-- Normbezüge: VSS 40 273:2024 (Ziffern 5 und 10 bis 18, Tab. 1 bis 3, Abb. 3 bis 6), VSS 40 090b (Abb. 2); nur Nummern, Ziffern und
+- Normbezüge: VSS 40 273:2024 (Ziffern 5 und 10 bis 18, Tab. 1 bis 3, Abb. 3 bis 6), VSS 40 090b (Abb. 2), VSS 40 242:2019 (Ziffern 12.3,
+  14.1 bis 14.4, 15.4.2, 16); nur Nummern, Ziffern und
   Zahlenwerte, kein Normtext
 - Polygon-Operationen: polygon-clipping (MIT)
 

@@ -29,7 +29,7 @@ export const STATUS_TEXT_TEIL: Record<string, string> = { erfuellt: 'erfüllt', 
 
 /** Trottoirüberfahrt (K0): Herkunft der Breite kurz und Status einer Phase (Panel und Bericht) */
 export const TUE_BREITE_KURZ: Record<TueBreiteQuelle, string> = {
-  av_quer: 'AV, Trottoir quer über die Zufahrt', av_neben: 'AV, wie das angrenzende Trottoir', eingabe: 'von Hand', annahme: 'Annahme',
+  av_quer: 'AV, Trottoir quer über die Zufahrt', av_neben: 'AV, schmaleres angrenzendes Trottoir', eingabe: 'von Hand', annahme: 'Annahme',
 }
 export const tuePhaseText = (p: TuePhase) => (p.status === 'keine_zufahrt' ? 'nicht geprüft' : p.fehlt.length ?
   `nicht erfüllt (${p.fehlt.join(', ')})` : STATUS_TEXT[p.status])

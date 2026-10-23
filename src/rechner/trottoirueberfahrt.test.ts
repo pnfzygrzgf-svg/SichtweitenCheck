@@ -10,7 +10,7 @@ import type { OsmDaten, OsmWeg } from '../daten/osm'
 import type { AvFlaeche } from '../daten/av'
 import type { Hindernis } from './hindernisse'
 import { rechneKnoten } from './rechnen'
-import { tueBand, TUE_GEHLINIE_M, TUE_BREITE_ANNAHME_M } from './trottoirueberfahrt'
+import { tueBand, TUE_GEHLINIE_M, TUE_BREITE_ANNAHME_M, type TueSeite } from './trottoirueberfahrt'
 import { KEINE_ALLE_EINGABEN, type Eingaben, type Ergebnis, type KnotenFall } from './typen'
 import { ergebnisAuszug } from '../fall'
 
@@ -118,7 +118,7 @@ describe('K0: Zufahrt in der AV durchgehend Strasse, angrenzendes Trottoir links
     expect([t.breiteQuelle, t.breite]).toEqual(['av_neben', expect.closeTo(2.5, 2)])
     expect(t.laenge).toBeCloseTo(2.5, 1)
     nahe(t.hinterkante, 1.25, -5.5, 0.06)
-    expect(t.breiteText).toContain('wie das angrenzende Trottoir nach AV (links und rechts, Mittel)')
+    expect(t.breiteText).toContain('nach dem schmaleren angrenzenden Trottoir (AV links 2,50 m, rechts 2,50 m')
   })
   it('Phase Trottoir mit Gehlinie y −5,0 und D\' (0,75; −8,5); Phase Fahrbahn ab der Bordkante D (0,75; −6)', () => {
     const tp = e.trottoirPruefung!
@@ -128,14 +128,32 @@ describe('K0: Zufahrt in der AV durchgehend Strasse, angrenzendes Trottoir links
     // ohne Modus: keine Trottoirprüfung (die AV zeigt kein Trottoir quer über die Zufahrt), Ergebnis wie bisher
     expect(rechne(osm(), [fahrbahn, trottoirL, trottoirR]).trottoirPruefung).toBeNull()
   })
-  it('Breite von Hand ohne Wirkung, wenn die AV die Breite liefert (Hinweis)', () => {
+  it('Breite von Hand geht der AV vor (Hinweis mit dem AV-Wert): hinterer Rand y −6,5, D\' y −9,5, Gehlinie bleibt y −5,0', () => {
     const m = rechne(osm(), [fahrbahn, trottoirL, trottoirR], { eingaben: eg({ trottoirueberfahrt: { breite: 3.5 } }) })
-    expect(m.trottoirueberfahrt!.breiteQuelle).toBe('av_neben')
-    expect(m.hinweise.join(' | ')).toContain('Breite der Trottoirüberfahrt von Hand 3,50 m ohne Wirkung')
+    expect([m.trottoirueberfahrt!.breiteQuelle, m.trottoirueberfahrt!.breite]).toEqual(['eingabe', 3.5])
+    expect(m.trottoirueberfahrt!.laenge).toBeCloseTo(3.5, 3)
+    expect(m.hinweise.join(' | ')).toContain('Breite der Trottoirüberfahrt von Hand 3,50 m (AV: 2,50 m)')
+    nahe(m.trottoirueberfahrt!.hinterkante, 1.25, -6.5, 0.06)
+    nahe(m.trottoirPruefung!.D, 0.75, -9.5, 0.06)
+    nahe(m.trottoirPruefung!.richtungen[0].K, 1.25, -5, 0.06)
+  })
+  it('ungleiche Trottoirs 2 m links / 6 m rechts: Breite 2,00 (das schmalere), Länge 2,00, hinterer Rand y −5; Gehlinie je Seite', () => {
+    // vorher (Schnitt durch die zusammengesetzte Randlinie): Breite 4,00, Länge 6,00. Gehlinie links y −4,5, rechts y −8,5
+    const l2 = flaeche('Trottoir', [lv(-200, -5), lv(-2.5, -5), lv(-2.5, -3), lv(-200, -3)])
+    const r6 = flaeche('Trottoir', [lv(2.5, -9), lv(200, -9), lv(200, -3), lv(2.5, -3)])
+    const m = rechne(osm(), [fahrbahn, l2, r6], { eingaben: eg(TUE) })
+    const t = m.trottoirueberfahrt!
+    expect([t.breiteQuelle, t.breite]).toEqual(['av_neben', expect.closeTo(2, 2)])
+    expect(t.laenge).toBeCloseTo(2, 2)
+    nahe(t.hinterkante, 1.25, -5, 0.06)
+    nahe(m.trottoirPruefung!.D, 0.75, -8, 0.06)
+    nahe(m.trottoirPruefung!.richtungen[0].K, 1.25, -4.5, 0.06)
+    nahe(m.trottoirPruefung!.richtungen[1].K, 1.25, -8.5, 0.06)
+    expect(m.annahmen.join(' | ')).toContain('hinterer Rand beidseits 2,00 m hinter dem Fahrbahnrand, auf der Zufahrtsachse 2,00 m')
   })
   it('nur rechts ein Trottoir: links Fahrbahnrand plus Breite (y −5,5)', () => {
     const m = rechne(osm(), [fahrbahn, trottoirR], { eingaben: eg(TUE) })
-    expect(m.trottoirueberfahrt!.breiteText).toContain('(rechts)')
+    expect(m.trottoirueberfahrt!.breiteText).toContain('angrenzenden Trottoir (AV rechts 2,50 m;')
     nahe(m.trottoirPruefung!.richtungen[0].K, 1.25, -5, 0.06)
     expect(m.trottoirPruefung!.achseQuelle).toContain('Fahrbahnrand plus Breite der Überfahrt 2,50 m')
   })
@@ -223,27 +241,79 @@ describe('K0: Regression ohne Modus', () => {
   })
 })
 
-describe('K0: tueBand (Geometrie)', () => {
-  // gerade Zufahrtsachse nach Süden ab (1,25; 30) über den Knoten; Arme West und Ost auf y = 0; Fahrbahnrand 3 m
-  const zAchse: P[] = [lv(1.25, 30), lv(1.25, -100)]
-  const sRand = 33                                     // Bogenlänge bis y −3
+describe('K0: tueBand (Breite nach VSS 40 242 Ziffer 16, Länge = Breite / sin α)', () => {
+  // Arme West und Ost auf y = 0, Zufahrt von Süden: West u = (−1; 0), links von u = Süden -> Seite +1; Ost u = (1; 0) -> Seite −1.
+  // Fahrbahnrand 3 m, Bordkante auf der Zufahrtsachse bei sRand = 33
+  const sRand = 33
   const west: P[] = [lv(0, 0), lv(-100, 0)], ost: P[] = [lv(0, 0), lv(100, 0)]
-  it('Reihenfolge der Breite: AV quer, AV neben (Mittel), Eingabe, Annahme', () => {
-    const t = (b: number) => ({ abstand: 3 + b / 2, breite: b, n: 10 })
-    const s0 = { ml: west, seite: -1 as const, rand: 3, t: null }, s1 = { ml: ost, seite: 1 as const, rand: 3, t: null }
-    expect(tueBand(zAchse, sRand, lv(0, 0), [s0, s1], { sHinter: 35.4, breite: 2.4 }, 3).quelle).toBe('av_quer')
-    const n = tueBand(zAchse, sRand, lv(0, 0), [{ ...s0, t: t(2) }, { ...s1, t: t(3) }], null, 4)
-    expect([n.quelle, n.breite, n.hinten, n.gehlinie]).toEqual(['av_neben', 2.5, [5, 6], [4.5, 5.5]])
-    expect(n.hinweise[0]).toContain('ohne Wirkung')
-    expect(tueBand(zAchse, sRand, lv(0, 0), [s0, s1], null, 3).quelle).toBe('eingabe')
-    const a = tueBand(zAchse, sRand, lv(0, 0), [s0, s1], null, null)
-    expect([a.quelle, a.breite, a.hinten, a.gehlinie]).toEqual(['annahme', 2, [5, 5], [4.5, 4.5]])
-    expect(a.sHinter).toBeCloseTo(35, 3)
+  const t = (b: number) => ({ abstand: 3 + b / 2, breite: b, n: 10 })
+  const seiten = (bw: number | null, bo: number | null): [TueSeite, TueSeite] =>
+    [{ ml: west, seite: 1, rand: 3, t: bw === null ? null : t(bw) }, { ml: ost, seite: -1, rand: 3, t: bo === null ? null : t(bo) }]
+  it('Reihenfolge: von Hand (geht der AV vor), AV quer, schmaleres angrenzendes Trottoir, Annahme 2,00 m', () => {
+    const h = tueBand(sRand, seiten(2, 3), { sHinter: 35.4, breite: 2.4 }, 3, 90)
+    expect([h.quelle, h.breite, h.laenge]).toEqual(['eingabe', 3, 3])
+    expect(h.hinweise).toEqual(['Breite der Trottoirüberfahrt von Hand 3,00 m (AV: 2,40 m).'])
+    const q = tueBand(sRand, seiten(2, 3), { sHinter: 35.4, breite: 2.4 }, null, 90)
+    expect([q.quelle, q.breite, q.sHinter]).toEqual(['av_quer', 2.4, 35.4])
+    const a = tueBand(sRand, seiten(null, null), null, null, 90)
+    expect([a.quelle, a.breite, a.hinten, a.gehlinie, a.sHinter]).toEqual(['annahme', 2, [5, 5], [4.5, 4.5], 35])
   })
-  it('schmales Trottoir unter 1,00 m: Gehlinie höchstens in der Mitte; unter 2,00 m Hinweis Ziffer 16', () => {
-    const n = tueBand(zAchse, sRand, lv(0, 0), [{ ml: west, seite: -1, rand: 3, t: { abstand: 3.4, breite: 0.8, n: 5 } },
-      { ml: ost, seite: 1, rand: 3, t: null }], null, null)
+  it('ungleiche Breiten 2/3, 2/6, 1,8/4: das schmalere, begrenzt auf 2,00 bis 3,50 m; Gehlinie je Seite vor dem eigenen Rand', () => {
+    const f = (bw: number, bo: number) => tueBand(sRand, seiten(bw, bo), null, null, 90)
+    const a = f(2, 3), b = f(2, 6), c = f(1.8, 4), d = f(4, 5)
+    expect([a.breite, a.laenge, a.hinten, a.gehlinie, a.hinweise]).toEqual([2, 2, [5, 6], [4.5, 5.5], []])
+    expect([b.breite, b.laenge, b.hinten, b.gehlinie]).toEqual([2, 2, [5, 9], [4.5, 8.5]])
+    expect([c.breite, c.laenge]).toEqual([2, 2])
+    expect(c.hinweise).toEqual(['Breite der Trottoirüberfahrt 2,00 m: angrenzendes Trottoir nach AV 1,80 m, nach VSS 40 242 Ziffer 16 ' +
+      'begrenzt auf 2,00 bis 3,50 m.'])
+    expect([d.breite, d.laenge, d.hinweise.length]).toEqual([3.5, 3.5, 1])
+    expect(c.quelle).toBe('av_neben')
+  })
+  it('schiefe Einmündung: Länge auf der Zufahrtsachse = Breite / sin α (60°: 2,50 / 0,866 = 2,887 m); AV quer: Breite = Länge · sin α', () => {
+    const n = tueBand(sRand, seiten(2.5, 2.5), null, null, 60)
+    expect(n.breite).toBe(2.5)
+    expect(n.laenge).toBeCloseTo(2.5 / Math.sin(Math.PI / 3), 6)
+    expect(n.sHinter).toBeCloseTo(sRand + 2.887, 3)
+    expect(tueBand(sRand, seiten(2.5, 2.5), null, null, 120).laenge).toBeCloseTo(2.887, 3)
+    const q = tueBand(sRand, seiten(null, null), { sHinter: sRand + 2.887, breite: 2.887 }, null, 60)
+    expect([q.laenge, q.breite]).toEqual([expect.closeTo(2.887, 3), expect.closeTo(2.5, 3)])
+  })
+  it('schmales Trottoir unter 1,00 m: Gehlinie höchstens in der Mitte des Trottoirs', () => {
+    const n = tueBand(sRand, [{ ml: west, seite: 1, rand: 3, t: { abstand: 3.4, breite: 0.8, n: 5 } }, { ml: ost, seite: -1, rand: 3, t: null }],
+      null, null, 90)
     expect(n.gehlinie[0]).toBeCloseTo(3.4, 6)
-    expect(n.hinweise.join(' ')).toContain('Ziffer 16')
+    expect(n.breite).toBe(2)
+  })
+})
+
+describe('K0: kurze Hinweise nur, wenn sie zutreffen (VSS 40 242 Ziffern 14.1, 14.2, 14.3.1, 14.3.4, 15.4.2)', () => {
+  const hw = (e: Ergebnis) => e.hinweise.join(' | ')
+  it('Normalfall (innerorts, 30 km/h, rechtwinklig, Einmündung): keiner dieser Hinweise', () => {
+    const h = hw(rechne(osm(), [fahrbahn], { eingaben: eg(TUE) }))
+    for (const z of ['14.1', '14.2', '14.3.1', '14.3.4', '15.4.2']) expect(h).not.toContain(`Ziffer ${z}`)
+  })
+  it('60 km/h: ausserorts (14.1) und Tempo über 50 km/h (14.3.1); ohne Modus nicht', () => {
+    const h = hw(rechne(osm({ maxspeed: '60' }), [fahrbahn], { eingaben: eg(TUE) }))
+    expect(h).toContain('Trottoirüberfahrt ausserorts (nach OSM): nach VSS 40 242 Ziffer 14.1 nur innerorts.')
+    expect(h).toContain('Tempo auf der Hauptfahrbahn 60 km/h: nach VSS 40 242 Ziffer 14.3.1 höchstens 50 km/h.')
+    expect(hw(rechne(osm({ maxspeed: '60' }), [fahrbahn]))).not.toContain('Ziffer 14.1')
+  })
+  it('Häkchen an einem Arm der durchgehenden Strasse (14.2)', () => {
+    const h = hw(rechne(osm(), [fahrbahn], { zufahrt: '1:1:-1', eingaben: eg(TUE) }))
+    expect(h).toContain('nach VSS 40 242 Ziffer 14.2')
+  })
+  it('spitzer Einbiegewinkel rund 40° (14.3.4)', () => {
+    const o = osm()
+    o.wege[1] = weg(2, [[12, 0, 0], [20, -153.2, -128.6]], { highway: 'residential', name: 'Nebenstrasse', maxspeed: '30' })
+    const e = rechne(o, [fahrbahn], { eingaben: eg(TUE) })
+    expect(hw(e)).toMatch(/Einbiegewinkel rund (40|140)°: nach VSS 40 242 Ziffer 14\.3\.4 nur zwischen 45° und 135°\./)
+  })
+  it('Velos auf dem Trottoir nach OSM (15.4.2): Tag auf der Seite der Zufahrt bzw. beidseits; andere Seite nicht', () => {
+    // Hauptstrasse West -> Ost digitalisiert: die Zufahrt (Süden) liegt rechts
+    expect(hw(rechne(osm({ 'sidewalk:right:bicycle': 'yes' }), [fahrbahn], { eingaben: eg(TUE) })))
+      .toContain('OSM: Velos auf dem Trottoir gestattet (sidewalk:right:bicycle=yes): nach VSS 40 242 Ziffer 15.4.2')
+    expect(hw(rechne(osm({ 'sidewalk:both:bicycle': 'yes' }), [fahrbahn], { eingaben: eg(TUE) }))).toContain('sidewalk:both:bicycle=yes')
+    expect(hw(rechne(osm({ 'sidewalk:left:bicycle': 'yes' }), [fahrbahn], { eingaben: eg(TUE) }))).not.toContain('15.4.2')
+    expect(hw(rechne(osm({ 'sidewalk:right:bicycle': 'yes' }), [fahrbahn]))).not.toContain('15.4.2')
   })
 })
