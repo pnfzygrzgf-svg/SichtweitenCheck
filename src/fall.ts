@@ -17,16 +17,19 @@
 // Ergebnisses der Rechtsvortritt (Zustand nach Abb. 6, Paarmatrix). Version 1 bis 4 werden weiter gelesen.
 // Version 6 (E4a): Bezeichnung des Falls (ort.bezeichnung, frei eingebbar im Bericht, höchstens BEZEICHNUNG_MAX Zeichen; zu lange
 // werden gekürzt, ungültige übergangen und gemeldet). Version 1 bis 5 werden weiter gelesen (ohne Bezeichnung).
+// Version 7 (K0): Trottoirüberfahrt über die Einmündung der Zufahrt (eingaben.trottoirueberfahrt: { breite } bzw. fehlt = kein Modus;
+// Breite von Hand TUE_BREITE_MIN bis TUE_BREITE_MAX m oder null), Quelle «vsig» (signalisierte Höchstgeschwindigkeit Stadt Bern); im
+// Auszug des Ergebnisses die Trottoirüberfahrt je Phase. Version 1 bis 6 werden weiter gelesen (ohne Trottoirüberfahrt).
 
 import type { P } from './geo'
 import type { Hindernis, ParkKlasse } from './rechner/hindernisse'
-import { KEINE_ALLE_EINGABEN, REGELUNGEN, TEMPO_ARTEN, TEMPO_MIN, TEMPO_MAX, type Eingaben, type Regelung, type Richtung,
+import { KEINE_ALLE_EINGABEN, REGELUNGEN, TEMPO_ARTEN, TEMPO_MIN, TEMPO_MAX, TUE_BREITE_MIN, TUE_BREITE_MAX, type Eingaben, type Regelung, type Richtung,
   type TempoArt, type TempoEingabe, type ZufahrtspunktEingabe, type Ergebnis } from './rechner/typen'
 import { zufahrtspunktKey } from './rechner/grundstueck'
 import { VELOFUEHRUNGEN, type Velofuehrung } from './rechner/velo'
 import { WAHRNEHMBARKEITEN, type Wahrnehmbarkeit } from './rechner/rechtsvortritt'
 
-export const FALL_VERSION = 6
+export const FALL_VERSION = 7
 /** Bezeichnung des Falls (Bericht): höchstens so lang */
 export const BEZEICHNUNG_MAX = 200
 
@@ -47,13 +50,15 @@ export interface FallErgebnis {
   // E3c
   rechtsvortritt?: { wahrnehmbarkeit: string; arme: { arm: string; rechts: string; vorhanden: number; zustand: string | null; status: string
     schmal: boolean; paare: { sichtbar: number; gesamt: number; erste: { s1: number; s2: number } | null } | null }[] } | null
+  // K0
+  trottoirueberfahrt?: { breite: number; breiteQuelle: string; laenge: number; phaseTrottoir: string; phaseFahrbahn: string } | null
 }
 
 export interface Fall {
   app: 'SichtweitenCheck'
   version: number
   ort: { lat: number; lon: number; knoten: number | null; zufahrt: string | null; zufahrtspunkt?: ZufahrtspunktEingabe; bezeichnung?: string }
-  quellen: { osm?: string; av?: string; parkkataster?: string; baumkataster?: string; hoehen?: string; geladen?: string }
+  quellen: { osm?: string; av?: string; parkkataster?: string; baumkataster?: string; hoehen?: string; vsig?: string; geladen?: string }
   eingaben: Eingaben                               // E1 und E2b, gelten für die Zufahrt (ort.zufahrt bzw. die vorgeschlagene)
   hindernisse: Hindernis[]
   vorschlaege: Record<string, 'verworfen'>         // verworfene Vorschläge (OSM, Baumkataster) und amtliche Parkfelder
@@ -85,7 +90,10 @@ export function ergebnisAuszug(e: Ergebnis, regelungText: string): FallErgebnis 
       arme: (e.rechtsvortritt.alle ?? [e.rechtsvortritt.arm]).map(a => ({ arm: a.armName, rechts: a.rechtsName,
         vorhanden: Math.round(a.vorhanden * 10) / 10, zustand: a.zustand, status: a.status, schmal: a.schmal,
         paare: a.paare ? { sichtbar: a.paare.sichtbar, gesamt: a.paare.paare.length, erste: a.paare.erste ? { s1: a.paare.erste.s1,
-          s2: a.paare.erste.s2 } : null } : null })) } : null }
+          s2: a.paare.erste.s2 } : null } : null })) } : null,
+    ...(e.trottoirueberfahrt ? { trottoirueberfahrt: { breite: Math.round(e.trottoirueberfahrt.breite * 100) / 100,
+      breiteQuelle: e.trottoirueberfahrt.breiteQuelle, laenge: Math.round(e.trottoirueberfahrt.laenge * 100) / 100,
+      phaseTrottoir: e.trottoirueberfahrt.phaseTrottoir.status, phaseFahrbahn: e.trottoirueberfahrt.phaseFahrbahn.status } } : {}) }
 }
 
 const zahl = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
@@ -159,6 +167,17 @@ export function eingabenPruefen(x: unknown, hinweise: string[], version = FALL_V
   // E3c (Version 5)
   feld('wahrnehmbarkeit', oderNull((v): v is Wahrnehmbarkeit => WAHRNEHMBARKEITEN.includes(v as Wahrnehmbarkeit)), v => { if (v) e.wahrnehmbarkeit = v })
   feld('alleArme', bool, v => { if (v) e.alleArme = true })
+  // K0 (Version 7): Trottoirüberfahrt; ungültige Breite -> ohne Breite (Modus bleibt), gemeldet
+  if (x.trottoirueberfahrt !== undefined && x.trottoirueberfahrt !== null) {
+    const t = x.trottoirueberfahrt
+    if (!istObjekt(t)) falsch('trottoirueberfahrt')
+    else {
+      const b = t.breite
+      const ok = b === undefined || b === null || (zahl(b) && b >= TUE_BREITE_MIN && b <= TUE_BREITE_MAX)
+      if (!ok) hinweise.push('Eingabe «trottoirueberfahrt.breite» ungültig, ohne Breite')
+      e.trottoirueberfahrt = { breite: ok && zahl(b) ? b : null }
+    }
+  }
   return e
 }
 
@@ -214,7 +233,7 @@ export const GEBIET = { latMin: 45.7, latMax: 47.9, lonMin: 5.8, lonMax: 10.6 }
 export const imGebiet = (lat: number, lon: number): boolean =>
   lat >= GEBIET.latMin && lat <= GEBIET.latMax && lon >= GEBIET.lonMin && lon <= GEBIET.lonMax
 
-const QUELLEN_SCHLUESSEL = ['osm', 'av', 'parkkataster', 'baumkataster', 'hoehen', 'geladen'] as const
+const QUELLEN_SCHLUESSEL = ['osm', 'av', 'parkkataster', 'baumkataster', 'hoehen', 'vsig', 'geladen'] as const
 
 /** Fall aus JSON lesen und prüfen -> [Fall, Hinweise]. Ausnahme nur bei fremder Datei, Version oder ungültigem Ort; ungültige
  * Listen bzw. Objekte und einzelne ungültige Einträge werden übergangen und gemeldet. Auch für den Browser-Speicher. */
@@ -285,7 +304,8 @@ export function eingabenGesetzt(e: Eingaben): number {
   return [e.typ !== v.typ, e.fahrstreifen !== v.fahrstreifen, e.neigungGross !== v.neigungGross, e.schwerverkehr !== v.schwerverkehr,
     e.neigung.links !== null, e.neigung.rechts !== null, e.regelung !== null, e.haltelinie !== null, e.D !== null, e.trottoirFrei,
     e.tempo.links !== null, e.tempo.rechts !== null, (e.velo?.links ?? null) !== null, (e.velo?.rechts ?? null) !== null,
-    !!e.ebikeVerboten, (e.wahrnehmbarkeit ?? null) !== null, !!e.alleArme].filter(x => x).length
+    !!e.ebikeVerboten, (e.wahrnehmbarkeit ?? null) !== null, !!e.alleArme, !!e.trottoirueberfahrt,
+    (e.trottoirueberfahrt?.breite ?? null) !== null].filter(x => x).length
 }
 
 /** Anzahl Eingaben (E1/E2b, Hindernisse, verworfene Vorschläge bzw. Parkfelder, Baumkataster zugeschaltet, Parkfelder abgeschaltet) */

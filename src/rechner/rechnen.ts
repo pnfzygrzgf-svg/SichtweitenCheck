@@ -19,6 +19,25 @@
 // Nullpunkt am Rand des rechten Arms, B 5,00 m, Tempo 30 km/h fest; nach rechts die Sicht auf die Fahrstreifenachse des rechten Arms
 // mit dem Zustand nach Abb. 6 (Wahrnehmbarkeit als Eingabe), bei schmaler Zufahrt die Paarmatrix nach Abb. 5; von links keine
 // Prüfung (dieser Verkehr muss der Zufahrt den Vortritt lassen); auf Wunsch dieselbe Rechnung für jeden Arm.
+//
+// K0 (23.10.2026): Trottoirüberfahrt und amtliches Tempo. Schnittstelle «Knotensicht einer Zufahrt mit Trottoirüberfahrt» (auch für
+// die Kopie in fgsCheck; Kern = rechner/ und daten/osm.ts, daten/av.ts, daten/parkkataster.ts, daten/baumkataster.ts, geo.ts, ohne UI):
+//
+//   rechneKnoten(osm, av, {
+//     knoten, zufahrt,                       // OSM-Knoten und Arm «wid:i:sd» (bzw. zufahrtspunkt für eine Ausfahrt ohne Knoten)
+//     eingaben: { ...KEINE_ALLE_EINGABEN, trottoirueberfahrt: { breite: null | m } },
+//     hindernisse, avZentrum, hoehen,
+//     tempoAmtlich: { linien, bereich, quelle } | null,   // Stadt Bern: V_sig des Geoportals (daten/vsig.ts), sonst null = OSM
+//   }) -> Rechnung; ergebnis.trottoirueberfahrt: TueErgebnis (Breite mit Herkunft, vorderer und hinterer Rand, Status je Phase),
+//      Phase Trottoir = ergebnis.trottoirPruefung (D' 3,00 m hinter dem hinteren Rand, Zielpunkte auf der Gehlinie 0,50 m vor dem
+//      hinteren Trottoirrand, Tab. 2), Phase Fahrbahn = ergebnis.richtungen (Auto Tab. 1, Velo Tab. 3, B ab der Bordkante).
+//
+// Im Modus gilt (VSS 40 242 Ziffern 12.3, 14.4): kein Rechtsvortritt (Vorgabe Vortritt bzw. Stop aus OSM; «Rechtsvortritt» gewählt:
+// gerechnet wie Vortritt), Nullpunkt von B an der Bordkante (vorderer Rand der Überfahrt; eine Haltelinie bzw. ein Radweg nach Ziffer 12
+// gehen vor), Sicht aufs Trottoir ab dem hinteren Rand mit der Gehlinie; Breite der Überfahrt in trottoirueberfahrt.ts. Ohne Modus
+// rechnet der Kern wie 0.5.0 (Trottoirachse in der Mitte, Nullpunkt an der Trottoirhinterkante bzw. mit «ohne Hindernisse» an der
+// Bordkante). Amtliches Tempo: je Richtung Mehrheit entlang der Mittellinie des Arms (tempo.amtlichEntlang; überwiegen die Punkte an
+// einer Linie ohne Wert, gilt OSM), vor OSM, von Hand geht vor.
 
 import { type P, lv95, wgs, neg, drehung, kreuz, dist, links, imPolygon, wdiff, sub, add, abstandStrecke } from '../geo'
 import type { OsmDaten } from '../daten/osm'
@@ -28,7 +47,8 @@ import { Fahrbahn, Gebaeude, Flaechen } from './flaechen'
 import { OsmAchsen } from './achsen'
 import { fahrstreifenmitte, lageOsm, LAGE_ERSATZ } from './fahrstreifen'
 import { punkteAufSpur } from './spur'
-import { wegTempo, tempoEntlang, zonenTempo, TEMPO_ERSATZ } from './tempo'
+import { wegTempo, tempoEntlang, zonenTempo, amtlichEntlang, TEMPO_ERSATZ } from './tempo'
+import { tueBand, TUE_GEHLINIE_M, TUE_BREITE_ANNAHME_M, type TueBand } from './trottoirueberfahrt'
 import { sichtweiteA, zielLaenge, sichtStatus, istHvsHighway, TAB1, TAB1_MAX, ZIEL_FAKTOR, STRASSENTYP_TEXT, NEIGUNG_GROSS_PROZENT,
   NEIGUNG_EBEN_PROZENT, type Strassentyp, type Ungunst, HVS_HIGHWAY } from './sichtweite'
 import { knotenInfo, vortrittPaar, vortrittsSignale, signalAnArm, armText, nachNr } from './knoten'
@@ -56,8 +76,9 @@ import { KEINE_EINGABEN, KEINE_HINDERNISSE, KEINE_KNOTEN_EINGABEN, type ArmInfo,
   type RichtungErgebnis, type SichtEingaben, type StrasseErgebnis, type TempoArt, type TempoEingabe, type VerdeckerEintrag,
   type HaltelinieErgebnis, type TrottoirErgebnis, type VortrittsHinweis, type HoehenVorgabe, type NeigungMessung, type SichtTeil,
   type VeloErgebnis, type TrottoirPruefung, type TrottoirRichtung, type RichtungStatus, type RvArm, type RvStatus,
-  type RechtsvortrittErgebnis, type Lage } from './typen'
-import { GEGENUEBER_GRAD, geradeausWinkel, lageVon, lageKurz, lageNach } from './lage'
+  type RechtsvortrittErgebnis, type Lage, type TempoAmtlichDaten, type TueErgebnis, type TuePhase, TUE_BREITE_MIN,
+  TUE_BREITE_MAX } from './typen'
+import { GEGENUEBER_GRAD, geradeausWinkel, lageVon, lageKurz, lageNach, lageWort } from './lage'
 
 /** Abruf um den Knoten (App): AV ±150 m, OSM Umkreis 300 m */
 export const AV_RADIUS_M = 150
@@ -126,7 +147,7 @@ export function knotenEingabenAus(e: Partial<KnotenEingaben> | undefined): Requi
   return { regelung: e?.regelung ?? null, haltelinie: e?.haltelinie ?? null, D: e?.D ?? null, trottoirFrei: e?.trottoirFrei ?? false,
     tempo: { links: e?.tempo?.links ?? null, rechts: e?.tempo?.rechts ?? null }, velo: { links: e?.velo?.links ?? null,
       rechts: e?.velo?.rechts ?? null }, ebikeVerboten: e?.ebikeVerboten ?? false, wahrnehmbarkeit: e?.wahrnehmbarkeit ?? null,
-    alleArme: e?.alleArme ?? false }
+    alleArme: e?.alleArme ?? false, trottoirueberfahrt: e?.trottoirueberfahrt ?? null }
 }
 
 /** Rechnung für den gewählten Knoten und die Zufahrt (ohne Zufahrt: Vorschlag, sonst nur Knoten und Arme) bzw. für eine
@@ -150,7 +171,8 @@ export function rechneKnoten(osm: OsmDaten, av: AvFlaeche[], fall: KnotenFall, k
       arme: [...g.arme, g.zArm], vortritt: [g.arme[0].key, g.arme[1].key], vortrittGrund: g.grund, vorschlag: g.zArm.key,
       signale: vortrittsSignale(osm, g.kp, lv95), grundstueck: true }
     if (!av.some(f => f.art === 'Strasse_Weg')) return leer(keineAv, t0, info)
-    const ergebnis = rechneZufahrt(k, info, g.zArm, false, eg, ke, avRadius, hg, fall.avZentrum ?? g.kp, g, fall.hoehen ?? null)
+    const ergebnis = rechneZufahrt(k, info, g.zArm, false, eg, ke, avRadius, hg, fall.avZentrum ?? g.kp, g, fall.hoehen ?? null,
+      fall.tempoAmtlich ?? null)
     return { knoten: info, ergebnis, meldungen: [], ms: performance.now() - t0 }
   }
   if (fall.knoten === null) return leer('Knoten bzw. Zufahrtspunkt wählen.', t0)
@@ -163,7 +185,8 @@ export function rechneKnoten(osm: OsmDaten, av: AvFlaeche[], fall: KnotenFall, k
   const zArm = info.arme.find(a => a.key === zKey)
   if (!zArm) return leer('Die gewählte Zufahrt gehört nicht zu diesem Knoten.', t0, info)
   if (!av.some(f => f.art === 'Strasse_Weg')) return leer(keineAv, t0, info)
-  const ergebnis = rechneZufahrt(k, info, zArm, fall.zufahrt === null, eg, ke, avRadius, hg, fall.avZentrum ?? kp, null, fall.hoehen ?? null)
+  const ergebnis = rechneZufahrt(k, info, zArm, fall.zufahrt === null, eg, ke, avRadius, hg, fall.avZentrum ?? kp, null, fall.hoehen ?? null,
+    fall.tempoAmtlich ?? null)
   return { knoten: info, ergebnis, meldungen: [], ms: performance.now() - t0 }
 }
 
@@ -204,12 +227,14 @@ export interface VortrittsstrasseTags { hw: string; t: Record<string, string>; t
  *  priority_road, maxspeed ab 50 km/h) -> Vortritt; Quartierstrasse (residential, living_street) mit Tempo 30 bzw. 20 oder
  *  unclassified in einer Tempo-30-Zone (zone:maxspeed, maxspeed:type) -> Rechtsvortritt (SVG Art. 36 Abs. 2, in Tempo-30-Zonen
  *  die Regel); sonst Vortritt. An einer Grundstückzufahrt gilt kein Rechtsvortritt (VRV Art. 15 Abs. 3). Alles ohne Signal ist
- *  eine Annahme (Quelle beginnt mit «ohne Signal in OSM»). */
-export function regelungVorgabe(signaleZufahrt: VortrittsHinweis[], strasse: VortrittsstrasseTags[] = [], grundstueck = false):
-  [Regelung, string] {
+ *  eine Annahme (Quelle beginnt mit «ohne Signal in OSM»). K0: an einer Trottoirüberfahrt gilt kein Rechtsvortritt (VSS 40 242
+ *  Ziffer 12.3). */
+export function regelungVorgabe(signaleZufahrt: VortrittsHinweis[], strasse: VortrittsstrasseTags[] = [], grundstueck = false,
+  trottoirueberfahrt = false): [Regelung, string] {
   if (signaleZufahrt.some(s => s.art === 'stop')) return ['stop', 'OSM highway=stop an der Zufahrt']
   if (signaleZufahrt.some(s => s.art === 'give_way')) return ['vortritt', 'OSM highway=give_way («Kein Vortritt») an der Zufahrt']
   if (grundstueck) return ['vortritt', 'ohne Signal in OSM; an einer Grundstückzufahrt gilt kein Rechtsvortritt']
+  if (trottoirueberfahrt) return ['vortritt', 'ohne Signal in OSM; an einer Trottoirüberfahrt gilt kein Rechtsvortritt (VSS 40 242 Ziffer 12.3)']
   const hvs = strasse.find(x => HVS_HIGHWAY.includes(x.hw.replace(/_link$/, '')) || ['designated', 'yes'].includes(x.t.priority_road ?? '') ||
     (x.tempo ?? 0) >= 50)
   if (hvs) {
@@ -245,8 +270,12 @@ export function neigungBestimmen(hand: number | null, m: NeigungMessung | undefi
 
 /** nurRv: nur für «alle Arme» (E3c): ohne Massnahmen, Trottoir und ohne die Rechnung der übrigen Arme */
 function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlagen: boolean, eg: SichtEingaben, ke: Required<KnotenEingaben>,
-  avRadius: number, hg: HindernisEingaben, avZentrum: P, g: GrundstueckGeo | null, hoehen: HoehenVorgabe | null, nurRv = false): Ergebnis {
+  avRadius: number, hg: HindernisEingaben, avZentrum: P, g: GrundstueckGeo | null, hoehen: HoehenVorgabe | null,
+  tempoAmtlich: TempoAmtlichDaten | null, nurRv = false): Ergebnis {
   const { netz, achsen, fahrbahn } = k
+  // K0: Trottoirüberfahrt über diese Einmündung (nicht in der Rechnung «alle Arme»)
+  const tue = !!ke.trottoirueberfahrt && !nurRv
+  const amtlich = tempoAmtlich?.linien.length ? tempoAmtlich : null
   const kp = info.p
   const annahmen: string[] = [], hinweise: string[] = []
   const zName = g ? (g.weg !== null ? `${zArm.name || 'Zufahrt'} (OSM-Weg ${g.weg}, service)` : 'Grundstückzufahrt') : zArm.name || zArm.hw
@@ -271,8 +300,12 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
     zMl.slice(0, -1).some((q, i) => dist(q, kp) <= 30 && abstandStrecke(s.p, q, zMl[i + 1]) <= SIGNAL_ZUFAHRT_M)
   const signaleZ = info.signale.filter(anZufahrt)
   const strasseTags = paar.map(a => a.wid).filter(istWeg).map(wid => ({ hw: netz.w(wid).hw, t: netz.w(wid).t, tempo: wegTempo(netz, wid)?.[0] ?? null }))
-  const [rVorgabe, rQuelle] = regelungVorgabe(signaleZ, strasseTags, !!g)
-  const regelung = ke.regelung ?? rVorgabe
+  const [rVorgabe, rQuelle] = regelungVorgabe(signaleZ, strasseTags, !!g, tue)
+  // Trottoirüberfahrt: Rechtsvortritt gilt nicht (VSS 40 242 Ziffer 12.3, VRV Art. 15 Abs. 3), gerechnet wie Vortritt
+  const regelung: Regelung = tue && ke.regelung === 'rechtsvortritt' ? 'vortritt' : ke.regelung ?? rVorgabe
+  if (tue && ke.regelung === 'rechtsvortritt')
+    hinweise.push('Rechtsvortritt an einer Trottoirüberfahrt: gilt nicht (wer über das Trottoir einfährt, ist vortrittsbelastet; VSS 40 242 ' +
+      'Ziffer 12.3, VRV Art. 15 Abs. 3); gerechnet wie «Vortritt».')
   if (ke.regelung === null)
     annahmen.push(`Vortrittsregelung «${REGELUNG_TEXT[regelung]}» angenommen (${rQuelle}; im Panel wählbar` +
       `${rVorgabe === 'rechtsvortritt' ? '; ohne Signal gilt Rechtsvortritt nach SVG Art. 36 Abs. 2, in Tempo-30-Zonen die Regel' : ''}).`)
@@ -489,7 +522,19 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
   const trAt = 'sHinter' in tr ? tr : null
   const trottoir: TrottoirErgebnis | null = trAt ? { breite: trAt.breite, frei: ke.trottoirFrei,
     hinterkante: beobachtungAb(zAchse, trAt.sHinter, 0).nullpunkt } : null
-  const sKante = trAt && !ke.trottoirFrei ? trAt.sHinter : beob.sRand
+  // AV-Trottoir neben den Armen (velo.trottoirNeben): für die Trottoirachse (E3b) bzw. die Trottoirüberfahrt (K0)
+  const lagenT = (trAt || tue) && !nurRv ? haupt.map(h => {
+    const zl = kreuz(h.arm.richtung, zArm.richtung) > 0
+    return { h, seite: (zl ? 1 : -1) as 1 | -1, rand: zl ? h.qs.links : h.qs.rechts,
+      t: trottoirNeben(h.ml, zl ? 1 : -1, zl ? h.qs.links : h.qs.rechts, p => k.trottoir.art(p) !== null) }
+  }) : null
+  // Trottoirüberfahrt (K0): Band zwischen Bordkante und hinterem Rand; F_B wartet für die Phase Fahrbahn an der Bordkante
+  const tueEingabe = ke.trottoirueberfahrt?.breite ?? null
+  const tueB: TueBand | null = tue ? tueBand(zAchse, beob.sRand, kp, lagenT!.map(l => ({ ml: l.h.ml, seite: l.seite, rand: l.rand, t: l.t })) as
+    [Parameters<typeof tueBand>[3][0], Parameters<typeof tueBand>[3][1]], trAt,
+    tueEingabe !== null && tueEingabe >= TUE_BREITE_MIN && tueEingabe <= TUE_BREITE_MAX ? tueEingabe : null) : null
+  if (tueB) hinweise.push(...tueB.hinweise)
+  const sKante = trAt && !ke.trottoirFrei && !tue ? trAt.sHinter : beob.sRand
   let xRadweg = radwegRandLinie ? schnittBei(zAchse, radwegRandLinie, kp) : null
   if (radwegRandLinie && !xRadweg) hinweise.push('Die Zufahrtsachse schneidet die Aussenkante des Radwegs nicht: B ab der Kante bzw. Trottoirhinterkante.')
   // Radweg aus OSM: nur, wenn seine Linie an der Zufahrt liegt (endet er vorher, keine Verlängerung)
@@ -515,13 +560,14 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
       const vorverlegt = l.s < sNormal - 0.05
       haltelinie = { p: l.fuss, quer: querlinie(l.fuss, l.t, HALTELINIE_HALB_M), abstand, vorverlegt }
       if (vorverlegt)
-        hinweise.push(`Haltelinie ${f2(sNormal - l.s)} m vor ${abRadweg ? 'der Aussenkante des Radwegs' : trAt && !ke.trottoirFrei ?
+        hinweise.push(`Haltelinie ${f2(sNormal - l.s)} m vor ${abRadweg ? 'der Aussenkante des Radwegs' : trAt && !ke.trottoirFrei && !tue ?
           'der Trottoirhinterkante' : 'der Kante des Fahrstreifens mit Vortritt'} (vorverlegt): Ausnahme nach VSS 40 273 Ziffer 14, nur an bestehenden ` +
           'Knoten und Zufahrten und mit begleitenden Markierungen.')
     }
   }
   const sNull = haltelinie ? beob.sRand + haltelinie.abstand : sNormal
-  const nullpunktText = haltelinie ? 'Vorderkante der Haltelinie' : abRadweg ? 'Aussenkante des Radwegs' : trAt && !ke.trottoirFrei ? 'Trottoirhinterkante' :
+  const nullpunktText = haltelinie ? 'Vorderkante der Haltelinie' : abRadweg ? 'Aussenkante des Radwegs' :
+    tue ? 'Bordkante (vorderer Rand der Trottoirüberfahrt)' : trAt && !ke.trottoirFrei ? 'Trottoirhinterkante' :
     trAt ? 'Bordkante (Trottoir ohne Hindernisse)' : 'Kante des Fahrstreifens mit Vortritt'
   const vorgabe = beobachtungAb(zAchse, sNull, B, dSeitlich)
   const ausserText = rv ? 'Rechtsvortritt, Abb. 4' : ao.ausserorts ? (stop ? 'ausserorts, Stop' : 'ausserorts') : 'innerorts'
@@ -547,7 +593,7 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
     annahmen.push(zufahrtVelo ? 'Beobachtungspunkt D auf der Achse des Velogegenverkehrs (Velofahrer über der Achse).' :
       `Beobachtungspunkt D am Fahrersitz: ${f2(FAHRERSITZ_M)} m links der Achse des Zufahrtsstreifens.`)
   }
-  if (trAt && !ke.trottoirFrei && !haltelinie && !ke.D)
+  if (trAt && !ke.trottoirFrei && !haltelinie && !ke.D && !tue)
     annahmen.push(`Trottoir zwischen Zufahrt und Vortrittsstrasse (AV, ${f1(trAt.breite)} m entlang der Zufahrtsachse): F_B wartet vor dem ` +
       'Trottoir, B ab der Trottoirhinterkante; steht auf dem Trottoir nichts im Weg, im Panel das Häkchen «Trottoir ohne Hindernisse» setzen ' +
       '(Ziffer 13.1).')
@@ -559,7 +605,7 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
   const trottoirGrund = trAt ? '' : (tr as { grund: string }).grund
   if (rv && trAt) hinweise.push('Rechtsvortritt mit Trottoir quer über die Zufahrt (Trottoirüberfahrt): wer über ein Trottoir einfährt, ist ' +
     'vortrittsbelastet (VRV Art. 15 Abs. 3); Vortrittsregelung prüfen.')
-  if (ke.trottoirFrei && !trAt) hinweise.push(`Häkchen «Trottoir ohne Hindernisse» ohne Wirkung: ${trottoirGrund}.`)
+  if (ke.trottoirFrei && !trAt && !tue) hinweise.push(`Häkchen «Trottoir ohne Hindernisse» ohne Wirkung: ${trottoirGrund}.`)
   if (k.gebaeude.some(x => imPolygon(D, x.poly))) hinweise.push('D liegt in einem Gebäude der AV: Daten bzw. Lage der Zufahrt prüfen.')
   const qsAnnahmen = haupt.filter(h => h.qs.annahme).map(h => `${armText(h.arm)}: ${h.qs.quelle}`)
   annahmen.push(...qsAnnahmen.map(x => `Querschnitt ${x}.`))
@@ -615,7 +661,7 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
   const richtungen = ([['links', aL, haupt[0], veloStand[0], lageLR[0]], ['rechts', aR, haupt[1], veloStand[1], lageLR[1]]] as
     [Richtung, ArmInfo, typeof haupt[0], VeloStand, Lage][])
     .map(([r, a, h, v, lg]) => richtungRechnen(k, r, lg, a, h.ml, h.qs, zAchse, D, kp, strasse, ns[r], avRadius, hv, park, ke.tempo[r],
-      !rv ? null : !zArm.zufluss && !zVeloGegen ? { grund: 'Rechtsvortritt: die Zufahrt ist eine Einbahn vom Knoten weg, kein vortrittsbelasteter ' +
+      amtlich, !rv ? null : !zArm.zufluss && !zVeloGegen ? { grund: 'Rechtsvortritt: die Zufahrt ist eine Einbahn vom Knoten weg, kein vortrittsbelasteter ' +
         'Verkehr; keine Prüfung' } : r === 'rechts' && rArm ? { wahr } :
         // Gegenverkehr wartet beim Geradeausfahren nicht (nur wer links abbiegt, lässt ihn durch); von links wartet der Verkehr
         { grund: !rArm ? 'Rechtsvortritt: kein Arm rechts der Zufahrt, kein Verkehr hat Vortritt vor dieser Zufahrt; keine Prüfung' :
@@ -712,19 +758,21 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
 
   // Trottoir (E3b, Ziffer 13.2, Tab. 2): D' 3,00 m hinter der Trottoirhinterkante, Zielpunkte beidseits auf der Trottoirachse
   let trottoirPruefung: TrottoirPruefung | null = null, trottoirProfil: P[] = []
-  if (trAt && !nurRv) {
-    const Dt = beobachtungAb(zAchse, trAt.sHinter, B_INNERORTS_M, dSeitlich)
+  if ((trAt || tueB) && !nurRv) {
+    // Trottoirüberfahrt (K0): D' hinter dem hinteren Rand der Überfahrt, Zielpunkte auf der Gehlinie TUE_GEHLINIE_M vor dem hinteren
+    // Trottoirrand je Seite (VSS 40 242 Ziffer 14.4); sonst (E3b) hinter der Trottoirhinterkante nach AV, Zielpunkte auf der Trottoirachse
+    const sH = tueB ? tueB.sHinter : trAt!.sHinter
+    const Dt = beobachtungAb(zAchse, sH, B_INNERORTS_M, dSeitlich)
     // Achse: Mitte der AV-Fläche Trottoir je Arm aus Querschnitten; sonst die Mitte des Trottoirs auf der Zufahrtsachse
-    const mitte = punkteAufSpur(zAchse, [(beob.sRand + trAt.sHinter) / 2])[0]?.[0] ?? Dt.Dachse
-    const lagen = haupt.map(h => {
-      const zl = kreuz(h.arm.richtung, zArm.richtung) > 0
-      return { h, seite: (zl ? 1 : -1) as 1 | -1, t: trottoirNeben(h.ml, zl ? 1 : -1, zl ? h.qs.links : h.qs.rechts, p => k.trottoir.art(p) !== null) }
-    })
+    const mitte = punkteAufSpur(zAchse, [(beob.sRand + sH) / 2])[0]?.[0] ?? Dt.Dachse
+    const lagen = lagenT!
     const quellen: string[] = []
     const linien = lagen.map((l, j) => {
       const anders = lagen[1 - j].t
-      const abstand = l.t?.abstand ?? anders?.abstand ?? dist(mitte, lot(l.h.ml, mitte).p)
-      quellen.push(`${lageNach({ lage: lageLR[j] })} ${l.t ? `Mitte der AV-Fläche Trottoir (${l.t.n} Querschnitte, Breite ${f1(l.t.breite)} m)` :
+      const abstand = tueB ? tueB.gehlinie[j] : l.t?.abstand ?? anders?.abstand ?? dist(mitte, lot(l.h.ml, mitte).p)
+      quellen.push(tueB ? `${lageNach({ lage: lageLR[j] })} ${f2(tueB.hinten[j] - tueB.gehlinie[j])} m vor dem hinteren Trottoirrand ` +
+        `(${tueB.herkunft[j]}), ${f2(Math.max(0, tueB.gehlinie[j] - l.rand))} m hinter dem Fahrbahnrand` :
+        `${lageNach({ lage: lageLR[j] })} ${l.t ? `Mitte der AV-Fläche Trottoir (${l.t.n} Querschnitte, Breite ${f1(l.t.breite)} m)` :
         anders ? 'wie die Gegenseite' : 'Mitte des Trottoirs an der Zufahrt, parallel zur Strasse'}`)
       const linie = mitVerlaengerung(versetzt(l.h.ml, l.seite * abstand))
       const x = schnittBei(zAchse, linie, kp)
@@ -736,16 +784,24 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
       // Profil vom Ende links zum Ende rechts: i in Gehrichtung von rechts; von links −i
       const gemessen = mT !== undefined && mT.i !== null
       const i = gemessen ? (j === 0 ? -mT!.i! : mT!.i!) || 0 : 0
-      const quelle = gemessen ? `${mT!.quelle}, Trottoirachse` : mT ? `${mT.quelle}: 0 % angenommen` : hoehen ? 'ohne Profil: 0 % angenommen' :
+      const quelle = gemessen ? `${mT!.quelle}, ${tueB ? 'Gehlinie' : 'Trottoirachse'}` : mT ? `${mT.quelle}: 0 % angenommen` : hoehen ? 'ohne Profil: 0 % angenommen' :
         'Höhenmodell lädt: vorerst 0 %'
       const tw = trottoirSichtweite(i)
       const teil = sichtTeil(Dt.D, linien[j], Math.ceil(ZIEL_FAKTOR * tw.A), [...k.gebaeude, ...hvT], tw.A)
       return { ...teil, richtung: r, lage: lageLR[j], neigung: i, neigungQuelle: quelle, text: tw.text,
         hinweise: [...teil.hinweise, ...(mT?.hinweis && j === 0 ? [mT.hinweis] : [])] }
     })
-    trottoirPruefung = { D: Dt.D, Dachse: Dt.Dachse, hinterkante: Dt.nullpunkt, achseQuelle: quellen.join('; '), richtungen: trRichtungen }
+    trottoirPruefung = { D: Dt.D, Dachse: Dt.Dachse, hinterkante: Dt.nullpunkt, achseQuelle: quellen.join('; '), richtungen: trRichtungen,
+      ...(tueB ? { gehlinie: true } : {}) }
     trottoirProfil = [...abschneiden(linien[0], TROTTOIR_PROFIL_M).reverse(), ...abschneiden(linien[1], TROTTOIR_PROFIL_M).slice(1)]
-    annahmen.push(`Trottoir (Ziffer 13.2, Tab. 2): Beobachtungspunkt D' ${zufahrtVelo ? '' : 'am Fahrersitz '}${f2(B_INNERORTS_M)} m hinter der ` +
+    if (tueB) annahmen.push(`Trottoirüberfahrt, Phase Trottoir (VSS 40 242 Ziffer 14.4; Werte VSS 40 273 Ziffer 13.2, Tab. 2): ` +
+      `Beobachtungspunkt D' ${zufahrtVelo ? '' : 'am Fahrersitz '}${f2(B_INNERORTS_M)} m hinter dem hinteren Rand der Überfahrt ` +
+      `(${zufahrtVelo ? 'auf der Achse des Velogegenverkehrs' : `${f2(FAHRERSITZ_M)} m links der Zufahrtsachse`}); Zielpunkte auf der ` +
+      `Gehlinie ${f2(TUE_GEHLINIE_M)} m vor dem hinteren Trottoirrand beidseits der Zufahrt (${quellen.join('; ')}); Längsneigung des ` +
+      `Trottoirs in Gehrichtung auf die Zufahrt zu ${mT?.i !== null && mT?.i !== undefined ? `aus dem Höhenmodell (Ausgleichsgerade über ` +
+      `${TROTTOIR_PROFIL_M} m beidseits)` : '0 % (ohne Messung)'}; Spalten der Tab. 2 bis zur Spaltenzahl gerechnet. Hindernisse wie für ` +
+      'Motorfahrzeuge; Hecken und Zäune an der Grundstücksgrenze von Hand.')
+    else annahmen.push(`Trottoir (Ziffer 13.2, Tab. 2): Beobachtungspunkt D' ${zufahrtVelo ? '' : 'am Fahrersitz '}${f2(B_INNERORTS_M)} m hinter der ` +
       `Trottoirhinterkante (${zufahrtVelo ? 'auf der Achse des Velogegenverkehrs' : `${f2(FAHRERSITZ_M)} m links der Zufahrtsachse`}); Zielpunkte auf der Trottoirachse beidseits der Zufahrt (${quellen.join('; ')}); ` +
       `Längsneigung des Trottoirs in Gehrichtung auf die Zufahrt zu ${mT?.i !== null && mT?.i !== undefined ? 'aus dem Höhenmodell ' +
       `(Ausgleichsgerade über ${TROTTOIR_PROFIL_M} m beidseits)` : '0 % (ohne Messung)'}; Spalten der Tab. 2 bis zur Spaltenzahl gerechnet ` +
@@ -758,6 +814,31 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
       ...(r.velo ? [['Velo', r.velo.status]] as [string, RichtungStatus][] : []), ...(tr ? [['Trottoir', tr.status]] as [string, RichtungStatus][] : [])]
     r.gesamt = teile.length ? teile.reduce((a, b) => (RANG[b[1]] < RANG[a[1]] ? b : a))[1] : 'keine_zufahrt'
     r.gesamtFehlt = teile.filter(t => t[1] === 'nicht_erfuellt').map(t => t[0])
+  }
+  // Trottoirüberfahrt (K0): Ergebnis je Phase (Trottoir ab dem hinteren Rand, Fahrbahn ab der Bordkante)
+  let trottoirueberfahrt: TueErgebnis | null = null
+  if (tueB) {
+    const seitenAv = lagenT!.map((l, j) => (l.t ? lageWort({ lage: lageLR[j] }) : '')).filter(x => x)
+    const breiteText = tueB.quelle === 'av_quer' ? `Breite ${f2(tueB.breite)} m aus der AV-Fläche Trottoir quer über die Zufahrt (entlang ` +
+      'der Zufahrtsachse)' : tueB.quelle === 'av_neben' ? `Breite ${f2(tueB.breite)} m wie das angrenzende Trottoir nach AV (${seitenAv.join(' und ')}` +
+      `${seitenAv.length > 1 ? ', Mittel' : ''}); an der Einmündung zeigt die AV kein Trottoir (Planungsfall)` :
+      tueB.quelle === 'eingabe' ? `Breite ${f2(tueB.breite)} m von Hand (die AV zeigt an der Zufahrt kein Trottoir)` :
+      `Breite ${f2(TUE_BREITE_ANNAHME_M)} m angenommen (die AV zeigt an der Zufahrt kein Trottoir, keine Eingabe; kleinste Breite nach ` +
+      'VSS 40 242 Ziffer 16)'
+    annahmen.push(`Trottoirüberfahrt (VSS 40 242): ${breiteText}; vorderer Rand an der Bordkante (Fahrbahnrand der Vortrittsstrasse), hinterer ` +
+      `Rand ${f2(tueB.laenge)} m dahinter entlang der Zufahrtsachse.`)
+    annahmen.push(`Trottoirüberfahrt, Phase Fahrbahn (VSS 40 242 Ziffer 14.4; Werte VSS 40 273 Tab. 1 und Tab. 3): B ab der ${nullpunktText}` +
+      `${haltelinie || abRadweg ? ' (geht dem vorderen Rand der Überfahrt vor)' : ''}; vortrittsbelastet ist die Zufahrt (kein Rechtsvortritt).`)
+    const schlecht = (xs: RichtungStatus[]): RichtungStatus => (xs.length ? xs.reduce((a, b) => (RANG[b] < RANG[a] ? b : a)) : 'keine_zufahrt')
+    const fb: [string, RichtungStatus][] = richtungen.flatMap(r => [...(r.status !== 'keine_zufahrt' ? [[`${lageKurz(r)}: Auto`, r.status]] : []),
+      ...(r.velo ? [[`${lageKurz(r)}: Velo`, r.velo.status]] : [])] as [string, RichtungStatus][])
+    const tt: [string, RichtungStatus][] = (trottoirPruefung?.richtungen ?? []).map(t => [`${lageKurz(t)}: Trottoir`, t.status])
+    const phase = (x: [string, RichtungStatus][]): TuePhase => ({ status: schlecht(x.map(y => y[1])),
+      fehlt: x.filter(y => y[1] === 'nicht_erfuellt').map(y => y[0]) })
+    trottoirueberfahrt = { breite: tueB.breite, breiteQuelle: tueB.quelle, breiteText, laenge: tueB.laenge,
+      vorderkante: beobachtungAb(zAchse, beob.sRand, 0).nullpunkt, hinterkante: beobachtungAb(zAchse, tueB.sHinter, 0).nullpunkt,
+      gehlinie: TUE_GEHLINIE_M, regelungText: regelung === 'stop' ? 'Stop (Zufahrt vortrittsbelastet)' : 'Vortritt: kein Rechtsvortritt an ' +
+        'einer Trottoirüberfahrt, die Zufahrt ist vortrittsbelastet (VSS 40 242 Ziffer 12.3)', phaseTrottoir: phase(tt), phaseFahrbahn: phase(fb) }
   }
 
   // nötiger AV-Ausschnitt: weitester Zielpunkt ab dem Knoten plus Reserve (ohne Richtungen ohne Verkehr), mit Velo- und Trottoirachse
@@ -804,7 +885,7 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
     return { richtung: r.richtung, lage: r.lage, vorhanden: si.vorhanden, massgebend: A, reicht: auto && (velo?.reicht ?? true), tempo: t, velo,
       ...(r.rv && rvAchsen ? { paareFrei } : {}) }
   })
-  const bezug = abRadweg ? 'Aussenkante des Radwegs' : trAt && !ke.trottoirFrei ? 'Trottoirhinterkante' : 'Kante'
+  const bezug = abRadweg ? 'Aussenkante des Radwegs' : trAt && !ke.trottoirFrei && !tue ? 'Trottoirhinterkante' : 'Kante'
   const massnahmen = nurRv ? null : massnahmenRechnen({ richtungen, variante, ausserorts: ao.ausserorts, regelung, grundstueck: !!g,
     rechtsvortritt: rechtsvortritt ? { aufheben: rechtsvortritt.arm.status === 'nicht_erfuellt', verdecker: rechtsvortritt.arm.paare?.verdecker ?? [],
       wahrnehmbarkeit: rechtsvortritt.arm.status === 'keine' ? [] : WAHRNEHMBARKEITEN.map(w => `${WAHRNEHMBARKEIT_TEXT[w]}${w === wahr ?
@@ -821,7 +902,7 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
     const keA: Required<KnotenEingaben> = { ...knotenEingabenAus(undefined), regelung: 'rechtsvortritt', wahrnehmbarkeit: ke.wahrnehmbarkeit }
     const egA: SichtEingaben = { ...eg, neigung: { links: null, rechts: null } }
     rechtsvortritt.alle = nachNr(info.arme).map(a => a.key === zArm.key ? rechtsvortritt!.arm :
-      rechneZufahrt(k, info, a, false, egA, keA, avRadius, hg, avZentrum, null, null, true).rechtsvortritt!.arm)
+      rechneZufahrt(k, info, a, false, egA, keA, avRadius, hg, avZentrum, null, null, tempoAmtlich, true).rechtsvortritt!.arm)
   }
 
   return { knoten: g ? null : info.id, zufahrt: zArm.key, zufahrtName: g?.weg != null ? `${zArm.nr} ${zName}` : armText(zArm),
@@ -831,7 +912,7 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
     ausserorts: ao.ausserorts, zufahrtAchse: abschneiden(abBogen(zAchse, Math.max(0, beob.sRand - 2)), Math.max(B, bisD) + 12),
     zufahrtLageQuelle: zQuelle, vortritt: [aL.key, aR.key], einbiegewinkel, richtungen, strasse, avRadius, avBedarf, annahmen, hinweise,
     hindernis, zufahrtProfil, zufahrtNeigung, massnahmen, radwegRand: abRadweg ? xRadweg!.p : null, trottoirPruefung, trottoirProfil,
-    rechtsvortritt, zufahrtVelo, seiteOhneArm }
+    rechtsvortritt, zufahrtVelo, seiteOhneArm, ...(trottoirueberfahrt ? { trottoirueberfahrt } : {}) }
 }
 
 /** Veloführung einer Richtung (E3b): in der Rechnung, Vorgabe aus OSM mit Quelle, Radweg (OSM bzw. angenommen) */
@@ -899,7 +980,7 @@ function hindernisStand(k: Kontext, hg: HindernisEingaben, kp: P, reichweite: nu
 
 function richtungRechnen(k: Kontext, richtung: Richtung, lage: Lage, a: ArmInfo, ml: P[], qs: Querschnitt, zAchse: P[], D: P, kp: P,
   strasse: StrasseErgebnis, ns: NeigungStand, avRadius: number, hindernisse: Verdeckend[], park: ParkRaster | null,
-  te0: TempoEingabe | null, rvR: { wahr: Wahrnehmbarkeit } | { grund: string } | null, avZentrum: P, vs: VeloStand,
+  te0: TempoEingabe | null, amtlich: TempoAmtlichDaten | null, rvR: { wahr: Wahrnehmbarkeit } | { grund: string } | null, avZentrum: P, vs: VeloStand,
   ebikeVerboten: boolean): RichtungErgebnis {
   const { netz } = k
   const hinweise: string[] = []
@@ -910,15 +991,26 @@ function richtungRechnen(k: Kontext, richtung: Richtung, lage: Lage, a: ArmInfo,
   // Tempo: OSM des Arms, Mehrheit entlang der Achse über die massgebende Länge; ohne Angabe 50 km/h (Annahme); von Hand (E2b)
   const w = wegTempo(netz, a.wid)
   const [t, treffer] = tempoEntlang(netz, ml, w ? w[0] : TEMPO_ERSATZ, 0, x => sichtweiteA(x).massgebend)
-  const tempoVorgabe = treffer ? t : w ? w[0] : TEMPO_ERSATZ
-  const vorgabeAnnahme = !treffer && !w
-  const tempoVorgabeQuelle = vorgabeAnnahme ? `Annahme (ohne OSM-Angabe)` : w && tempoVorgabe === w[0] ? w[1] : 'OSM maxspeed (Mehrheit entlang der Achse)'
+  const tempoOsm = treffer ? t : w ? w[0] : TEMPO_ERSATZ
+  // K0: amtliches Tempo (Stadt Bern V_sig) entlang derselben Linie vor OSM; ohne Treffer bleibt OSM
+  const am = amtlich ? amtlichEntlang(netz, ml, tempoOsm, 0, x => sichtweiteA(x).massgebend, amtlich) : null
+  const ta = am?.tempo ?? 0, trefferA = !!am?.treffer
+  const tempoVorgabe = trefferA ? ta : tempoOsm
+  const vorgabeAnnahme = !trefferA && !treffer && !w
+  const tempoVorgabeQuelle = trefferA ? `${amtlich!.quelle} (signalisierte Höchstgeschwindigkeit V_sig, Mehrheit entlang der Achse)` :
+    vorgabeAnnahme ? `Annahme (ohne OSM-Angabe)` : w && tempoVorgabe === w[0] ? w[1] : 'OSM maxspeed (Mehrheit entlang der Achse)'
+  if (trefferA && ta !== tempoOsm && !rvR)
+    hinweise.push(`Tempo ${ta} km/h laut ${amtlich!.quelle} (signalisierte Höchstgeschwindigkeit), OSM ${!treffer && !w ? 'ohne Angabe' :
+      `${tempoOsm} km/h`}.`)
+  else if (am && !trefferA && a.zufluss && !rvR)
+    hinweise.push(`${amtlich!.quelle}: entlang dieser Richtung keine signalisierte Höchstgeschwindigkeit (${am.leer ? 'Linie ohne Wert' :
+      'keine Linie bzw. ausserhalb des geladenen Bereichs'}): Tempo aus OSM.`)
   const tempo = te ? te.wert : tempoVorgabe
   const tempoAnnahme = !te && vorgabeAnnahme
   const tempoQuelle = rvR ? `Rechtsvortritt: Zufahrtsgeschwindigkeit ${RV_TEMPO} km/h (VSS 40 273 Ziffer 15)` :
     te ? `von Hand: ${TEMPO_ART_TEXT[te.art]}${te.begruendung.trim() ? ` (${te.begruendung.trim()})` : ''}` : tempoVorgabeQuelle
   if (!rvR && te && te.art === 'signalisiert' && te.wert !== tempoVorgabe && !vorgabeAnnahme)
-    hinweise.push(`Signalisiertes Tempo von Hand ${te.wert} km/h, OSM ${tempoVorgabe} km/h: Signalisation vor Ort prüfen.`)
+    hinweise.push(`Signalisiertes Tempo von Hand ${te.wert} km/h, ${trefferA ? amtlich!.quelle : 'OSM'} ${tempoVorgabe} km/h: Signalisation vor Ort prüfen.`)
   const sw0 = sichtweiteA(tempo, strasse.typ, strasse.ungunst, ns.i)
   // Rechtsvortritt: massgebend die kleinste Sichtweite, die nach Abb. 6 nicht «zu sanieren» ist (sehr schlecht: keine, 25 m gezeigt),
   // oberer Wert die grösste Stufe der Abb. 6; Zielpunkte bis RV_ZIEL_M

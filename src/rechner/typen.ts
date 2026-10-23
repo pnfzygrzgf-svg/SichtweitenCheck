@@ -1,7 +1,7 @@
 // ── Ein- und Ausgabe der Rechnung (E0 bis E3c): Knoten bzw. Grundstückzufahrt, Zufahrt, Eingaben zur erforderlichen
 //    Sichtweite, Eingaben zum Knoten (Vortrittsregelung, Haltelinie, D, Trottoir, Tempo, Veloführung, Wahrnehmbarkeit), Hindernisse,
 //    Längsneigung aus dem Höhenmodell (E3a), Ergebnis je Richtung mit Velo (E3b), Trottoir (E3b), Massnahmen nach Ziffer 14 (E3a),
-//    Rechtsvortritt nach Teil E (E3c) ──
+//    Rechtsvortritt nach Teil E (E3c); K0: Trottoirüberfahrt (VSS 40 242 Ziffer 14.4) und amtliches Tempo (V_sig Stadt Bern) ──
 
 import type { P } from '../geo'
 import type { Status, Strassentyp, Ungunst, TypStufe } from './sichtweite'
@@ -62,7 +62,15 @@ export interface KnotenEingaben {
   // E3c, fehlen in älteren Fällen
   wahrnehmbarkeit?: Wahrnehmbarkeit | null   // Rechtsvortritt: Wahrnehmbarkeit des Knotens (Ziffer 18; Vorgabe «gut», Annahme)
   alleArme?: boolean                // Rechtsvortritt: jeden Arm gegen seinen rechten Nachbarn prüfen (Tabelle im Panel)
+  // K0, fehlt in älteren Fällen (= kein Modus)
+  trottoirueberfahrt?: TrottoirueberfahrtEingabe | null   // Trottoirüberfahrt über diese Einmündung (VSS 40 242 Ziffer 14.4)
 }
+/** Trottoirüberfahrt über die Einmündung der Zufahrt (K0): gesetzt = Modus an. breite: Breite der Überfahrt von Hand [m]; gilt nur,
+ *  wenn die AV keine Breite liefert (Reihenfolge: AV-Trottoir quer über die Zufahrt, angrenzendes AV-Trottoir, Eingabe, Annahme) */
+export interface TrottoirueberfahrtEingabe { breite: number | null }
+/** Breite der Trottoirüberfahrt von Hand: zulässiger Bereich [m] */
+export const TUE_BREITE_MIN = 1
+export const TUE_BREITE_MAX = 8
 export const KEINE_KNOTEN_EINGABEN: KnotenEingaben = {
   regelung: null, haltelinie: null, D: null, trottoirFrei: false, tempo: { links: null, rechts: null },
 }
@@ -90,7 +98,15 @@ export interface KnotenFall {
   knoten: number | null; zufahrt: string | null; zufahrtspunkt?: ZufahrtspunktEingabe | null
   eingaben?: SichtEingaben & Partial<KnotenEingaben>; hindernisse?: HindernisEingaben; avZentrum?: P
   hoehen?: HoehenVorgabe | null     // Längsneigung aus dem Höhenmodell (E3a; null = nicht geladen)
+  tempoAmtlich?: TempoAmtlichDaten | null   // K0: amtliches Tempo (Stadt Bern: V_sig des Geoportals); null = nur OSM
 }
+
+/** Linie des amtlichen Tempos (K0; Stadt Bern: Layer «Signalisierte_Hoechstgeschwindigkeit», Linien auf der Strassenachse):
+ *  vSig in km/h, null ohne Angabe (dort gilt OSM) */
+export interface TempoAmtlichLinie { id: string; strasse: string; vSig: number | null; teile: P[][] }
+/** Amtliches Tempo für die Rechnung (K0): Linien, abgedeckter Bereich (Quadrat ±radiusM um mitte; ausserhalb gilt OSM) und
+ *  Herkunft für die Texte (z. B. «Geoportal Stadt Bern»). Die Zuständigkeit (Gemeinde) prüft der Aufrufer. */
+export interface TempoAmtlichDaten { linien: TempoAmtlichLinie[]; bereich: { mitte: P; radiusM: number } | null; quelle: string }
 
 /** Strassentyp und ungünstige Verhältnisse der vortrittsberechtigten Strasse, wie gerechnet, mit den Vorgaben */
 export interface StrasseErgebnis {
@@ -200,6 +216,28 @@ export interface TrottoirPruefung {
   hinterkante: P
   achseQuelle: string         // Lage der Trottoirachse
   richtungen: TrottoirRichtung[]
+  gehlinie?: boolean          // K0, Trottoirüberfahrt: Zielpunkte auf der Gehlinie 0,50 m vom hinteren Trottoirrand statt auf der Achse
+}
+
+/** Herkunft der Breite einer Trottoirüberfahrt (K0), in dieser Reihenfolge: AV-Fläche Trottoir quer über die Zufahrt, Breite des
+ *  angrenzenden AV-Trottoirs links bzw. rechts der Zufahrt, Eingabe, Annahme 2,00 m */
+export type TueBreiteQuelle = 'av_quer' | 'av_neben' | 'eingabe' | 'annahme'
+/** Phase der Sicht an einer Trottoirüberfahrt (VSS 40 242 Ziffer 14.4): schlechtester Status der Richtungen und die nicht erfüllten
+ *  Teile je Richtung (z. B. «links: Auto»); keine_zufahrt = in keiner Richtung geprüft */
+export interface TuePhase { status: RichtungStatus; fehlt: string[] }
+/** Trottoirüberfahrt (K0): Band zwischen vorderem Rand (Bordkante = Fahrbahnrand) und hinterem Rand auf der Zufahrtsachse; Phase
+ *  Trottoir = trottoirPruefung (D' 3,00 m hinter dem hinteren Rand, Gehlinie), Phase Fahrbahn = richtungen (Auto, Velo; B ab der Bordkante) */
+export interface TueErgebnis {
+  breite: number              // Breite der Überfahrt [m]: bei av_quer entlang der Zufahrtsachse, sonst quer zur Vortrittsstrasse
+  breiteQuelle: TueBreiteQuelle
+  breiteText: string          // Herkunft der Breite als Satz
+  laenge: number              // Abstand vorderer – hinterer Rand entlang der Zufahrtsachse [m]
+  vorderkante: P              // Bordkante (Fahrbahnrand der Vortrittsstrasse) auf der Zufahrtsachse: Nullpunkt der Phase Fahrbahn
+  hinterkante: P              // hinterer Rand der Überfahrt auf der Zufahrtsachse: Nullpunkt der Phase Trottoir
+  gehlinie: number            // Abstand der Gehlinie vom hinteren Trottoirrand [m] (0,50)
+  regelungText: string        // Vortritt fest: warum
+  phaseTrottoir: TuePhase
+  phaseFahrbahn: TuePhase
 }
 
 export interface RichtungErgebnis {
@@ -354,6 +392,7 @@ export interface Ergebnis {
   rechtsvortritt: RechtsvortrittErgebnis | null   // Teil E (E3c), nur bei Rechtsvortritt an einem Knoten
   seiteOhneArm?: Richtung | null    // ein Arm liegt gegenüber und auf dieser Seite liegt kein Arm des Knotens (Panel: «links: kein Arm»)
   zufahrtVelo: ZufahrtVelo | null   // E4: Zufahrt mit Einbahn vom Knoten weg und Velo gegen die Einbahn: F_B ist ein Velo, D auf seiner Achse
+  trottoirueberfahrt?: TueErgebnis  // K0: nur im Modus Trottoirüberfahrt (sonst fehlt das Feld)
 }
 /** Velo gegen die Einbahn auf der Zufahrt (E4): Tag des Velozuflusses, Veloführung aus OSM mit Quelle, Lage der Achse (D, F_B) */
 export interface ZufahrtVelo { quelle: string; fuehrung: Exclude<Velofuehrung, 'kein'>; fuehrungQuelle: string; lageText: string }

@@ -252,7 +252,7 @@ describe('Fall-Datei E4a: Bezeichnung (Version 6)', () => {
   it('hin und zurück; Version 5 ohne Bezeichnung lesbar; zu lang gekürzt, ungültig gemeldet', () => {
     const f = fallMit(x => { x.ort.bezeichnung = 'Hallerstrasse / Alpeneggstrasse, Projekt 2026' })
     const text = fallSchreiben(f)
-    expect(JSON.parse(text).version).toBe(6)
+    expect(JSON.parse(text).version).toBe(FALL_VERSION)      // seit K0 Version 7 (vorher 6)
     const [g, h] = fallLesen(text)
     expect(h).toEqual([])
     expect(g.ort.bezeichnung).toBe('Hallerstrasse / Alpeneggstrasse, Projekt 2026')
@@ -268,5 +268,37 @@ describe('Fall-Datei E4a: Bezeichnung (Version 6)', () => {
     expect([zahl.ort.bezeichnung, hz]).toEqual([undefined, ['Bezeichnung ungültig, übergangen']])
     const [leer] = fallLesen(JSON.stringify({ ...roh, ort: { ...roh.ort, bezeichnung: '   ' } }))
     expect(leer.ort.bezeichnung).toBeUndefined()
+  })
+})
+
+describe('Fall-Datei K0: Trottoirüberfahrt und Quelle V_sig (Version 7)', () => {
+  it('hin und zurück; Version 6 ohne Trottoirüberfahrt lesbar; ungültige Breite -> Modus ohne Breite, gemeldet', () => {
+    const f = fallMit(x => {
+      x.ort.zufahrt = '7:0:1'
+      x.eingaben.trottoirueberfahrt = { breite: 2.5 }
+      x.quellen = { vsig: 'Geodaten Stadt Bern, Signalisierte Höchstgeschwindigkeit' }
+    })
+    const text = fallSchreiben(f)
+    expect(JSON.parse(text).version).toBe(7)
+    const [g, h] = fallLesen(text)
+    expect(h).toEqual([])
+    expect(g.eingaben.trottoirueberfahrt).toEqual({ breite: 2.5 })
+    expect(g.quellen.vsig).toBe('Geodaten Stadt Bern, Signalisierte Höchstgeschwindigkeit')
+    expect(eingabenZahl(g)).toBe(2)                        // Häkchen und Breite
+    const roh = JSON.parse(text)
+    // Modus ohne Breite
+    const [o] = fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, trottoirueberfahrt: { breite: null } } }))
+    expect([o.eingaben.trottoirueberfahrt, eingabenZahl(o)]).toEqual([{ breite: null }, 1])
+    // Version 6: ohne das Feld kein Modus
+    const { trottoirueberfahrt: _t, ...ohne } = roh.eingaben
+    const [v6, h6] = fallLesen(JSON.stringify({ ...roh, version: 6, eingaben: ohne }))
+    expect([v6.eingaben.trottoirueberfahrt, h6, v6.version]).toEqual([undefined, [], FALL_VERSION])
+    // ungültig
+    const [u, hu] = fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, trottoirueberfahrt: { breite: 50 } } }))
+    expect([u.eingaben.trottoirueberfahrt, hu]).toEqual([{ breite: null }, ['Eingabe «trottoirueberfahrt.breite» ungültig, ohne Breite']])
+    const [k, hk] = fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, trottoirueberfahrt: 'ja' } }))
+    expect([k.eingaben.trottoirueberfahrt, hk]).toEqual([undefined, ['Eingabe «trottoirueberfahrt» ungültig, Vorgabe']])
+    // Version 8 (Zukunft) nicht lesbar
+    expect(() => fallLesen(JSON.stringify({ ...roh, version: 8 }))).toThrow('Version 8')
   })
 })

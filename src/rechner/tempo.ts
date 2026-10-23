@@ -3,8 +3,13 @@
 // Übernommen aus fgsCheck (rechner/tempo.ts): wegTempo, zonenTempo, tempoBei, tempoEntlang. Die Tabellen der VSS 40 241 sind
 // entfernt; die Stufen und Sichtweiten kommen aus der VSS 40 273 Tab. 1 (rechner/sichtweite.ts). Ohne Angabe 50 km/h
 // (TEMPO_ERSATZ, als Annahme ausgewiesen).
+// K0 (Nutzerentscheid 23.10.2026, wie fgsCheck seit 21.10.2026): amtliches Tempo als Eingabe der Rechnung (TempoAmtlichDaten; in der
+// Stadt Bern V_sig des Geoportals): je Punkt der Spur die nächste Linie bis AMTLICH_SUCH_M, die etwa parallel liegt (höchstens
+// AMTLICH_WINKEL); ist die nächste Linie ohne Wert bzw. liegt der Punkt ausserhalb des Bereichs, zählt der Punkt nicht. Mehrheit
+// entlang der Spur wie tempoEntlang; ohne Treffer gilt OSM. Eine Eingabe von Hand geht vor (rechnen.ts).
 
 import { type P, dot, einheit, sub, add, dist } from '../geo'
+import type { TempoAmtlichDaten } from './typen'
 import type { OsmNetz } from './netz'
 import { RASTER } from './netz'
 import { punkteAufSpur } from './spur'
@@ -62,10 +67,10 @@ export function tempoBei(netz: OsmNetz, p: P, richtung: P, radius = TEMPO_SUCHRA
 /**
  * Achsen.tempo_entlang (fgsCheck): das Tempo, das auf dem grössten Teil der Spur innerhalb der Länge laenge(tempo) gilt (alle
  * 2 m ab h; Gleichstand -> höheres), bis dreimal neu gerechnet; Pendel -> das höhere Tempo der Schleife (grössere Sichtweite).
- * -> [tempo, Treffer entlang der Spur, Pendel]
+ * -> [tempo, Treffer entlang der Spur, Pendel]. bei: Tempo je Punkt (Vorgabe: OSM maxspeed; K0 amtliches Tempo: amtlichBei)
  */
-export function tempoEntlang(netz: OsmNetz, weg: P[], tempoStart0: number, h: number, laenge: (tempo: number) => number):
-  [number, boolean, number[] | null] {
+export function tempoEntlang(netz: OsmNetz, weg: P[], tempoStart0: number, h: number, laenge: (tempo: number) => number,
+  bei: (q: P, r: P) => number | null = (q, r) => tempoBei(netz, q, r)): [number, boolean, number[] | null] {
   let tempo = tempoStart0, treffer = false
   const folge = [tempoStart0], ergebnis = new Map<number, number>()
   let pendel: number[] | null = null
@@ -75,7 +80,7 @@ export function tempoEntlang(netz: OsmNetz, weg: P[], tempoStart0: number, h: nu
     const abst: number[] = []
     for (let k = 0; k <= Math.floor(sw / 2); k++) abst.push(h + k * 2)
     for (const [q, tRueck] of punkteAufSpur(weg, abst)) {
-      const v = tempoBei(netz, q, tRueck)
+      const v = bei(q, tRueck)
       if (v) zaehl.set(v, (zaehl.get(v) ?? 0) + 2)
     }
     if (!zaehl.size) break
@@ -95,4 +100,57 @@ export function tempoEntlang(netz: OsmNetz, weg: P[], tempoStart0: number, h: nu
     tempo = neu
   }
   return [tempo, treffer, pendel]
+}
+
+// ---------------------------------------------------------------- amtliches Tempo (K0)
+/** Suchradius um einen Punkt der Spur [m]: die Linien liegen auf der Strassenachse (wie fgsCheck VSIG_SUCH_M) */
+export const AMTLICH_SUCH_M = 8
+/** höchste Abweichung der Linie von der Fahrtrichtung [°] (wie fgsCheck VSIG_WINKEL) */
+export const AMTLICH_WINKEL = 35
+
+/** nächste Linie bei p (bis AMTLICH_SUCH_M, höchstens AMTLICH_WINKEL zur Fahrtrichtung) mit ihrem Wert (v null = Linie ohne Wert);
+ *  null ohne Linie bzw. ausserhalb des Bereichs */
+export function amtlichNaechste(d: TempoAmtlichDaten): (p: P, richtung: P) => { v: number | null } | null {
+  const cos = Math.cos(AMTLICH_WINKEL * Math.PI / 180)
+  const b = d.bereich
+  return (p, richtung) => {
+    if (b && Math.max(Math.abs(p[0] - b.mitte[0]), Math.abs(p[1] - b.mitte[1])) > b.radiusM - AMTLICH_SUCH_M + 1e-9) return null
+    let best: [number, number | null] | null = null
+    for (const l of d.linien) for (const z of l.teile) for (let i = 1; i < z.length; i++) {
+      const a = z[i - 1], w = sub(z[i], a), l2 = dot(w, w)
+      if (l2 === 0) continue
+      const t = Math.max(0, Math.min(1, dot(sub(p, a), w) / l2))
+      const dd = dist(p, add(a, w, t))
+      if (dd <= AMTLICH_SUCH_M && Math.abs(dot(einheit(w), richtung)) >= cos - 1e-9 && (best === null || dd < best[0])) best = [dd, l.vSig]
+    }
+    return best ? { v: best[1] !== null && best[1] > 0 ? best[1] : null } : null
+  }
+}
+
+/**
+ * Amtliches Tempo je Punkt (wie fgsCheck vsigTempo): Wert der nächsten Linie bis AMTLICH_SUCH_M, die höchstens AMTLICH_WINKEL von der
+ * Fahrtrichtung abweicht, auf die Stufe der Tab. 1; null ausserhalb des Bereichs bzw. wenn die nächste Linie ohne Wert ist (dann
+ * zählt nicht der Wert einer weiter entfernten Linie).
+ */
+export function amtlichBei(d: TempoAmtlichDaten): (p: P, richtung: P) => number | null {
+  const n = amtlichNaechste(d)
+  return (p, richtung) => { const x = n(p, richtung); return x && x.v !== null ? tempoStufe(x.v) : null }
+}
+
+/**
+ * Amtliches Tempo entlang der Spur: Mehrheit der Punkte mit Wert wie tempoEntlang (Start tempo0, das Tempo aus OSM). Gilt nur, wenn
+ * über die Länge des Ergebnisses mehr als die Hälfte der Punkte an einer Linie mit Wert liegt; sonst OSM («leere Linie -> OSM», auch
+ * ohne Linie: sonst entschieden die wenigen Punkte am Knoten, die noch die Linie des anderen Arms treffen). -> Tempo, Treffer, Punkte
+ * an einer Linie mit bzw. ohne Wert
+ */
+export function amtlichEntlang(netz: OsmNetz, weg: P[], tempo0: number, h: number, laenge: (tempo: number) => number, d: TempoAmtlichDaten):
+  { tempo: number; treffer: boolean; wert: number; leer: number } {
+  const n = amtlichNaechste(d)
+  const [t, treffer] = tempoEntlang(netz, weg, tempo0, h, laenge, (q, r) => { const x = n(q, r); return x && x.v !== null ? tempoStufe(x.v) : null })
+  const abst: number[] = []
+  for (let k = 0; k <= Math.floor(laenge(t) / 2); k++) abst.push(h + k * 2)
+  let wert = 0, leer = 0
+  const pkte = punkteAufSpur(weg, abst)
+  for (const [q, r] of pkte) { const x = n(q, r); if (x) { if (x.v === null) leer++; else wert++ } }
+  return { tempo: t, treffer: treffer && 2 * wert > pkte.length, wert, leer }
 }
