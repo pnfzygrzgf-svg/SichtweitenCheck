@@ -244,12 +244,12 @@ Häkchen «Trottoirüberfahrt» (Block «Zufahrt», je Zufahrt; Fall-Datei Versi
 kein Rechtsvortritt (VSS 40 242 Ziffer 12.3; Vorgabe Vortritt bzw. Stop aus OSM, «Rechtsvortritt» wird wie Vortritt gerechnet) und die
 Sicht in zwei Phasen nach Ziffer 14.4 mit den Werten der VSS 40 273: Phase Fahrbahn mit B ab der Bordkante (vorderer Rand der
 Überfahrt; Haltelinie und Radweg nach Ziffer 12 gehen vor), Motorfahrzeuge Tab. 1, Velo Tab. 3; Phase Trottoir mit D' 3,00 m hinter dem
-hinteren Rand der Überfahrt und Zielpunkten auf der Gehlinie 0,50 m vor dem hinteren Trottoirrand, Tab. 2 nach der Längsneigung (Profil
+hinteren Rand der Überfahrt und Zielpunkten auf der Gehlinie 0,50 m vor dem hinteren Rand der Überfahrt, Tab. 2 nach der Längsneigung (Profil
 entlang der Gehlinie). Breite der Überfahrt in dieser Reihenfolge (Ziffer 16): Eingabe von Hand, AV-Fläche Trottoir quer über die
 Zufahrt, das schmalere angrenzende AV-Trottoir links bzw. rechts, begrenzt auf 2,00 bis 3,50 m (an vielen Einmündungen ist die Zufahrt in
 der AV durchgehend Strasse, der Planungsfall), sonst 2,00 m als Annahme. Hinterer Rand der Überfahrt beidseits gleich weit hinter dem
-Fahrbahnrand, auf der Zufahrtsachse Länge = Breite / sin α; die Gehlinie je Seite vor dem eigenen hinteren Trottoirrand (AV-Trottoir der
-Seite, sonst Fahrbahnrand plus Breite). Kurze Hinweise nur, wenn sie zutreffen: ausserorts (Ziffer 14.1), Zufahrt auf der durchgehenden
+Fahrbahnrand (Breite, bei einem AV-Trottoir hinter Radweg bzw. Grünstreifen plus dieser Vorlauf), auf der Zufahrtsachse Länge = Abstand /
+sin α; die Gehlinie beidseits 0,50 m vor diesem hinteren Rand der Überfahrt (D' 3,00 m dahinter, Abstand D' – Gehlinie also 3,50 m). Kurze Hinweise nur, wenn sie zutreffen: ausserorts (Ziffer 14.1), Zufahrt auf der durchgehenden
 Strasse (14.2), Tempo über 50 km/h (14.3.1), Winkel unter 45° bzw. über 135° (14.3.4), Velos auf dem Trottoir nach OSM (15.4.2). Ergebnis je Phase (Status, nicht erfüllte Teile) im Panel, auf der Karte (Band von der
 Bordkante zum hinteren Rand, Sichtdreiecke von D und D') und im Bericht. Die Gehlinie gilt nur in diesem Modus; Knoten und
 Grundstückzufahrten ohne Häkchen rechnen wie 0.5.0 (Trottoirachse, Nullpunkt an der Trottoirhinterkante). In der Stadt Bern (AV-Gemeinde

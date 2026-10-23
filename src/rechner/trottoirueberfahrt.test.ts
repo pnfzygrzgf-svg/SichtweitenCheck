@@ -85,7 +85,7 @@ describe('K0: Trottoirüberfahrt mit AV-Trottoir quer über die Zufahrt', () => 
     nahe(l.K, 1.25, -4.5, 0.06); nahe(r.K, 1.25, -4.5, 0.06)
     nahe(l.sichtpunkte[10], 1.25 - 10, -4.5, 0.06); nahe(r.sichtpunkte[10], 1.25 + 10, -4.5, 0.06)
     expect([l.A, l.status, r.A, r.status]).toEqual([15, 'erfuellt', 15, 'erfuellt'])
-    expect(tp.achseQuelle).toContain('0,50 m vor dem hinteren Trottoirrand')
+    expect(tp.achseQuelle).toContain('0,50 m vor dem hinteren Rand der Überfahrt')
     const ohne = rechne(osm(), [fbT, neben, trottoirQuer]).trottoirPruefung!
     expect(ohne.gehlinie).toBeUndefined()
     nahe(ohne.richtungen[0].K, 1.25, -4, 0.06)
@@ -128,17 +128,18 @@ describe('K0: Zufahrt in der AV durchgehend Strasse, angrenzendes Trottoir links
     // ohne Modus: keine Trottoirprüfung (die AV zeigt kein Trottoir quer über die Zufahrt), Ergebnis wie bisher
     expect(rechne(osm(), [fahrbahn, trottoirL, trottoirR]).trottoirPruefung).toBeNull()
   })
-  it('Breite von Hand geht der AV vor (Hinweis mit dem AV-Wert): hinterer Rand y −6,5, D\' y −9,5, Gehlinie bleibt y −5,0', () => {
+  it('Breite von Hand geht der AV vor (Hinweis mit dem AV-Wert): hinterer Rand y −6,5, D\' y −9,5, Gehlinie y −6,0', () => {
     const m = rechne(osm(), [fahrbahn, trottoirL, trottoirR], { eingaben: eg({ trottoirueberfahrt: { breite: 3.5 } }) })
     expect([m.trottoirueberfahrt!.breiteQuelle, m.trottoirueberfahrt!.breite]).toEqual(['eingabe', 3.5])
     expect(m.trottoirueberfahrt!.laenge).toBeCloseTo(3.5, 3)
     expect(m.hinweise.join(' | ')).toContain('Breite der Trottoirüberfahrt von Hand 3,50 m (AV: 2,50 m)')
     nahe(m.trottoirueberfahrt!.hinterkante, 1.25, -6.5, 0.06)
     nahe(m.trottoirPruefung!.D, 0.75, -9.5, 0.06)
-    nahe(m.trottoirPruefung!.richtungen[0].K, 1.25, -5, 0.06)
+    nahe(m.trottoirPruefung!.richtungen[0].K, 1.25, -6, 0.06)
   })
-  it('ungleiche Trottoirs 2 m links / 6 m rechts: Breite 2,00 (das schmalere), Länge 2,00, hinterer Rand y −5; Gehlinie je Seite', () => {
-    // vorher (Schnitt durch die zusammengesetzte Randlinie): Breite 4,00, Länge 6,00. Gehlinie links y −4,5, rechts y −8,5
+  it('ungleiche Trottoirs 2 m links / 6 m rechts: Breite 2,00 (das schmalere), Länge 2,00, hinterer Rand y −5; Gehlinie beidseits y −4,5', () => {
+    // vorher: Breite 4,00, Länge 6,00 (Schnitt durch die zusammengesetzte Randlinie), dann Gehlinie rechts y −8,5 (eigener Rand, D' fast
+    // auf der Gehlinie); jetzt bestimmt die Überfahrt den Rand: Gehlinie beidseits 0,50 m davor, D' 3,00 m dahinter -> 3,50 m Abstand
     const l2 = flaeche('Trottoir', [lv(-200, -5), lv(-2.5, -5), lv(-2.5, -3), lv(-200, -3)])
     const r6 = flaeche('Trottoir', [lv(2.5, -9), lv(200, -9), lv(200, -3), lv(2.5, -3)])
     const m = rechne(osm(), [fahrbahn, l2, r6], { eingaben: eg(TUE) })
@@ -148,14 +149,15 @@ describe('K0: Zufahrt in der AV durchgehend Strasse, angrenzendes Trottoir links
     nahe(t.hinterkante, 1.25, -5, 0.06)
     nahe(m.trottoirPruefung!.D, 0.75, -8, 0.06)
     nahe(m.trottoirPruefung!.richtungen[0].K, 1.25, -4.5, 0.06)
-    nahe(m.trottoirPruefung!.richtungen[1].K, 1.25, -8.5, 0.06)
+    nahe(m.trottoirPruefung!.richtungen[1].K, 1.25, -4.5, 0.06)
+    for (const r of m.trottoirPruefung!.richtungen) expect(m.trottoirPruefung!.D[1] - r.K[1]).toBeCloseTo(-3.5, 1)
     expect(m.annahmen.join(' | ')).toContain('hinterer Rand beidseits 2,00 m hinter dem Fahrbahnrand, auf der Zufahrtsachse 2,00 m')
   })
   it('nur rechts ein Trottoir: links Fahrbahnrand plus Breite (y −5,5)', () => {
     const m = rechne(osm(), [fahrbahn, trottoirR], { eingaben: eg(TUE) })
     expect(m.trottoirueberfahrt!.breiteText).toContain('angrenzenden Trottoir (AV rechts 2,50 m;')
     nahe(m.trottoirPruefung!.richtungen[0].K, 1.25, -5, 0.06)
-    expect(m.trottoirPruefung!.achseQuelle).toContain('Fahrbahnrand plus Breite der Überfahrt 2,50 m')
+    expect(m.trottoirPruefung!.achseQuelle).toContain('nach links 0,50 m vor dem hinteren Rand der Überfahrt, 2,00 m hinter dem Fahrbahnrand')
   })
 })
 
@@ -258,11 +260,16 @@ describe('K0: tueBand (Breite nach VSS 40 242 Ziffer 16, Länge = Breite / sin �
     const a = tueBand(sRand, seiten(null, null), null, null, 90)
     expect([a.quelle, a.breite, a.hinten, a.gehlinie, a.sHinter]).toEqual(['annahme', 2, [5, 5], [4.5, 4.5], 35])
   })
-  it('ungleiche Breiten 2/3, 2/6, 1,8/4: das schmalere, begrenzt auf 2,00 bis 3,50 m; Gehlinie je Seite vor dem eigenen Rand', () => {
+  it('ungleiche Breiten 2/3, 2/6, 1,8/4, 5,6/7,4: das schmalere, begrenzt auf 2,00 bis 3,50 m; Gehlinie beidseits vor dem Rand der Überfahrt', () => {
     const f = (bw: number, bo: number) => tueBand(sRand, seiten(bw, bo), null, null, 90)
     const a = f(2, 3), b = f(2, 6), c = f(1.8, 4), d = f(4, 5)
-    expect([a.breite, a.laenge, a.hinten, a.gehlinie, a.hinweise]).toEqual([2, 2, [5, 6], [4.5, 5.5], []])
-    expect([b.breite, b.laenge, b.hinten, b.gehlinie]).toEqual([2, 2, [5, 9], [4.5, 8.5]])
+    expect([a.breite, a.laenge, a.hinten, a.gehlinie, a.hinweise]).toEqual([2, 2, [5, 5], [4.5, 4.5], []])
+    expect([b.breite, b.laenge, b.hinten, b.gehlinie]).toEqual([2, 2, [5, 5], [4.5, 4.5]])
+    // breite Trottoirs 5,6 / 7,4 m (Winkelriedstrasse): Breite 3,50, Gehlinie beidseits 3,00 m hinter dem Fahrbahnrand, D' bei 6,50:
+    // Abstand D' – Gehlinie 3,50 m (vorher 0,66 / 1,45 m)
+    const w = f(5.6, 7.4)
+    expect([w.breite, w.abstand, w.laenge, w.hinten, w.gehlinie]).toEqual([3.5, 3.5, 3.5, [6.5, 6.5], [6, 6]])
+    expect(w.sHinter + 3 - (sRand + w.gehlinie[0] - 3)).toBeCloseTo(3.5, 9)
     expect([c.breite, c.laenge]).toEqual([2, 2])
     expect(c.hinweise).toEqual(['Breite der Trottoirüberfahrt 2,00 m: angrenzendes Trottoir nach AV 1,80 m, nach VSS 40 242 Ziffer 16 ' +
       'begrenzt auf 2,00 bis 3,50 m.'])
@@ -274,15 +281,21 @@ describe('K0: tueBand (Breite nach VSS 40 242 Ziffer 16, Länge = Breite / sin �
     expect(n.breite).toBe(2.5)
     expect(n.laenge).toBeCloseTo(2.5 / Math.sin(Math.PI / 3), 6)
     expect(n.sHinter).toBeCloseTo(sRand + 2.887, 3)
+    // Gehlinie auf der Achse 0,50 / sin α vor dem hinteren Rand; D' 3,00 m dahinter (rechnen.ts): Abstand auf der Achse 3,577 m
+    expect(n.sHinter - n.sGehlinie).toBeCloseTo(0.5 / Math.sin(Math.PI / 3), 6)
     expect(tueBand(sRand, seiten(2.5, 2.5), null, null, 120).laenge).toBeCloseTo(2.887, 3)
     const q = tueBand(sRand, seiten(null, null), { sHinter: sRand + 2.887, breite: 2.887 }, null, 60)
     expect([q.laenge, q.breite]).toEqual([expect.closeTo(2.887, 3), expect.closeTo(2.5, 3)])
   })
-  it('schmales Trottoir unter 1,00 m: Gehlinie höchstens in der Mitte des Trottoirs', () => {
-    const n = tueBand(sRand, [{ ml: west, seite: 1, rand: 3, t: { abstand: 3.4, breite: 0.8, n: 5 } }, { ml: ost, seite: -1, rand: 3, t: null }],
-      null, null, 90)
-    expect(n.gehlinie[0]).toBeCloseTo(3.4, 6)
-    expect(n.breite).toBe(2)
+  it('Trottoir hinter einem Radweg (Vorlauf 2,00 m): hinterer Rand 2,00 + Breite hinter dem Fahrbahnrand, Gehlinie 0,50 m davor', () => {
+    // Trottoir 4,09 m ab 2,00 m hinter dem Rand (Egelgasse): Breite 3,50 (begrenzt), Abstand 5,50, Gehlinie 5,00 hinter dem Rand
+    const n = tueBand(sRand, [{ ml: west, seite: 1, rand: 3, t: { abstand: 3 + 2 + 4.09 / 2, breite: 4.09, n: 5 } },
+      { ml: ost, seite: -1, rand: 3, t: null }], null, null, 90)
+    expect([n.breite, n.vorlauf, n.abstand, n.laenge]).toEqual([3.5, expect.closeTo(2, 9), expect.closeTo(5.5, 9), expect.closeTo(5.5, 9)])
+    expect(n.hinten).toEqual([expect.closeTo(8.5, 9), expect.closeTo(8.5, 9)])
+    expect(n.gehlinie).toEqual([expect.closeTo(8, 9), expect.closeTo(8, 9)])
+    // ohne Vorlauf (Trottoir am Rand) bleibt der Abstand die Breite
+    expect(tueBand(sRand, seiten(2.5, null), null, null, 90).abstand).toBe(2.5)
   })
 })
 
@@ -315,5 +328,46 @@ describe('K0: kurze Hinweise nur, wenn sie zutreffen (VSS 40 242 Ziffern 14.1, 1
     expect(hw(rechne(osm({ 'sidewalk:both:bicycle': 'yes' }), [fahrbahn], { eingaben: eg(TUE) }))).toContain('sidewalk:both:bicycle=yes')
     expect(hw(rechne(osm({ 'sidewalk:left:bicycle': 'yes' }), [fahrbahn], { eingaben: eg(TUE) }))).not.toContain('15.4.2')
     expect(hw(rechne(osm({ 'sidewalk:right:bicycle': 'yes' }), [fahrbahn]))).not.toContain('15.4.2')
+  })
+})
+
+describe('K0: Gehlinie vor dem hinteren Rand der Überfahrt, Abstand D\' – Gehlinie 3,50 m (Review fgsCheck 23.10.2026)', () => {
+  const abstandDG = (e: Ergebnis) => e.trottoirPruefung!.richtungen.map(r => e.trottoirPruefung!.D[1] - r.K[1])
+  it('breite Trottoirs 5,6 / 7,4 m (wie Winkelriedstrasse): Breite 3,50, Gehlinie beidseits y −6, D\' y −9,5', () => {
+    const l = flaeche('Trottoir', [lv(-200, -8.6), lv(-2.5, -8.6), lv(-2.5, -3), lv(-200, -3)])
+    const r = flaeche('Trottoir', [lv(2.5, -10.4), lv(200, -10.4), lv(200, -3), lv(2.5, -3)])
+    const e = rechne(osm(), [fahrbahn, l, r], { eingaben: eg(TUE) })
+    expect([e.trottoirueberfahrt!.breite, e.trottoirueberfahrt!.abstand]).toEqual([3.5, 3.5])
+    nahe(e.trottoirPruefung!.D, 0.75, -9.5, 0.06)
+    nahe(e.trottoirPruefung!.richtungen[0].K, 1.25, -6, 0.06); nahe(e.trottoirPruefung!.richtungen[1].K, 1.25, -6, 0.06)
+    for (const d of abstandDG(e)) expect(d).toBeCloseTo(-3.5, 1)
+    expect(e.hinweise.join(' | ')).toContain('begrenzt auf 2,00 bis 3,50 m')
+  })
+  it('ungleich 2 / 6 m: Abstand D\' – Gehlinie beidseits 3,50 m', () => {
+    const l2 = flaeche('Trottoir', [lv(-200, -5), lv(-2.5, -5), lv(-2.5, -3), lv(-200, -3)])
+    const r6 = flaeche('Trottoir', [lv(2.5, -9), lv(200, -9), lv(200, -3), lv(2.5, -3)])
+    for (const d of abstandDG(rechne(osm(), [fahrbahn, l2, r6], { eingaben: eg(TUE) }))) expect(d).toBeCloseTo(-3.5, 1)
+  })
+  it('Radweg vor dem Trottoir: Phase Fahrbahn ab der Aussenkante des Radwegs, Überfahrt ab dem Fahrbahnrand bis hinter das Trottoir', () => {
+    // Radweg (OSM) y −4,5, 2,00 m angenommen (y −3,5 … −5,5, Ziffer 12: B ab y −5,5 -> D y −8,5). AV-Trottoir 3,00 m dahinter
+    // (y −5,5 … −8,5): Vorlauf 2,50, Breite 3,00, hinterer Rand 5,50 m hinter dem Fahrbahnrand (y −8,5), D' y −11,5, Gehlinie y −8,0
+    const radweg = weg(50, [[51, -200, -4.5], [52, 200, -4.5]], { highway: 'cycleway' })
+    const tl = flaeche('Trottoir', [lv(-200, -8.5), lv(-2.5, -8.5), lv(-2.5, -5.5), lv(-200, -5.5)])
+    const tr = flaeche('Trottoir', [lv(2.5, -8.5), lv(200, -8.5), lv(200, -5.5), lv(2.5, -5.5)])
+    const e = rechne(osm({}, { querungen: [radweg] }), [fahrbahn, tl, tr], { eingaben: eg(TUE) })
+    expect(e.nullpunktText).toBe('Aussenkante des Radwegs')
+    nahe(e.D, 0.75, -8.5, 0.06)
+    const t = e.trottoirueberfahrt!
+    expect([t.breite, t.abstand, t.laenge]).toEqual([expect.closeTo(3, 2), expect.closeTo(5.5, 2), expect.closeTo(5.5, 2)])
+    nahe(t.vorderkante, 1.25, -3, 0.06); nahe(t.hinterkante, 1.25, -8.5, 0.06)
+    nahe(e.trottoirPruefung!.D, 0.75, -11.5, 0.06)
+    for (const d of abstandDG(e)) expect(d).toBeCloseTo(-3.5, 1)
+    expect(e.annahmen.join(' | ')).toContain('hinterer Rand beidseits 5,50 m (Trottoir nach AV ab 2,50 m) hinter dem Fahrbahnrand')
+  })
+  it('Flag durchgehend: true an einem Arm der durchgehenden Strasse (Ziffer 14.2), sonst false', () => {
+    expect(rechne(osm(), [fahrbahn], { eingaben: eg(TUE) }).trottoirueberfahrt!.durchgehend).toBe(false)
+    const d = rechne(osm(), [fahrbahn], { zufahrt: '1:1:-1', eingaben: eg(TUE) })
+    expect(d.trottoirueberfahrt!.durchgehend).toBe(true)
+    expect(d.hinweise.join(' | ')).toContain('Ziffer 14.2')
   })
 })

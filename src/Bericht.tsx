@@ -285,7 +285,7 @@ function ErgebnisTabelle({ e }: { e: Ergebnis }) {
         {zeile('A vorhanden Velo', r => r.velo ? <b>{vorhandenText(r.velo.vorhanden, r.velo.bisEnde)}</b> : leer('–'), 'vV')}
         {zeile('Status Velo', r => r.velo ? <b>{statusMarke(r.velo.status)} {STATUS_TEXT_TEIL[r.velo.status]}</b> : leer('–'), 'sV')}
         <tr className="bericht-zwischen"><td colSpan={rs.length + 1}><b>Trottoir</b> (Tab. 2, von D'){e.trottoirueberfahrt ?
-          ` – Trottoirüberfahrt, Phase Trottoir (D' hinter dem hinteren Rand, Gehlinie ${f2(TUE_GEHLINIE_M)} m vor dem hinteren Trottoirrand)` : ''}</td></tr>
+          ` – Trottoirüberfahrt, Phase Trottoir (D' hinter dem hinteren Rand, Gehlinie ${f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt)` : ''}</td></tr>
         {e.trottoirPruefung ? <>
           {zeile('Längsneigung Trottoir', r => { const t = tr(r); return t ? <>{fi(t.neigung)} %<div className="klein">{t.neigungQuelle}</div></> : leer('–') }, 'iT')}
           {zeile('A Trottoir', r => { const t = tr(r); return t ? <><b>{t.A} m</b><div className="klein">{t.text}</div></> : leer('–') }, 'AT')}

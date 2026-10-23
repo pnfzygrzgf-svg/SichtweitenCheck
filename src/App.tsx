@@ -353,8 +353,7 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false 
             <p>Trottoir: Fussgänger und fahrzeugähnliche Geräte, die von dieser Seite auf dem Trottoir zur Zufahrt kommen (Tab. 2).</p>
             <ul>
               {gehlinie ? <li>Trottoirüberfahrt, Phase Trottoir (VSS 40 242 Ziffer 14.4): D' {velo ? 'auf der Veloachse' : 'am Fahrersitz'}{' '}
-                {f2(B_INNERORTS_M)} m hinter dem hinteren Rand der Überfahrt; Zielpunkte auf der Gehlinie {f2(TUE_GEHLINIE_M)} m vor dem
-                hinteren Trottoirrand ({achseQuelle}).</li> :
+                {f2(B_INNERORTS_M)} m hinter dem hinteren Rand der Überfahrt; Zielpunkte auf der Gehlinie {f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt ({achseQuelle}).</li> :
               <li>D' {velo ? 'auf der Veloachse' : 'am Fahrersitz'} {f2(B_INNERORTS_M)} m hinter der Trottoirhinterkante; Zielpunkte auf der
                 Trottoirachse ({achseQuelle}).</li>}
               <li>Längsneigung in Gehrichtung zur Zufahrt {fi(t.neigung)} % ({t.neigungQuelle}).</li>
@@ -821,7 +820,7 @@ function TueBlock({ t }: { t: TueErgebnis }) {
         <p>Sicht in zwei Phasen (VSS 40 242 Ziffer 14.4, Werte nach VSS 40 273):</p>
         <ul>
           <li>Phase Trottoir: D' {f2(B_INNERORTS_M)} m hinter dem hinteren Rand der Überfahrt, Zielpunkte auf der Gehlinie{' '}
-            {f2(TUE_GEHLINIE_M)} m vor dem hinteren Trottoirrand (Tab. 2, nach der Längsneigung des Trottoirs). Spalte «Trottoir» unten.</li>
+            {f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt (Tab. 2, nach der Längsneigung des Trottoirs). Spalte «Trottoir» unten.</li>
           <li>Phase Fahrbahn: B ab der Bordkante (vorderer Rand der Überfahrt), Motorfahrzeuge Tab. 1, Velo Tab. 3. Spalten «Auto» und
             «Velo» unten.</li>
         </ul>
@@ -833,7 +832,7 @@ function TueBlock({ t }: { t: TueErgebnis }) {
         ({TUE_BREITE_KURZ[t.breiteQuelle]})</span>, hinterer Rand {f2(t.laenge)} m hinter der Bordkante entlang der Zufahrtsachse;{' '}
         {t.regelungText.split(':')[0]}.</p>
       <ul className="gesamtstatus">
-        {zeile('Phase Trottoir', t.phaseTrottoir, `ab dem hinteren Rand, Gehlinie ${f2(t.gehlinie)} m vor dem hinteren Trottoirrand`)}
+        {zeile('Phase Trottoir', t.phaseTrottoir, `ab dem hinteren Rand, Gehlinie ${f2(t.gehlinie)} m vor dem hinteren Rand der Überfahrt`)}
         {zeile('Phase Fahrbahn', t.phaseFahrbahn, 'ab der Bordkante (vorderer Rand)')}
       </ul>
     </div>
@@ -881,7 +880,7 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
           <tr><td>Trottoirüberfahrt<Info titel="Trottoirüberfahrt (VSS 40 242)">
             <p>Häkchen, wenn über diese Einmündung eine Trottoirüberfahrt führt bzw. geplant ist. Dann gilt kein Rechtsvortritt (die Zufahrt
               ist vortrittsbelastet, VSS 40 242 Ziffer 12.3), und die Sicht wird in zwei Phasen geprüft (Ziffer 14.4): aufs Trottoir ab dem
-              hinteren Rand der Überfahrt (D' {f2(B_INNERORTS_M)} m dahinter, Gehlinie {f2(TUE_GEHLINIE_M)} m vor dem hinteren Trottoirrand,
+              hinteren Rand der Überfahrt (D' {f2(B_INNERORTS_M)} m dahinter, Gehlinie {f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt,
               Tab. 2), auf die Fahrbahn ab der Bordkante (B ab dem vorderen Rand, Tab. 1 und Tab. 3).</p>
             <p>Breite der Überfahrt: von Hand, sonst AV-Trottoir quer über die Zufahrt, sonst das schmalere angrenzende AV-Trottoir links
               bzw. rechts, begrenzt auf 2,00 bis 3,50 m (an vielen Einmündungen ist die Zufahrt in der AV durchgehend Strasse), sonst
@@ -1858,7 +1857,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
             <li><span className="farbe" style={{ background: TROTTOIR_FARBE }} />Sichtdreiecke Trottoir von D' (Bernstein; rot: verdeckt bis A),
               D' als Bernstein-Punkt mit dunklem Rand</li>
             <li><span className="farbe rund" style={{ background: '#ffffff', border: `3px solid ${TROTTOIR_FARBE}` }} />Fussgänger am Ende von A
-              auf der Trottoirachse (Punkt mit Ring; Trottoirüberfahrt: auf der Gehlinie {f2(TUE_GEHLINIE_M)} m vor dem hinteren Trottoirrand)</li>
+              auf der Trottoirachse (Punkt mit Ring; Trottoirüberfahrt: auf der Gehlinie {f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt)</li>
             <li><span className="farbe" style={{ background: TROTTOIR_FARBE }} />Trottoirüberfahrt: breiter Bernstein-Strich auf der Zufahrtsachse
               von der Bordkante bis zum hinteren Rand, dort eine gestrichelte Querlinie</li>
             <li><span className="farbe" style={{ background: VERDECKT_FARBE }} />Sichtdreieck verdeckt (ab der ersten Verdeckung bis A) und verdeckendes Gebäude</li>

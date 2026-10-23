@@ -27,7 +27,7 @@ export function Anleitung() {
       </ol>
       <p><b>Trottoirüberfahrt:</b> führt (bzw. soll) ein Trottoir durchgehend über die Einmündung, im Block «Zufahrt» das Häkchen
         «Trottoirüberfahrt» setzen. Dann gilt kein Rechtsvortritt, und die App prüft zwei Phasen: die Sicht aufs Trottoir ab dem hinteren
-        Rand der Überfahrt (Fussgänger 0,50 m vor dem hinteren Trottoirrand) und die Sicht auf die Fahrbahn ab der Bordkante. Die
+        Rand der Überfahrt (Fussgänger 0,50 m vor dem hinteren Rand der Überfahrt) und die Sicht auf die Fahrbahn ab der Bordkante. Die
         Breite: die Eingabe, sonst aus der AV (Trottoir quer über die Zufahrt, sonst das schmalere angrenzende Trottoir, 2,00 bis
         3,50 m), sonst 2,00 m als Annahme. In der Stadt Bern rechnet die App mit dem signalisierten Tempo des Geoportals (OSM nur, wo es fehlt).</p>
       <p><b>Bericht und Fall:</b> «Bericht drucken / als PDF» für die Druckansicht, «Fall speichern» und «Fall laden» für die Datei.</p>
