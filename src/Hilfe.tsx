@@ -46,7 +46,8 @@ export function Datenschutz() {
           Bezeichnung, Zahlen und Status; die Dienste erhalten nur Koordinaten bzw. Ausschnitte (siehe unten).</li>
         <li>Eingaben (Hindernisse, Regelung, Haltelinie, D, Tempo, Neigung, Häkchen, Bezeichnung) bleiben im Browser: je Knoten bzw.
           Grundstückzufahrt mit Eingaben ein Eintrag im lokalen Speicher (localStorage, Schlüssel «SichtweitenCheck.fall.» und Nummer
-          des Knotens bzw. «z» und Koordinaten des Zufahrtspunkts), sonst nur in der Fall-Datei, wenn Sie sie speichern. Ohne
+          des Knotens bzw. «z» und Koordinaten des Zufahrtspunkts), sonst nur in der Fall-Datei, wenn Sie sie speichern. Die zuletzt gesehene Kartenansicht (Mitte und Zoom) steht unter
+          «sichtweitencheck.karteAnsicht»; nach einem Neuladen öffnet die Karte dort. Ohne
           Eingaben wird nichts gespeichert; wer alle Eingaben eines Knotens entfernt, entfernt auch seinen Eintrag. Alle Einträge
           löschen Sie über die Website-Daten dieser Seite in den Browser-Einstellungen.</li>
         <li>Der Browser holt die Daten direkt bei diesen Diensten; sie sehen dabei technisch die IP-Adresse und Browserangaben:

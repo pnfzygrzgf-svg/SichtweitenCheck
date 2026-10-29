@@ -85,6 +85,8 @@ mit dem Häkchen «Trottoir ohne Hindernisse» ab der Bordkante).
      Kartenbreite breit, so dass sie neben dem Mauszeiger ganz in der Karte bleiben.
    - Hindernisse, verworfene Vorschläge und die Häkchen der Quellen bleiben je Knoten bzw. Zufahrtspunkt im Browser (localStorage);
      beim nächsten Öffnen übernimmt die App sie (Hinweis unter den Knöpfen «Fall laden» / «Fall speichern»).
+   - Die zuletzt gesehene Kartenansicht (Mitte und Zoom) bleibt im Browser (`sichtweitencheck.karteAnsicht`, nur Schweiz); nach
+     einem Neuladen öffnet die Karte dort statt am Startort.
 5. Panel, Schritt 2 «Vortritt und Zufahrt» und Schritt 3, Block «Zufahrt» (E2b):
    - **Vortrittsregelung** (Schritt 2, über der Armwahl): Vortritt, Stop, Rechtsvortritt. Vorgabe aus OSM `highway=stop` an der Zufahrt (Stop) bzw. `give_way`
      (Vortritt); ohne Signal nach der Vortrittsstrasse (`rechner/rechnen.ts` regelungVorgabe): Hauptverkehrsstrasse (trunk, primary,

@@ -179,6 +179,9 @@ function veloZeichnen(ebene: L.LayerGroup, mitte: P, richtung: P, farbe: string,
 
 const KARTE_STUFEN = [30, 45, 70]   // Kartenhöhe auf dem Smartphone in % der Fensterhöhe
 
+/** Schlüssel der zuletzt gesehenen Kartenansicht im Browser (nur Bequemlichkeit, darf fehlen) */
+const ANSICHT_SCHLUESSEL = 'sichtweitencheck.karteAnsicht'
+
 export default function Karte(props: {
   mitte: [number, number]
   av: AvFlaeche[] | null
@@ -265,7 +268,18 @@ export default function Karte(props: {
 
   useEffect(() => {
     if (!elRef.current || kartenRef.current) return
-    const map = L.map(elRef.current, { maxZoom: 22, doubleClickZoom: false }).setView(mitte, 18)
+    // letzte Kartenansicht dieses Browsers (29.10.2026, wie fgsCheck): nach einem Neuladen dort weiter statt am Startort; nur Schweiz
+    const gemerkt = ((): { c: [number, number]; z: number } | null => {
+      try {
+        const v = JSON.parse(localStorage.getItem(ANSICHT_SCHLUESSEL) ?? 'null') as { c: [number, number]; z: number } | null
+        return v && v.c[0] > 45.7 && v.c[0] < 47.9 && v.c[1] > 5.9 && v.c[1] < 10.6 && v.z >= 8 && v.z <= 22 ? v : null
+      } catch { return null }
+    })()
+    const map = L.map(elRef.current, { maxZoom: 22, doubleClickZoom: false }).setView(gemerkt?.c ?? mitte, gemerkt?.z ?? 18)
+    map.on('moveend', () => {
+      const c = map.getCenter()
+      try { localStorage.setItem(ANSICHT_SCHLUESSEL, JSON.stringify({ c: [c.lat, c.lng], z: map.getZoom() })) } catch { /* ohne Speicher */ }
+    })
     // Quellenangabe: auf dem Smartphone einzeilig gekürzt (index.css), Tippen klappt sie auf (seit 28.10.2026, wie VeloroutenCheck)
     map.attributionControl.getContainer()?.addEventListener('click', ev => (ev.currentTarget as HTMLElement).classList.toggle('offen'))
     const luftbild = L.tileLayer(HINTERGRUND_LUFTBILD, { maxZoom: 22, maxNativeZoom: 20, attribution: '© swisstopo' }).addTo(map)
