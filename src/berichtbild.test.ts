@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import type { P } from './geo'
 import type { Ergebnis, RichtungErgebnis, KnotenInfo, ArmInfo } from './rechner/typen'
-import { ausschnitt, bildPixel, svgAbbildung, massstab, berichtPunkte, imAusschnitt, schilder, type Box } from './berichtbild'
+import { ausschnitt, bildPixel, svgAbbildung, massstab, berichtPunkte, imAusschnitt, schilder, kreuzungspunkte, type Box } from './berichtbild'
 import { autoText, gesamtText, statusMarke } from './texte'
 
 const O: P = [2600000, 1200000]
@@ -50,13 +50,13 @@ describe('Kartenbild: Geometrien eines Ergebnisses', () => {
     // Rand 5: E −5,4 … 61,5 (66,9 m), N −7,5 … 20 (27,5 m); 27,5/66,9 < 0,55 -> Höhe 36,795 um 6,25: −12,1475 … 24,6475
     boxNah(b, [-5.4, -12.1475, 61.5, 24.6475])
   })
-  it('Velo, Trottoir, Haltelinie, Zufahrtspunkt und Punkte der Abb. 5 kommen dazu', () => {
+  it('Velo, Trottoir, Halte- oder Wartelinie, Zufahrtspunkt und Punkte des Sichtfelds (Abb. 5) kommen dazu', () => {
     const velo = { dreieckFrei: [lv(0, 0), lv(1, 4), lv(31, 4)], dreieckVerdeckt: [], A: 30, sichtpunkte: Array.from({ length: 41 }, (_, i) => lv(1 + i, 4)),
       verdeckerListe: [{ ring: [lv(20, -30), lv(21, -30), lv(21, -29)] }] }
     const r2 = { ...rechts, velo } as unknown as RichtungErgebnis
     const e2 = { ...e, richtungen: [r2], haltelinie: { quer: [lv(-1.5, 2), lv(1.5, 2)] }, zufahrtspunkt: { eingabe: lv(0, 3) },
       trottoirPruefung: { D: lv(0, -4), richtungen: [{ dreieckFrei: [lv(0, -4), lv(0, 1), lv(-18, 1)], dreieckVerdeckt: [], verdeckerListe: [] }] },
-      rechtsvortritt: { arm: { paare: { punkte1: [lv(0, -12)], punkte2: [lv(-14, 5)] } } } } as unknown as Ergebnis
+      rechtsvortritt: { arm: { sichtfeld: { pfad: [lv(0, -12), lv(0, 5)], linien: [{ p: lv(-14, 5) }] } } } } as unknown as Ergebnis
     const pkt = berichtPunkte(e2)
     for (const p of [lv(-18, 1), lv(0, -4), lv(20, -30), lv(-1.5, 2), lv(0, 3), lv(0, -12), lv(-14, 5)])
       expect(pkt.some(q => q[0] === p[0] && q[1] === p[1])).toBe(true)
@@ -64,6 +64,16 @@ describe('Kartenbild: Geometrien eines Ergebnisses', () => {
     expect(Math.max(...pkt.filter(q => Math.abs(q[1] - O[1] - 4) < 0.35 && q[0] - O[0] < 40).map(q => q[0] - O[0]))).toBeCloseTo(32.8, 6)
     const b = ausschnitt(pkt)
     for (const p of pkt) expect(drin(b, p)).toBe(true)
+  })
+})
+
+describe('Karte: Kreuzungspunkt K beschriftet (Korrektur 31.10.2026, Punkt 10)', () => {
+  it('je geprüfte Richtung mit Motorfahrzeugen ein Punkt «K» bei r.K; ohne Verkehr keiner', () => {
+    const r = (richtung: string, lage: string, status: string, K: P) => ({ richtung, lage, status, K, strasse: 'Hauptstrasse' }) as unknown as RichtungErgebnis
+    const k = kreuzungspunkte({ richtungen: [r('links', 'links', 'erfuellt', lv(1, 2)), r('rechts', 'rechts', 'nicht_erfuellt', lv(1, -2))] })
+    expect(k.map(x => [x.richtung, x.text, x.p])).toEqual([['links', 'K', lv(1, 2)], ['rechts', 'K', lv(1, -2)]])
+    expect(k[0].tooltip).toContain('ab hier wird A gemessen')
+    expect(kreuzungspunkte({ richtungen: [r('links', 'gegenueber', 'keine_zufahrt', lv(0, 0))] })).toEqual([])
   })
 })
 

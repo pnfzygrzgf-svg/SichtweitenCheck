@@ -58,7 +58,7 @@ describe('Gesamtrechnung T-Knoten', () => {
     expect([links.spur, rechts.spur]).toEqual(['nah', 'fern'])
     expect(e.vortritt).toEqual(['1:1:-1', '1:1:1'])
     expect(e.einbiegewinkel).toBeCloseTo(90, 3)
-    expect(e.annahmen.some(a => a.startsWith('Einbiegewinkel'))).toBe(false)
+    expect(e.annahmen.some(a => a.includes('mündet schräg'))).toBe(false)
   })
   it('Zufahrt auf einem Arm der Hauptstrasse: übrige Arme als Vortrittsstrasse, mit Hinweis', () => {
     const r6 = rechneKnoten(osm(), [fahrbahn], { knoten: 12, zufahrt: '1:1:1' }).ergebnis!
@@ -113,7 +113,7 @@ describe('Gesamtrechnung T-Knoten', () => {
   it('ohne Tempo in OSM: 50 km/h als Annahme', () => {
     const r3 = rechneKnoten(osm({ maxspeed: '' }), [fahrbahn], { knoten: 12, zufahrt: null }).ergebnis!
     expect(r3.richtungen.every(x => x.tempo === 50 && x.tempoAnnahme)).toBe(true)
-    expect(r3.annahmen.some(a => a.startsWith('Tempo nach links: ohne Angabe in OSM 50 km/h'))).toBe(true)
+    expect(r3.annahmen.some(a => a.includes('Tempo nach links: ohne Angabe in OSM 50 km/h'))).toBe(true)
   })
   it('Einbahn West -> Ost auf der Hauptstrasse: von rechts kein Verkehr', () => {
     const r4 = rechneKnoten(osm({ oneway: 'yes' }), [fahrbahn], { knoten: 12, zufahrt: null }).ergebnis!
@@ -122,8 +122,13 @@ describe('Gesamtrechnung T-Knoten', () => {
   })
   it('Annahmen in der Seite: B, D Fahrersitz, d, Strassentyp, Vortritt, nur Gebäude', () => {
     const t = e.annahmen.join(' | ')
-    for (const s of ['Beobachtungsdistanz B = 3,00 m', 'Fahrersitz: 0,50 m links', '1,50 m vom rechten Fahrbahnrand',
-      'unterer Wert der Tab. 1 massgebend', 'Vortrittsregelung «Vortritt» angenommen', 'nur Gebäude der AV']) expect(t).toContain(s)
+    for (const s of ['Das wartende Fahrzeug steht 3,00 m hinter der Kante des Fahrstreifens mit Vortritt (Beobachtungsdistanz B innerorts',
+      'Das Auge des Lenkers (D) liegt 0,50 m links der Fahrlinie (Fahrersitz)', 'mit der Wagenmitte 1,50 m vom rechten Fahrbahnrand',
+      'massgebend ist der untere Wert der Tab. 1', 'Vortrittsregelung «Kein Vortritt (Signal 3.02)» angenommen',
+      'Gebäude der amtlichen Vermessung (weitere Hindernisse sind keine']) expect(t).toContain(s)
+    // je Thema höchstens ein Punkt, in der Reihenfolge der Rechnung (Korrektur 31.10.2026)
+    expect(e.annahmenThemen!.map(x => x.thema)).toEqual(['vortritt', 'wartend', 'verkehr', 'hindernisse'])
+    expect(e.annahmen).toEqual(e.annahmenThemen!.map(x => `${x.titel}: ${x.text}`))
   })
   it('ohne Zufahrt an einer Kreuzung: nur Knoten und Meldung', () => {
     const x = osm()
@@ -155,13 +160,15 @@ describe('E1: erforderliche Sichtweite an einer Hauptverkehrsstrasse', () => {
     expect(seite(e, 'links').dreieckVerdeckt.length).toBeGreaterThan(0)
     expect(seite(e, 'rechts').status).toBe('erfuellt')            // frei bis 105 m ≥ 70 m
     const t = e.annahmen.join(' | ')
-    expect(t).toContain('Strassentyp «Hauptverkehrsstrasse oder wichtige Verbindungsstrasse» aus OSM highway=tertiary angenommen')
-    expect(t).toContain('Zwischenwert der Tab. 1 massgebend (Mittel von unterem und oberem Wert, aufgerundet; Entscheid 15.10.2026 – ' +
-      'die Norm nennt nur einen Bereich)')
-    // Strassentyp aus OSM als Annahme der App, tertiary auf der sicheren Seite; 2-%-Grenze mit Normgrundlage
-    expect(t).toContain('(Annahme der App, im Panel wählbar: trunk, primary, secondary, tertiary und deren links gelten als ' +
-      'Hauptverkehrsstrasse, tertiary damit auf der sicheren Seite; sonst Erschliessungsstrasse)')
-    expect(t).toContain('Untergrenze erst über ±2 %, weil die unteren Werte der Tab. 1 für i ≤ ±2 % gelten (VSS 40 273 Ziffer 13.1)')
+    expect(t).toContain('Die Vortrittsstrasse gilt als Hauptverkehrsstrasse oder wichtige Verbindungsstrasse (nach OSM highway=tertiary; ' +
+      'im Panel änderbar)')
+    expect(t).toContain('der Zwischenwert der Tab. 1 (VSS 40 273, S. 8; Mittel von unterem und oberem Wert, aufgerundet; Entscheid ' +
+      '15.10.2026 – die Norm nennt nur einen Bereich)')
+    // Strassentyp aus OSM als Annahme der App, tertiary auf der sicheren Seite: technische Herleitung
+    expect(e.herleitung!.join(' | ')).toContain('trunk, primary, secondary, tertiary und deren links gelten als Hauptverkehrsstrasse ' +
+      '(tertiary damit auf der sicheren Seite)')
+    // eben: Anhaltesichtweite nicht angewendet, darum nicht genannt
+    expect(t).not.toContain('Anhaltesichtweite')
     expect(seite(e, 'links').typText).toBe('Zwischenwert, Hauptverkehrsstrasse (Mittel von unterem und oberem Wert, aufgerundet; ' +
       'Entscheid 15.10.2026 – die Norm nennt nur einen Bereich)')
     expect(t).toContain('Längsneigung von links und von rechts 0 % (eben')
@@ -170,32 +177,50 @@ describe('E1: erforderliche Sichtweite an einer Hauptverkehrsstrasse', () => {
     const e = rechne(hvs(), eg({ typ: 'es' }))
     expect(e.strasse.typGewaehlt).toBe(true)
     expect(e.richtungen.map(x => x.massgebend)).toEqual([50, 50])
-    expect(e.annahmen.some(a => a.startsWith('Strassentyp'))).toBe(false)
+    expect(e.annahmen.some(a => a.includes('Die Vortrittsstrasse gilt als'))).toBe(false)
   })
-  it('ES mit Neigung: links −6 % -> Anhaltesichtweite 53 m massgebend; rechts +6 % -> 46 m < 50 m, Tab. 1 bleibt', () => {
+  it('ES mit Neigung: links −6 % -> Anhaltesichtweite 52 m massgebend; rechts +6 % -> 46 m < 50 m, Tab. 1 bleibt', () => {
     const e = rechne(hvs(), eg({ typ: 'es', neigung: { links: -6, rechts: 6 } }))
     const l = seite(e, 'links'), r = seite(e, 'rechts')
-    expect([l.neigung, l.anhalte?.meter, l.anhalteAngewendet, l.massgebend, l.massgebendText]).toEqual([-6, 53, true, 53, 'Anhaltesichtweite bei −6 %'])
+    expect([l.neigung, l.anhalte?.meter, l.anhalteAngewendet, l.massgebend, l.massgebendText]).toEqual([-6, 52, true, 52, 'Anhaltesichtweite bei −6 %'])
     expect([r.neigung, r.anhalte?.meter, r.massgebend, r.massgebendText]).toEqual([6, 46, 50, 'unterer Wert, Erschliessungsstrasse'])
-    // |i| > 4 %: Häkchen «grosse Längsneigung» als Vorgabe gesetzt, bei ES nur Hinweis
+    // |i| > 5 %: Häkchen «grosse Längsneigung» als Vorgabe gesetzt, bei ES nur Hinweis
     expect(e.strasse.ungunst.neigung).toBe(true)
     expect(e.hinweise.some(h => h.startsWith('Ungünstige Verhältnisse an einer Erschliessungs'))).toBe(true)
-    expect(e.annahmen.some(a => a.startsWith('Längsneigung'))).toBe(false)
+    expect(e.annahmen.some(a => a.includes('Längsneigung'))).toBe(false)
+    // Anhaltesichtweite angewendet (links −6 %): kurz genannt, Einzelheiten in der Herleitung
+    expect(e.annahmen.join(' | ')).toContain('zählt zusätzlich die Anhaltesichtweite nach VSS 40 090b (Abb. 2, S. 5')
+    expect(e.herleitung!.join(' | ')).toContain('Untergrenze erst über ±2 % (VSS 40 273 Ziffer 13.1)')
   })
   it('HVS mit Neigung ±6 %: Vorgabe «grosse Längsneigung» hebt auf den oberen Wert 70 m; Häkchen von Hand weg: 60 m', () => {
     const e = rechne(hvs(), eg({ neigung: { links: -6, rechts: 6 } }))
     expect(e.richtungen.map(x => [x.typStufe, x.massgebend])).toEqual([['oben', 70], ['oben', 70]])
-    expect(e.annahmen.some(a => a.startsWith('Grosse Längsneigung angenommen'))).toBe(true)
+    expect(e.annahmen.some(a => a.includes('Ungünstige Verhältnisse angenommen: Gefälle über 5 % in einer Richtung'))).toBe(true)
     const f = rechne(hvs(), eg({ neigungGross: false, neigung: { links: -6, rechts: 6 } }))
     expect(f.richtungen.map(x => x.massgebend)).toEqual([60, 60])   // Anhaltesichtweite 53 m < 60 m
     expect(f.strasse.ungunstVorgabe.neigung).toBe(true)
   })
-  it('OSM lanes=4: Vorgabe «mehr als zwei Fahrstreifen», HVS oberer Wert; Schwerverkehr nur von Hand', () => {
+  it('OSM lanes=4: Vorgabe «mehr als ein Fahrstreifen je Richtung», HVS oberer Wert; Schwerverkehr von Hand', () => {
     const e = rechne(hvs({ lanes: '4' }))
     expect(e.strasse).toMatchObject({ fahrstreifenQuelle: 'OSM lanes=4', ungunst: { fahrstreifen: true, neigung: false, schwerverkehr: false } })
     expect(e.richtungen.map(x => x.massgebend)).toEqual([70, 70])
     expect(rechne(hvs({ lanes: '2' })).richtungen.map(x => x.massgebend)).toEqual([60, 60])
     expect(rechne(hvs(), eg({ schwerverkehr: true })).richtungen.map(x => x.massgebend)).toEqual([70, 70])
+  })
+  it('Block 5, ungünstige Verhältnisse nach Kanton Solothurn: lanes je Richtung, Einbahn, Schwerverkehrsanteil über 8 %', () => {
+    // lanes:forward/backward gehen vor: 2 in einer Richtung -> ungünstig; je 1 -> nicht (auch bei lanes=3)
+    expect(rechne(hvs({ 'lanes:forward': '2', 'lanes:backward': '1' })).strasse).toMatchObject({ ungunst: { fahrstreifen: true },
+      fahrstreifenQuelle: 'OSM lanes:forward=2, lanes:backward=1' })
+    expect(rechne(hvs({ lanes: '3', 'lanes:forward': '1', 'lanes:backward': '1' })).strasse.ungunst.fahrstreifen).toBe(false)
+    // lanes=2 ohne Einbahn: je Richtung einer -> nicht ungünstig
+    expect(rechne(hvs({ lanes: '2' })).strasse.ungunst.fahrstreifen).toBe(false)
+    // Schwerverkehrsanteil: 9 % -> oberer Wert mit Annahme, 8 % -> Zwischenwert; Häkchen von Hand gilt unabhängig vom Anteil
+    const s9 = rechne(hvs(), eg({ schwerverkehrAnteil: 9 }))
+    expect([s9.strasse.ungunst.schwerverkehr, s9.richtungen.map(x => x.massgebend)]).toEqual([true, [70, 70]])
+    expect(s9.annahmen.some(a => a.includes('Ungünstige Verhältnisse angenommen: Schwerverkehrsanteil 9,0 %, über 8 %') &&
+      a.includes('Kanton Solothurn (AVT 12/2024, S. 3'))).toBe(true)
+    expect(rechne(hvs(), eg({ schwerverkehrAnteil: 8 })).richtungen.map(x => x.massgebend)).toEqual([60, 60])
+    expect(rechne(hvs(), eg({ schwerverkehrAnteil: 2, schwerverkehr: true })).strasse.ungunst.schwerverkehr).toBe(true)
   })
   it('AV-Bedarf: Tempo 30 weitester Zielpunkt 54,3 m -> 75 m (kein Nachladen); Tempo 70 166,3 m -> 187 m, Hinweis bei ±150 m', () => {
     // Tempo 30: rechts Ende der Zielpunkte (1,25 + 53; 1,5) -> 54,27 m ab Knoten, plus 20 m Reserve
@@ -223,13 +248,15 @@ describe('E1: erforderliche Sichtweite an einer Hauptverkehrsstrasse', () => {
     expect(e.strasse.typQuelle).toContain('primary_link')
     expect(e.strasse.typQuelle).toContain('residential')
     expect(rechne(hvs({ highway: 'trunk' })).strasse.typ).toBe('hvs')
-    // genau 4 %: noch keine grosse Längsneigung; Annahme 0 % nur für die andere Richtung
-    const n = rechne(hvs(), eg({ neigung: { links: -4, rechts: 0 } }))
+    // genau 5 % (Kanton Solothurn, Annahme): noch keine grosse Längsneigung; Annahme 0 % nur für die andere Richtung
+    const n = rechne(hvs(), eg({ neigung: { links: -5, rechts: 0 } }))
     expect(n.strasse.ungunst.neigung).toBe(false)
-    expect(n.annahmen.filter(a => a.startsWith('Längsneigung'))).toEqual([expect.stringContaining('Längsneigung von rechts 0 %')])
+    const nt = n.annahmen.join(' | ')
+    expect([nt.includes('Längsneigung von rechts 0 %'), nt.includes('Längsneigung von links')]).toEqual([true, false])
   })
-  it('80 km/h, −12 % (ES): Anhaltesichtweite 143 m über dem oberen Wert, Zielpunkte bis 215 m, AV-Bedarf 234 m', () => {
-    // längere Vorlage (±300 m); links: (1,25 − 215; −1,5) -> 213,76 m + 20 -> 234 m; rechts eben: 1,5 × 140 = 210 m
+  it('80 km/h, −12 % (ES): Anhaltesichtweite 142 m über dem oberen Wert, Zielpunkte bis 213 m, AV-Bedarf 232 m', () => {
+    // längere Vorlage (±300 m); Abb. 2 bei −12 % 143 m, um −1 m auf Tab. 1 verschoben -> 142 m; links: (1,25 − 213; −1,5) ->
+    // 211,76 m + 20 -> 232 m; rechts eben: 1,5 × 140 = 210 m
     const lang: OsmDaten = { ...osm(), wege: [
       weg(1, [[10, -300, 0], [12, 0, 0], [13, 300, 0]], { highway: 'unclassified', name: 'Hauptstrasse', maxspeed: '80' }),
       weg(2, [[12, 0, 0], [20, 0, -200]], { highway: 'residential', name: 'Nebenstrasse', maxspeed: '30' })] }
@@ -237,11 +264,11 @@ describe('E1: erforderliche Sichtweite an einer Hauptverkehrsstrasse', () => {
       lv(300, 3), lv(-300, 3), lv(-300, -3)])
     const e = rechneKnoten(lang, [fb], { knoten: 12, zufahrt: null, eingaben: eg({ typ: 'es', neigungGross: false, neigung: { links: -12, rechts: 0 } }) }).ergebnis!
     const l = seite(e, 'links'), r = seite(e, 'rechts')
-    expect([l.typWert, l.anhalte?.meter, l.massgebend, l.sMax, l.status]).toEqual([110, 143, 143, 215, 'erfuellt'])
+    expect([l.typWert, l.anhalte?.meter, l.massgebend, l.sMax, l.status]).toEqual([110, 142, 142, 213, 'erfuellt'])
     expect(l.hinweise.join(' ')).toContain('verlängert')
     expect([r.massgebend, r.sMax]).toEqual([110, 210])
-    expect(e.avBedarf).toBe(234)
-    expect(avNachladen(e.avBedarf, e.avRadius)).toBe(234)
+    expect(e.avBedarf).toBe(232)
+    expect(avNachladen(e.avBedarf, e.avRadius)).toBe(232)
   })
   it('Nachladen höchstens 400 m', () => {
     expect(avNachladen(157, 150)).toBe(157)
@@ -249,5 +276,97 @@ describe('E1: erforderliche Sichtweite an einer Hauptverkehrsstrasse', () => {
     expect(avNachladen(450, 150)).toBe(400)
     expect(avNachladen(420, 380)).toBe(400)
     expect(avNachladen(450, 400)).toBeNull()
+  })
+})
+
+// Block 5, Überholfall (VSS 40 273 Ziffer 6, Abb. 1): ausserorts (maxspeed:type CH:rural), 50 km/h, ES: A = 50 m, B = 5,00 m:
+// Dachse (1,25; −8), D (0,75; −8). Nach rechts fährt der Verkehr von Osten auf y = +1,5, das überholende Fahrzeug auf dem
+// Gegenfahrstreifen y = −1,5 (1,50 m vom anderen Rand). Gebäude x ≥ 25, y ≤ −4: die Sichtlinie D -> (1,25 + s; y) liegt bei y = −4
+// bei 0,75 + (0,5 + s) · 4 / (y + 8). Auto (y = 1,5): verdeckt ab s = 24,25 · 9,5 / 4 − 0,5 = 57,09 m ≥ 50 m; Überholfall (y = −1,5):
+// ab s = 24,25 · 6,5 / 4 − 0,5 = 38,91 m < 50 m: nicht erfüllt.
+describe('Block 5: Überholfall ausserorts', () => {
+  const land = (x: Record<string, string> = {}) => osm({ maxspeed: '50', 'maxspeed:type': 'CH:rural', ...x })
+  const haus = flaeche('Gebaeude', [lv(25, -4), lv(60, -4), lv(60, -30), lv(25, -30), lv(25, -4)])
+  const rechne = (o: OsmDaten, e: Partial<import('./typen').Eingaben> = {}) =>
+    rechneKnoten(o, [fahrbahn, haus], { knoten: 12, zufahrt: null, eingaben: { ...KEINE_EINGABEN, ...e } }).ergebnis!
+  const seite = (e: ReturnType<typeof rechne>, r: 'links' | 'rechts') => e.richtungen.find(x => x.richtung === r)!
+  it('zweite Sichtlinie auf den Gegenfahrstreifen: rechts 38,9 m < 50 m, Auto 57,1 m; Gesamtstatus nicht erfüllt (Überholfall)', () => {
+    const e = rechne(land())
+    expect([e.ausserorts, e.B]).toEqual([true, 5])
+    const r = seite(e, 'rechts'), l = seite(e, 'links')
+    expect(r.vorhanden).toBeCloseTo(24.25 * 9.5 / 4 - 0.5, 1)
+    expect(r.status).toBe('massgebend')
+    expect(r.ueberholfall!.vorhanden).toBeCloseTo(24.25 * 6.5 / 4 - 0.5, 1)
+    expect([r.ueberholfall!.A, r.ueberholfall!.status]).toEqual([50, 'nicht_erfuellt'])
+    nahe(r.ueberholfall!.K, 1.25, -1.5)
+    expect([r.gesamt, r.gesamtFehlt]).toEqual(['nicht_erfuellt', ['Überholfall']])
+    // links: Gegenfahrstreifen y = +1,5, frei
+    nahe(l.ueberholfall!.K, 1.25, 1.5)
+    expect(l.ueberholfall!.status).toBe('erfuellt')
+    expect(e.ueberholen).toMatchObject({ ausserorts: true, vorgabe: true, gewaehlt: false, erlaubt: true, geprueft: true })
+    expect(e.annahmen.join(' | ')).toContain('Ausserorts ist hier Überholen erlaubt (Vorgabe: ohne overtaking=no in OSM: erlaubt angenommen): ' +
+      'die App prüft von links und von rechts zusätzlich')
+    // Massnahmen: rechts nicht erfüllt nur wegen des Überholfalls; die Varianten rechnen ihn mit
+    expect(e.massnahmen).not.toBeNull()
+    expect(e.massnahmen!.find(m => m.nr === 2)!.zeilen[0].text).toContain('Überholfall')
+  })
+  it('Überholverbot aus OSM (overtaking=no, je Richtung overtaking:forward/backward) bzw. von Hand; innerorts nicht geprüft', () => {
+    const v = rechne(land({ overtaking: 'no' }))
+    expect(v.richtungen.map(r => r.ueberholfall ?? null)).toEqual([null, null])
+    expect(v.annahmen.join(' | ')).toContain('Überholfall nicht geprüft (von links: Überholen verboten (OSM overtaking=no); von rechts: ' +
+      'Überholen verboten (OSM overtaking=no); VSS 40 273 Ziffer 6, S. 4).')
+    expect(seite(v, 'rechts').gesamt).toBe('massgebend')
+    // Arm West (sd −1): Verkehr zum Knoten in Wegrichtung -> overtaking:forward; Arm Ost -> overtaking:backward
+    const f = rechne(land({ 'overtaking:forward': 'no' }))
+    expect([!!seite(f, 'links').ueberholfall, !!seite(f, 'rechts').ueberholfall]).toEqual([false, true])
+    const b = rechne(land({ 'overtaking:backward': 'no' }))
+    expect([!!seite(b, 'links').ueberholfall, !!seite(b, 'rechts').ueberholfall]).toEqual([true, false])
+    // von Hand: verboten bzw. trotz OSM erlaubt
+    expect(rechne(land(), { ueberholen: false }).richtungen.every(r => !r.ueberholfall)).toBe(true)
+    expect(rechne(land({ overtaking: 'no' }), { ueberholen: true }).richtungen.every(r => !!r.ueberholfall)).toBe(true)
+    // innerorts: keine Prüfung und keine Annahme (gilt dort nicht; Korrektur 31.10.2026)
+    const i = rechne(osm())
+    expect(i.richtungen.every(r => !r.ueberholfall)).toBe(true)
+    expect(i.annahmen.join(' | ')).not.toContain('Überholfall')
+  })
+})
+
+describe('Block 5: Hinweise ohne Statuswirkung', () => {
+  const rechne = (o: OsmDaten, e: Partial<import('./typen').Eingaben> = {}, av: AvFlaeche[] = [fahrbahn]) =>
+    rechneKnoten(o, av, { knoten: 12, zufahrt: null, eingaben: { ...KEINE_EINGABEN, ...e } }).ergebnis!
+  const STOP = 'Kein Vortritt statt Stop möglich: Stop nur, wo die Sicht nicht reicht (SSV Art. 36 Abs. 7; Praxis TBA Bern Arbeitshilfe ' +
+    'Vortritt Kap. 2.3, vif Luzern 653.105, Basel-Stadt AB-SSV Teil 1 Kap. 5.2).'
+  it('Stop mit ausreichender Sicht: innerorts Hinweis «Kein Vortritt statt Stop»; nicht, wenn eine Richtung nicht reicht', () => {
+    expect(rechne(osm(), { regelung: 'stop' }).hinweise).toContain(STOP)
+    expect(rechne(osm(), { regelung: 'stop' }, [fahrbahn, ecke]).hinweise.some(h => h.startsWith('Kein Vortritt statt Stop'))).toBe(false)
+    expect(rechne(osm()).hinweise.some(h => h.startsWith('Kein Vortritt statt Stop'))).toBe(false)
+  })
+  it('Stop ausserorts: gerechnet mit B 5,00 m (Kein Vortritt); D von Hand: Vorbehalt', () => {
+    const land = osm({ maxspeed: '50', 'maxspeed:type': 'CH:rural' })
+    const e = rechne(land, { regelung: 'stop' })
+    expect(e.B).toBe(3)
+    expect(e.hinweise).toContain(`${STOP} Ausserorts gilt bei «Kein Vortritt» B 5,00 m (Ziffer 12): mit D bei B 5,00 m gerechnet, reicht ` +
+      'die Sicht auch dort.')
+    const h = rechne(land, { regelung: 'stop', D: lv(0.75, -6) })
+    expect(h.hinweise).toContain(`${STOP} Ausserorts gilt bei «Kein Vortritt» B 5,00 m (Ziffer 12): ab B 5,00 m zu prüfen (D von Hand ` +
+      'gesetzt, nicht gerechnet).')
+  })
+  it('Anhaltesichtweite angewendet bei Tempo ≤ 30 bzw. ES: Hinweis auf VSS 40 090b Ziffer 6; Einbiegewinkel 90°: kein Hinweis', () => {
+    const e = rechne(osm(), { neigung: { links: -8, rechts: 0 } })
+    expect(e.hinweise).toContain('Auf siedlungsorientierten Strassen mit Verkehrsberuhigung darf die Anhaltesichtweite nach VSS 40 090b ' +
+      'Ziffer 6 (S. 4) reduziert werden; die App reduziert nicht (konservativ).')
+    expect(rechne(osm()).hinweise.some(h => h.startsWith('Auf siedlungsorientierten'))).toBe(false)
+    expect(e.hinweise.some(h => h.startsWith('Einbiegewinkel'))).toBe(false)
+  })
+  it('Einbiegewinkel unter 45°: Hinweis mit Annahme der Grenze', () => {
+    // Nebenstrasse von Südwesten unter 40° zur Hauptstrasse (Zufahrt von x < 0)
+    const o = osm()
+    const c = Math.cos(40 * Math.PI / 180), s = Math.sin(40 * Math.PI / 180)
+    o.wege[1] = weg(2, [[12, 0, 0], [20, -200 * c, -200 * s]], { highway: 'residential', name: 'Nebenstrasse', maxspeed: '30' })
+    const e = rechne(o)
+    expect(Math.round(e.einbiegewinkel) < 45 || Math.round(e.einbiegewinkel) > 135).toBe(true)
+    expect(e.hinweise.find(h => h.startsWith('Einbiegewinkel'))).toBe(`Einbiegewinkel rund ${Math.round(e.einbiegewinkel)}°: deutlich von 90° ` +
+      'abweichend, nach VSS 40 273 Ziffer 10 (S. 7) grundsätzlich zu vermeiden; spitze Winkel für Lastwagen besonders problematisch ' +
+      '(Annahme der Grenze 45°/135°).')
   })
 })

@@ -10,10 +10,10 @@ import { wgs, lv95, add, dist, sub, einheit, type P } from './geo'
 import { querlinie, B_INNERORTS_M } from './rechner/beobachtung'
 import { TUE_BREITE_KURZ, f2 } from './texte'
 import { hindernisRing, artText, quelleText, type Hindernis } from './rechner/hindernisse'
-import { abschneiden as abschneidenM } from './rechner/netz'
 import Ortssuche from './Ortssuche'
 import { ortZoom, type Ort } from './daten/ortssuche'
 import { autoUmriss, autoScheibe, fbLage, fbVeloLage, faLage, veloLage } from './rechner/fahrzeug'
+import { kreuzungspunkte } from './berichtbild'
 
 // Unterbau aus fgsCheck (Karte.tsx): Hintergründe, Standort, Strassennamen, Ortssuche, Hinweise. Neu in E0: Knoten statt
 // Übergänge, Arme zum Wählen der Zufahrt, Beobachtungspunkt D, Sichtdreiecke, Fahrstreifenachsen, verdeckende Gebäude.
@@ -23,6 +23,8 @@ import { autoUmriss, autoScheibe, fbLage, fbVeloLage, faLage, veloLage } from '.
 // Trottoirpunkten (Bernstein), Fussgänger (Punkt mit Ring) am Ende von A, D'.
 // E2b: Werkzeuge «Haltelinie setzen» und «Zufahrt setzen» (Grundstückzufahrt, zweiter Klick zeichnet die Richtung), D zum
 // Ziehen (D von Hand), Haltelinie als Querlinie, Nullpunkt von B, Zufahrtspunkt.
+// Block 5: Halte- oder Wartelinie (Feld haltelinie), Überholfall als zweites, schwächeres Sichtdreieck, Sichtfeld der schmalen Zufahrt
+// beim Rechtsvortritt (bfu BM.021 Abb. 4: Pfad und Sichtlinien von D).
 
 // AV-Farben wie fgsCheck (Gebäude neutral dunkelgrau, damit Rot für «verdeckt» bleibt)
 export const AV_FARBEN: Record<string, string> = {
@@ -50,7 +52,7 @@ export const FB_FARBE = '#1e293b'
 export const FA_FARBE = '#f8fafc'
 /** E3b: Velo-Prüfung (Petrol, wie VeloroutenCheck) und Trottoir-Prüfung (Bernstein, wie fgsCheck) */
 export const VELO_FARBE = '#0f766e'
-export const TROTTOIR_FARBE = '#d97706'
+export const TROTTOIR_FARBE = '#4f46e5'   // Indigo (Entscheid 31.10.2026: Orange nur für die Zufahrt)
 const SCHEIBE_FARBE = '#94a3b8'
 /** Nummernschild der gewählten Zufahrt (App-Farbe; Karte: CSS .arm-nr.gewaehlt, Bericht: Kartenbild) */
 export const NR_GEWAEHLT_FARBE = '#15803d'
@@ -112,6 +114,9 @@ const TREFFER_PANE = 'treffer'
 const OBEN_PANE = 'oben'
 /** D über allem Übrigen (auch über F<sub>B</sub> und den Strassennamen), damit er sich ziehen lässt */
 const D_PANE = 'dpunkt'
+/** Nummernschilder der Arme über Linien, Dreiecken und Strassennamen (Nutzer 31.10.2026: sonst teils von der Armlinie verdeckt;
+ *  im gemeinsamen Pane hängt die Reihenfolge Marker/SVG vom z-index aus der Bildschirmlage ab); nur D liegt darüber */
+const SCHILD_PANE = 'schilder'
 // Knoten: nur Marker im Sichtbereich mit diesem Rand (Anteil je Seite) zeichnen
 const MARKER_RAND = 0.5
 const STANDORT_MS = 10000
@@ -136,6 +141,8 @@ function hindernisEbene(h: Hindernis, stilRoh: L.PathOptions): L.Path {
   if (h.art === 'zaun') return L.polyline(h.linie.map(ll), { ...stil, weight: 3, dashArray: h.dicht ? stil.dashArray : '1 5' })
   return L.polygon(hindernisRing(h).map(ll), h.art === 'baum' ? { ...stil, weight: 3 } : stil)
 }
+const knotenTip = (id: number, lsa?: Set<number>) =>
+  `<b>OSM-Knoten ${id}</b>${lsa?.has(id) ? ' · LSA (Lichtsignalanlage)' : ''}<br><i>Klick: Knoten wählen</i>`
 const markerStil = (g: boolean): L.CircleMarkerOptions => ({
   radius: g ? 9 : 6, color: g ? '#0f172a' : '#ffffff', weight: g ? 3 : 2, fillColor: KNOTEN_FARBE, fillOpacity: 0.95, pane: OBEN_PANE,
 })
@@ -187,6 +194,8 @@ export default function Karte(props: {
   av: AvFlaeche[] | null
   kantone: string[]
   knoten: OsmKnoten[]
+  /** Korrektur 31.10.2026 (Punkt 13): LSA-Knoten (Lichtsignal in OSM am Knoten bzw. auf einem Arm) im geladenen Umkreis */
+  lsa?: Set<number>
   strassennamen: Strassenname[]
   gewaehlt: number | null
   rechnung: Rechnung | null
@@ -290,6 +299,7 @@ export default function Karte(props: {
     map.createPane(HIND_PANE).style.zIndex = '410'
     map.createPane(TREFFER_PANE).style.zIndex = '420'
     map.createPane(OBEN_PANE).style.zIndex = '430'
+    map.createPane(SCHILD_PANE).style.zIndex = '455'
     map.createPane(D_PANE).style.zIndex = '460'
     const eb: Record<string, L.LayerGroup> = {
       av: L.layerGroup().addTo(map), sicht: L.layerGroup().addTo(map), hind: L.layerGroup().addTo(map), treffer: L.layerGroup().addTo(map),
@@ -383,7 +393,7 @@ export default function Karte(props: {
       const alt = vorher.get(k.id)
       if (alt && alt.k === k) { neu.set(k.id, alt); vorher.delete(k.id); continue }
       const m = L.circleMarker([k.lat, k.lon], markerStil(k.id === cb.current.gewaehlt))
-        .bindTooltip(`<b>OSM-Knoten ${k.id}</b><br><i>Klick: Knoten wählen</i>`)
+        .bindTooltip(knotenTip(k.id, cb.current.lsa))
         .on('click', e => { if (werkzeugAktiv()) return; L.DomEvent.stopPropagation(e); cb.current.onKnoten(k) })
       neu.set(k.id, { k, m })
     }
@@ -391,6 +401,10 @@ export default function Karte(props: {
     markerRef.current = neu
     markerAbgleich()
   }, [knoten])
+  // LSA-Knoten im Tooltip kennzeichnen (Korrektur 31.10.2026, Punkt 13)
+  useEffect(() => {
+    for (const [id, { m }] of markerRef.current) m.setTooltipContent(knotenTip(id, props.lsa))
+  }, [props.lsa, knoten])
   useEffect(() => {
     const n = markerRef.current
     for (const id of new Set([gewaehltRef.current, gewaehlt])) {
@@ -423,7 +437,7 @@ export default function Karte(props: {
       // Nummernschild am Anfang des Arms (über den Armen, Tooltip und Klick wie der Arm); Grundstückzufahrt «Z» am Zufahrtspunkt
       const zp = kn.grundstueck && istZ ? e?.zufahrtspunkt ?? null : null
       const lage = (abstand: number) => nrLage(kn, a, zp?.eingabe, abstand)
-      const schild = L.marker(ll(lage(schildAbstand())), { icon: nrIcon(a, istZ), pane: OBEN_PANE,
+      const schild = L.marker(ll(lage(schildAbstand())), { icon: nrIcon(a, istZ), pane: SCHILD_PANE,
         keyboard: false, zIndexOffset: 1000, bubblingMouseEvents: true })
       // Grundstückzufahrt: Arme ab dem Knotenpunkt, keine Wahl der Zufahrt
       if (kn.grundstueck) {
@@ -443,24 +457,26 @@ export default function Karte(props: {
       schilderRef.current.push({ m: schild, lage })
     }
     namenAbgleich()
+    // Korrektur 31.10.2026 (Punkt 13): gewählter LSA-Knoten mit Kennzeichnung
+    if (kn.lsa) L.marker(ll(kn.p), { icon: L.divIcon({ className: 'lsa-marke', iconSize: [0, 0], html: '<span>LSA</span>' }), pane: OBEN_PANE,
+      keyboard: false, interactive: false }).addTo(eb.arme)
     if (!e) return
-    // Rechtsvortritt, schmale Zufahrt (Abb. 5): Fächer der Sichtlinien zwischen den Punkten beider Fahrbahnachsen; frei dünn grau,
-    // verdeckt rot, die erste verdeckte Kombination dick
-    const m = e.rechtsvortritt?.arm.paare
-    if (m && e.rechtsvortritt?.fahrbahnachsen) {
-      for (const ax of e.rechtsvortritt.fahrbahnachsen)
-        L.polyline(abschneidenM(ax, m.s[m.s.length - 1]).map(ll), { color: '#111827', weight: 1.5, dashArray: '8 3 2 3', interactive: false,
-          pane: OBEN_PANE }).addTo(eb.sicht)
-      for (const p of m.paare.filter(x => x.frei))
-        L.polyline([ll(m.punkte1[p.i]), ll(m.punkte2[p.j])], { color: '#64748b', weight: 1, opacity: 0.35, interactive: false }).addTo(eb.sicht)
-      for (const p of m.paare.filter(x => !x.frei)) {
-        const erste = m.erste && m.s[p.i] === m.erste.s1 && m.s[p.j] === m.erste.s2
-        L.polyline([ll(m.punkte1[p.i]), ll(m.punkte2[p.j])], { color: VERDECKT_FARBE, weight: erste ? 4 : 2, opacity: 0.9, pane: OBEN_PANE })
-          .bindTooltip(`Abb. 5: Sichtlinie ${f1(m.s[p.i])} m (Zufahrt) – ${f1(m.s[p.j])} m (rechter Arm) verdeckt${erste ?
-            ' (erste verdeckte Kombination)' : ''}`, { sticky: true }).addTo(eb.sicht)
+    // Rechtsvortritt, schmale Zufahrt (Abb. 5, Konstruktion nach bfu BM.021 Abb. 4; Block 5): Pfad von D über den Schnitt der Achsen
+    // auf den rechten Arm (strichpunktiert), Fächer der Sichtlinien von D zu seinen Punkten; frei dünn grau, verdeckt rot, die erste
+    // verdeckte dick
+    const m = e.rechtsvortritt?.arm.sichtfeld
+    if (m) {
+      L.polyline(m.pfad.map(ll), { color: '#111827', weight: 1.5, dashArray: '8 3 2 3', interactive: false, pane: OBEN_PANE }).addTo(eb.sicht)
+      for (const l of m.linien.filter(x => x.frei))
+        L.polyline([ll(m.D), ll(l.p)], { color: '#64748b', weight: 1, opacity: 0.45, interactive: false }).addTo(eb.sicht)
+      for (const l of m.linien.filter(x => !x.frei)) {
+        const erste = !!m.erste && l.s === m.erste.s
+        L.polyline([ll(m.D), ll(l.p)], { color: VERDECKT_FARBE, weight: erste ? 4 : 2, opacity: 0.9, pane: OBEN_PANE })
+          .bindTooltip(`Abb. 5: Sichtlinie zum Punkt bei ${f1(l.s)} m Pfadlänge (${f1(l.sRechts)} m auf dem rechten Arm) verdeckt` +
+            `${l.verdecker ? ` durch ${esc(l.verdecker)}` : ''}${erste ? ' (erste verdeckte)' : ''}`, { sticky: true }).addTo(eb.sicht)
       }
-      for (const q of [...m.punkte1, ...m.punkte2])
-        L.circleMarker(ll(q), { radius: 2, color: '#111827', weight: 1, fillColor: '#ffffff', fillOpacity: 1, interactive: false, pane: OBEN_PANE })
+      for (const l of m.linien)
+        L.circleMarker(ll(l.p), { radius: 2, color: '#111827', weight: 1, fillColor: '#ffffff', fillOpacity: 1, interactive: false, pane: OBEN_PANE })
           .addTo(eb.sicht)
     }
     for (const r of e.richtungen) {
@@ -474,6 +490,19 @@ export default function Karte(props: {
           L.polygon(r.dreieckVerdeckt.map(ll), { color: VERDECKT_FARBE, weight: 1, fillColor: VERDECKT_FARBE, fillOpacity: 0.3 })
             .bindTooltip(`Sichtdreieck ${name}: verdeckt ab ${f1(r.vorhanden)} m (erforderlich ${r.massgebend} m)`, { sticky: true }).addTo(eb.sicht)
         L.polyline(r.achse.map(ll), { color: ACHSE_FARBE, weight: 2, dashArray: '6 5', interactive: false, pane: OBEN_PANE }).addTo(eb.sicht)
+        // Überholfall (Block 5, Ziffer 6): zweites Sichtdreieck auf den Gegenfahrstreifen, schwächer und gestrichelt
+        const u = r.ueberholfall
+        if (u) {
+          if (u.dreieckFrei.length >= 3)
+            L.polygon(u.dreieckFrei.map(ll), { color: FREI_FARBE, weight: 1, dashArray: '2 4', fillColor: FREI_FARBE, fillOpacity: 0.1 })
+              .bindTooltip(`Überholfall ${name} (Sichtlinie S' auf den Gegenfahrstreifen): frei bis ${f1(Math.min(u.vorhanden, u.A))} m ` +
+                `(erforderlich ${u.A} m)`, { sticky: true }).addTo(eb.sicht)
+          if (u.dreieckVerdeckt.length >= 3)
+            L.polygon(u.dreieckVerdeckt.map(ll), { color: VERDECKT_FARBE, weight: 1, dashArray: '2 4', fillColor: VERDECKT_FARBE, fillOpacity: 0.15 })
+              .bindTooltip(`Überholfall ${name}: verdeckt ab ${f1(u.vorhanden)} m (erforderlich ${u.A} m)`, { sticky: true }).addTo(eb.sicht)
+          L.polyline(u.achse.map(ll), { color: ACHSE_FARBE, weight: 1, dashArray: '2 5', opacity: 0.8, interactive: false, pane: OBEN_PANE })
+            .addTo(eb.sicht)
+        }
         // Fläche, die die Sichtweite begrenzt: innerhalb von A in der Liste der Verdecker (unten, rot); verdeckt sie erst
         // ausserhalb von A, orange
         if (r.verdecker && !r.verdeckerListe.some(t => t.id === r.verdecker!.id)) {
@@ -482,8 +511,6 @@ export default function Karte(props: {
             .bindTooltip(`${esc(verdeckerName(r.verdecker))}: verdeckt ${name} ab rund ${f1(r.vorhanden)} m` +
               (innen ? '' : `, erst nach der erforderlichen Sichtweite (${r.massgebend} m)`), { sticky: true }).addTo(eb.sicht)
         }
-        L.circleMarker(ll(r.K), { radius: 4, color: '#111827', weight: 1.5, fillColor: '#ffffff', fillOpacity: 1, pane: OBEN_PANE })
-          .bindTooltip(`Kreuzungspunkt K ${name}, ${r.spur === 'nah' ? 'nahe' : 'ferne'} Fahrspur`).addTo(eb.sicht)
         // Ende der massgebenden Sichtweite A auf der Achse
         const iA = Math.min(r.massgebend, r.sichtpunkte.length - 1)
         if (iA > 0) L.circleMarker(ll(r.sichtpunkte[iA]), { radius: 4, color: '#111827', weight: 1.5, fillColor: STATUS_FARBE[r.status], fillOpacity: 1,
@@ -511,6 +538,10 @@ export default function Karte(props: {
           `Velo ${name}: Vorderrad am Ende der erforderlichen Sichtweite, ${v.A} m`)
       }
     }
+    // K je geprüfte Richtung als beschrifteter Punkt wie D (Korrektur 31.10.2026, Punkt 10)
+    for (const k of kreuzungspunkte(e))
+      L.marker(ll(k.p), { icon: L.divIcon({ className: 'k-punkt', iconSize: [12, 12], html: `<span>${k.text}</span>` }), pane: OBEN_PANE,
+        keyboard: false, zIndexOffset: 800 }).bindTooltip(esc(k.tooltip)).addTo(eb.sicht)
     // Trottoir (E3b): zwei kleine Dreiecke von D' zu den Trottoirpunkten (Bernstein), Fussgänger am Ende von A
     const tp = e.trottoirPruefung
     if (tp) {
@@ -557,10 +588,10 @@ export default function Karte(props: {
         .addTo(eb.sicht)
     }
     L.polyline(e.zufahrtAchse.map(ll), { color: ZUFAHRT_FARBE, weight: 2, dashArray: '6 5', interactive: false, pane: OBEN_PANE }).addTo(eb.sicht)
-    // Haltelinie (E2b): Querlinie an der Vorderkante, weiss mit dunklem Rand
+    // Halte- oder Wartelinie (E2b, Feld haltelinie): Querlinie an der Vorderkante, weiss mit dunklem Rand
     if (e.haltelinie) {
       const h = e.haltelinie, q = h.quer.map(ll)
-      const text = `Haltelinie, ${f1(Math.abs(h.abstand))} m ${h.abstand >= 0 ? 'hinter' : 'vor'} der Kante${h.vorverlegt ? ' (vorverlegt)' : ''}`
+      const text = `Halte- oder Wartelinie (Vorderkante: Beginn von B), ${f1(Math.abs(h.abstand))} m ${h.abstand >= 0 ? 'hinter' : 'vor'} der Kante${h.vorverlegt ? ' (vorverlegt)' : ''}`
       L.polyline(q, { color: '#111827', weight: 8, opacity: 0.9, pane: OBEN_PANE, interactive: false }).addTo(eb.sicht)
       L.polyline(q, { color: HALTELINIE_FARBE, weight: 5, opacity: 1, pane: OBEN_PANE }).bindTooltip(text, { sticky: true }).addTo(eb.sicht)
     }

@@ -16,24 +16,25 @@ import { KEINE_ALLE_EINGABEN, KEINE_HINDERNISSE, REGELUNGEN, TEMPO_ARTEN, TEMPO_
   type HindernisEingaben, type HindernisStand, type Rechnung, type Regelung, type Richtung, type RichtungErgebnis, type StrasseErgebnis,
   type TempoArt, type TempoEingabe, type ZufahrtspunktEingabe, type HoehenVorgabe, type SichtTeil, type TrottoirPruefung,
   type RechtsvortrittErgebnis, type RvArm, type RvStatus, type TempoAmtlichDaten, type TempoAmtlichLinie, type TueErgebnis,
-  type TuePhase, TUE_BREITE_MIN, TUE_BREITE_MAX } from './rechner/typen'
+  type TuePhase, type UeberholStand, TUE_BREITE_MIN, TUE_BREITE_MAX } from './rechner/typen'
 import { WAHRNEHMBARKEITEN, WAHRNEHMBARKEIT_TEXT, WAHRNEHMBARKEIT_VORGABE, ZUSTAND_TEXT, RV_TEMPO, RV_B_M, RV_A_M,
-  RV_A_MIN_M, SCHMAL_M, PAAR_LAENGE_M, PAAR_SCHRITT_M, type Wahrnehmbarkeit } from './rechner/rechtsvortritt'
+  RV_A_MIN_M, SCHMAL_M, ENG_LAENGE_M, ENG_SCHRITT_M, type Wahrnehmbarkeit } from './rechner/rechtsvortritt'
 import { VELOFUEHRUNGEN, VELOFUEHRUNG_TEXT, TAB3_EBIKE, TAB3_GRENZE, D_VELO_M, RADSTREIFEN_M,
-  RADWEG_NAH_M, type Velofuehrung } from './rechner/velo'
+  RADWEG_NAH_M, TROTTOIR_NEIGUNG_AUSLEGUNG, type Velofuehrung } from './rechner/velo'
 import { ladeNeigung } from './daten/hoehen'
-import { HOEHEN_QUELLE, PROFIL_MIN_M, ZUFAHRT_STEIL_PROZENT } from './rechner/neigung'
+import { HOEHEN_QUELLE, PROFIL_MIN_M } from './rechner/neigung'
 import { HALTELINIE_MIN_M, type Massnahme, type Uebernahme } from './rechner/massnahmen'
-import { AV_RADIUS_M, OSM_RADIUS_M, KATASTER_RADIUS_M, avNachladen, REGELUNG_TEXT, TEMPO_ART_TEXT } from './rechner/rechnen'
+import { AV_RADIUS_M, OSM_RADIUS_M, KATASTER_RADIUS_M, avNachladen, REGELUNG_TEXT, TEMPO_ART_TEXT, LSA_TEXT, RV_TEMPO_TEXT } from './rechner/rechnen'
 import { zufahrtspunktKey, zufahrtspunktLesen } from './rechner/grundstueck'
-import { armText, nachNr } from './rechner/knoten'
+import { armText, nachNr, keineZufahrt } from './rechner/knoten'
 import { lageText, lageNach } from './rechner/lage'
-import { TAB1, ZIEL_FAKTOR, STRASSENTYP_TEXT, UNGUNST_TEXT, NEIGUNG_GROSS_PROZENT, NEIGUNG_EBEN_PROZENT,
-  ZWISCHENWERT_TEXT, neigungLesen, type Strassentyp, type Ungunst } from './rechner/sichtweite'
+import { TAB1, ZIEL_FAKTOR, STRASSENTYP_TEXT, UNGUNST_TEXT, NEIGUNG_GROSS_PROZENT, NEIGUNG_EBEN_PROZENT, SCHWERVERKEHR_PROZENT,
+  UNGUNST_MASSE_TEXT, ZWISCHENWERT_TEXT, neigungLesen, type Strassentyp, type Ungunst } from './rechner/sichtweite'
 import { ANHALTESICHT_STUFEN, ANHALTESICHT_I_MIN } from './rechner/anhaltesicht'
 import { FAHRERSITZ_M, B_INNERORTS_M, TROTTOIR_BIS_M, TROTTOIR_MAX_M } from './rechner/beobachtung'
 import { D_MFZ_M } from './rechner/hauptachsen'
-import { Anleitung, Datenschutz, Fusszeile } from './Hilfe'
+import { Anleitung, Datenschutz, Fusszeile, RechnungGrundlagen, DatenQuellen, QuellenTabelle, BegriffeListe, BegriffText } from './Hilfe'
+import { RegelUebersicht } from './RegelUebersicht'
 import { f1, f2, fi, STATUS_TEXT, rvStatusText, RV_STATUS_TEXT, STATUS_TEXT_TEIL, TUE_BREITE_KURZ, tuePhaseText } from './texte'
 import Bericht from './Bericht'
 import Info from './Info'
@@ -70,10 +71,6 @@ const AV_NAME_KARTE: Record<string, string> = { Strasse_Weg: 'Fahrbahn', Gebaeud
 
 const RV_STATUS_FARBE: Record<RvStatus, string> = { erfuellt: STATUS_FARBE.erfuellt, bedingt: STATUS_FARBE.massgebend,
   nicht_erfuellt: STATUS_FARBE.nicht_erfuellt, keine: STATUS_FARBE.keine_zufahrt }
-/** Merkmale der Wahrnehmbarkeit (Ziffer 18), Stichworte */
-const WAHRNEHMBARKEIT_HILFE = 'Gut: Hecken und Gärten beidseits der Kreuzung unterbrochen, Gehwegführung markiert die Abzweigung, ' +
-  'besondere Markierung oder vertikaler Versatz. Schlecht: gleichförmige Gärten ohne Gehweg an der Abzweigung, durchlaufender Gehweg, ' +
-  'Pflästerung als falsche Kontinuität (Ziffer 18).'
 // ---------------------------------------------------------------- Hindernisse (E2a, Werkzeuge aus fgsCheck)
 const WERKZEUGE: [Exclude<Werkzeug, null>, string, string][] = [
   ['parkfeld', 'Parkfeld', 'Ecken anklicken, Doppelklick schliesst'],
@@ -153,16 +150,38 @@ function NeigungFeld({ wert, vorgabe, unbekannt, onWert, name }: { wert: number 
 /** Vorgabe der Längsneigung kurz: Zahl bzw. «unbekannt» */
 const neigungVorgabeKurz = (r: RichtungErgebnis) => (r.neigungVorgabeUnbekannt ? 'unbekannt' : `${fi(r.neigungVorgabe)} %`)
 
+/** Schwerverkehrsanteil von Hand [%] (Block 5): übernommen beim Verlassen des Felds bzw. mit Enter; leer = ohne Angabe */
+const anteilLesen = (t: string): number | null | undefined => {
+  const x = t.trim().replace(/%$/, '').trim().replace(',', '.')
+  if (!x) return null
+  const v = Number(x)
+  return Number.isFinite(v) && v >= 0 && v <= 100 ? Math.round(v * 10) / 10 : undefined
+}
+function AnteilFeld({ wert, onWert }: { wert: number | null; onWert: (v: number | null) => void }) {
+  const [text, setText] = useState(wert === null ? '' : f1(wert))
+  useEffect(() => { setText(t => (anteilLesen(t) === wert ? t : wert === null ? '' : f1(wert))) }, [wert])
+  const v = anteilLesen(text)
+  const uebernehmen = () => { if (v !== undefined && v !== wert) onWert(v) }
+  return <>
+    <input type="text" inputMode="decimal" size={5} aria-label="Schwerverkehrsanteil in Prozent" placeholder="leer" value={text}
+      className={v === undefined ? 'falsch' : ''} onChange={e => setText(e.target.value)} onBlur={uebernehmen}
+      onKeyDown={e => { if (e.key === 'Enter') uebernehmen() }} /> %
+    {v === undefined && <span className="fehler klein"> Zahl zwischen 0 und 100 oder leer</span>}
+  </>
+}
+
 /** Block «Erforderliche Sichtweite» (Schritt 3): Strassentyp, ungünstige Verhältnisse, Längsneigung je Richtung (E1); beim
  *  Rechtsvortritt nur die Längsneigung */
-function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false }: { s: StrasseErgebnis; eingaben: Eingaben;
-  setEingaben: (f: (e: Eingaben) => Eingaben) => void; richtungen: RichtungErgebnis[]; rv?: boolean }) {
+function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false, ueber = null }: { s: StrasseErgebnis; eingaben: Eingaben;
+  setEingaben: (f: (e: Eingaben) => Eingaben) => void; richtungen: RichtungErgebnis[]; rv?: boolean; ueber?: UeberholStand | null }) {
   // Zustand der Bedienelemente aus den Eingaben (sofort), Vorgaben aus dem Ergebnis bzw. aus der eingegebenen Neigung
   const typ = eingaben.typ ?? s.typVorgabe
   // Neigung wie gerechnet: von Hand (sofort), sonst die Vorgabe aus dem Höhenmodell (aus dem Ergebnis)
   const neigungVorgabe = richtungen.some(r => Math.abs(eingaben.neigung[r.richtung] ?? r.neigungVorgabe) > NEIGUNG_GROSS_PROZENT + 1e-9)
   // Neigung einer Richtung unbekannt (ohne Eingabe von Hand): die Vorgabe «grosse Längsneigung» bleibt aus (Entscheid 31.10.2026)
   const neigungOffen = !neigungVorgabe && richtungen.some(r => r.neigungVorgabeUnbekannt && eingaben.neigung[r.richtung] === null)
+  const anteil = eingaben.schwerverkehrAnteil ?? null
+  const anteilUngunst = anteil !== null && anteil > SCHWERVERKEHR_PROZENT + 1e-9
   const gesetzt: Ungunst = { fahrstreifen: eingaben.fahrstreifen ?? s.ungunstVorgabe.fahrstreifen,
     neigung: eingaben.neigungGross ?? neigungVorgabe, schwerverkehr: eingaben.schwerverkehr }
   const haekchen = (k: keyof Ungunst, quelle: string, warn = false) => (
@@ -172,7 +191,7 @@ function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false }:
     }} /> {UNGUNST_TEXT[k]} <span className={warn ? 'klein warnung' : 'klein'}>({quelle})</span></label>
   )
   const vorgabe = (b: boolean) => (b ? 'ja' : 'nein')
-  const ohneWirkung = typ !== 'hvs' && (gesetzt.fahrstreifen || gesetzt.neigung || gesetzt.schwerverkehr)
+  const ohneWirkung = typ !== 'hvs' && (gesetzt.fahrstreifen || gesetzt.neigung || gesetzt.schwerverkehr || anteilUngunst)
   return (
     <div className="eingabe">
       <table className="zahlen">
@@ -193,16 +212,41 @@ function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false }:
           <tr><td>Ungünstige Verhältnisse<Info titel="Ungünstige Verhältnisse">
             <p>Bei einer Hauptverkehrsstrasse hebt ein Häkchen den Wert der Tab. 1 vom Zwischenwert auf den oberen Wert. Bei
               Erschliessungs-, Sammel- und Verbindungsstrassen sind ungünstige Verhältnisse nur ein Hinweis: der untere Wert bleibt.</p>
-            <p>Vorgaben: mehr als zwei Fahrstreifen aus OSM lanes ({s.fahrstreifenQuelle}); grosse Längsneigung, wenn |i| in einer
-              Richtung über {NEIGUNG_GROSS_PROZENT} % liegt (bei unbekannter Neigung nicht gesetzt: kein Mass bekannt); hoher
-              Schwerverkehrsanteil nur von Hand.</p></Info></td><td>
+            <p>Vorgaben: mehr als ein Fahrstreifen je Richtung aus OSM (lanes:forward bzw. lanes:backward, sonst lanes: bei einer
+              Einbahn ab 2, sonst ab 3; hier {s.fahrstreifenQuelle}); grosse Längsneigung bei einem Gefälle über{' '}
+              {NEIGUNG_GROSS_PROZENT} % in einer Richtung, also |i| über {NEIGUNG_GROSS_PROZENT} % (bei unbekannter Neigung nicht gesetzt:
+              kein Mass bekannt); hoher Schwerverkehrsanteil über {SCHWERVERKEHR_PROZENT} % aus dem eingegebenen Anteil, das Häkchen setzt
+              ihn von Hand (dann unabhängig vom Anteil).</p>
+            <p>{UNGUNST_MASSE_TEXT}.</p></Info></td><td>
             {haekchen('fahrstreifen', eingaben.fahrstreifen === null ? `Vorgabe ${quelleText(s.fahrstreifenQuelle)}` :
               `gewählt; Vorgabe ${vorgabe(s.ungunstVorgabe.fahrstreifen)}`)}
             {haekchen('neigung', eingaben.neigungGross === null ? `Vorgabe aus der Längsneigung${neigungOffen ? '; unbekannt, nicht gesetzt' :
               ''}` : `gewählt; Vorgabe ${vorgabe(neigungVorgabe)}`, eingaben.neigungGross === null && neigungOffen)}
-            {haekchen('schwerverkehr', 'nur von Hand')}
+            {haekchen('schwerverkehr', eingaben.schwerverkehr ? 'von Hand gesetzt: gilt unabhängig vom Anteil' :
+              anteilUngunst ? `nicht von Hand; aus dem Anteil über ${SCHWERVERKEHR_PROZENT} %: ungünstig` : 'von Hand bzw. aus dem Anteil')}
+            <div className="klein">Schwerverkehrsanteil{' '}
+              <AnteilFeld wert={anteil} onWert={v => setEingaben(e => ({ ...e, schwerverkehrAnteil: v }))} />{' '}
+              {anteilUngunst ? <span className="warnung">über {SCHWERVERKEHR_PROZENT} %: ungünstig</span> :
+                anteil !== null ? `(höchstens ${SCHWERVERKEHR_PROZENT} %: nicht ungünstig)` : `(ungünstig über ${SCHWERVERKEHR_PROZENT} %)`}</div>
             {ohneWirkung && <div className="klein warnung">Häkchen ohne Wirkung: bei einer Erschliessungsstrasse bleibt der untere Wert.</div>}
-          </td></tr></>}
+          </td></tr>
+          {ueber && <tr><td>Überholfall<Info titel="Überholfall (Ziffer 6)">
+            <p>Ausserorts, wo Überholen erlaubt ist, prüft die App eine zweite Sichtlinie S' von D auf die Achse des Gegenfahrstreifens
+              (VSS 40 273 Ziffer 6, S. 4; Abb. 1, S. 5): das überholende Fahrzeug fährt {f2(D_MFZ_M)} m vom anderen Fahrbahnrand, die Zielpunkte
+              reichen bis zur selben erforderlichen Sichtweite A, die Hindernisse wie für Motorfahrzeuge. Der Teil zählt zum Status der
+              Richtung.</p>
+            <p>Vorgabe aus OSM (overtaking=no bzw. overtaking:forward/backward=no für den Verkehr zum Knoten: verboten, sonst erlaubt; hier{' '}
+              {ueber.vorgabeQuelle}); das Häkchen gilt für beide Richtungen. Innerorts und beim Rechtsvortritt keine Prüfung.</p></Info></td><td>
+            <label style={ueber.ausserorts ? undefined : { opacity: 0.55 }}><input type="checkbox" checked={eingaben.ueberholen ?? ueber.vorgabe}
+              onChange={ev => { const v = ev.target.checked; setEingaben(e => ({ ...e, ueberholen: v })) }} /> Überholen im Knotenbereich
+              erlaubt</label>
+            {(eingaben.ueberholen ?? null) !== null && <>{' '}<button className="zweit klein"
+              onClick={() => setEingaben(e => ({ ...e, ueberholen: null }))}>Vorgabe</button></>}
+            <div className="klein">{(eingaben.ueberholen ?? null) !== null ? <>(<Hand />; Vorgabe {ueber.vorgabe ? 'erlaubt' : 'verboten'},{' '}
+              {ueber.vorgabeQuelle})</> : <span className={ueber.vorgabe && ueber.ausserorts ? 'warnung' : ''}>(Vorgabe: {ueber.vorgabeQuelle})</span>}</div>
+            {!ueber.ausserorts && <div className="klein">innerorts: ohne Wirkung (Überholfall nur ausserorts)</div>}
+            {ueber.ausserorts && !ueber.geprueft && ueber.grund && <div className="klein">nicht geprüft: {ueber.grund}</div>}
+          </td></tr>}</>}
           <tr><td>Längsneigung i<Info titel="Längsneigung">
             {rv && <p>Rechtsvortritt: Tab. 1, Strassentyp und ungünstige Verhältnisse gelten nicht (ausgeblendet); die Längsneigung wirkt
               nur auf das Velo (Tab. 3).</p>}
@@ -252,6 +296,9 @@ function veloStand(r: RichtungErgebnis): TeilStand {
   return rvNichtGeprueft(r) ? { feld: 'Velo nicht geprüft', kurz: 'nicht geprüft', farbe: GRAU } :
     { feld: 'kein Veloverkehr', kurz: 'kein Veloverkehr', farbe: GRAU }
 }
+/** Überholfall (Block 5): nur, wenn geprüft */
+const ueberStand = (r: RichtungErgebnis): TeilStand | null => (r.ueberholfall ? { feld: `Überholfall ${STATUS_TEXT_TEIL[r.ueberholfall.status]}`,
+  kurz: STATUS_TEXT_TEIL[r.ueberholfall.status], farbe: STATUS_FARBE[r.ueberholfall.status] } : null)
 const trottoirStand = (t: TrottoirRichtung | null): TeilStand => (t ? { feld: `Trottoir ${STATUS_TEXT_TEIL[t.status]}`,
   kurz: STATUS_TEXT_TEIL[t.status], farbe: STATUS_FARBE[t.status] } : { feld: 'Trottoir keines', kurz: 'keines', farbe: GRAU })
 /** graue Zeile der Statusübersicht: auf dieser Seite liegt kein Arm (der andere Arm liegt gegenüber) */
@@ -265,7 +312,7 @@ function verdeckerKurz(v: { art: string; name: string }) {
 }
 const vorhandenText = (t: { vorhanden: number; bisEnde: boolean }) => `${t.bisEnde ? '≥ ' : ''}${f1(t.vorhanden)} m`
 /** Tempo einer Richtung kurz für die Überschrift: «30 km/h, OSM maxspeed» */
-const tempoKurz = (r: RichtungErgebnis) => (r.rv || rvNichtGeprueft(r) || r.tempoQuelle.startsWith('Rechtsvortritt') ? 'Rechtsvortritt' : r.tempoArt ? `von Hand, ${TEMPO_ART_TEXT[r.tempoArt]}` :
+const tempoKurz = (r: RichtungErgebnis) => (rvNichtGeprueft(r) ? 'Rechtsvortritt' : r.tempoArt ? `von Hand, ${TEMPO_ART_TEXT[r.tempoArt]}` :
   kurzQuelle(r.tempoQuelle))
 /** Hinweise mit Folgen für das Ergebnis: Zielpunkte über den AV-Ausschnitt hinaus (weiter weg fehlen Gebäude) */
 const avGrenze = (h: string[]) => h.filter(x => x.startsWith('Zielpunkte reichen über den AV-Ausschnitt'))
@@ -310,6 +357,7 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false 
   // Rechtsvortritt, Verkehr von links bzw. Gegenverkehr: nur die graue Statuszeile, keine Spalten (ausser ein Trottoir ist geprüft)
   if (nichtGeprueft && !v && !t) return null
   const warn = avGrenze([...r.hinweise, ...(v?.hinweise ?? []), ...(t?.hinweise ?? [])])
+  const u = r.ueberholfall ?? null
   const auto = autoStand(r)
   const autoA = r.rv ? 'Abb. 6, Minimum' : r.anhalteAngewendet && r.massgebendText.startsWith('Anhaltesichtweite') ? 'Anhaltesichtweite' :
     `Tab. 1, ${STUFE_KURZ[r.typStufe]}`
@@ -318,7 +366,7 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false 
       <h3>{lageText(r)}: {r.strasse}<span className="klein">, {r.spur === 'nah' ? 'nahe' : 'ferne'} Fahrspur</span>
         {' '}<span className={r.tempoAnnahme ? 'klein warnung' : 'klein'}>· {r.tempo} km/h, {tempoKurz(r)}</span></h3>
       {warn.map(w => <p key={w} className="klein warnung">{w}</p>)}
-      <div className={mitTrottoir ? 'teile drei' : 'teile'}>
+      <div className={mitTrottoir && u ? 'teile vier' : mitTrottoir || u ? 'teile drei' : 'teile'}>
         <TeilSpalte name="Auto" stand={auto} A={r.massgebend} Aquelle={autoA} t={r}
           leer={r.status === 'keine_zufahrt' ? (nichtGeprueft ? 'nicht geprüft (Rechtsvortritt)' : 'keine Autos (Einbahn vom Knoten weg)') : undefined}
           herleitung={<>
@@ -347,6 +395,18 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false 
             <VerdeckerListe liste={r.verdeckerListe} />
             {r.hinweise.length > 0 && <><p>Hinweise:</p><ul>{r.hinweise.map((h, i) => <li key={i}>{h}</li>)}</ul></>}
           </>} />
+        {u && <TeilSpalte name="Überholfall" farbe={FREI_FARBE} stand={ueberStand(r)!} A={u.A} Aquelle="wie Auto" t={u}
+          herleitung={<>
+            <p>Überholfall (VSS 40 273 Ziffer 6, S. 4; Abb. 1, S. 5): ausserorts mit erlaubtem Überholen eine zweite Sichtlinie S' von D
+              auf den Gegenfahrstreifen, auf dem das überholende Fahrzeug fährt.</p>
+            <ul>
+              <li>Achse: {u.lageText}; ohne Abzug eines Parkstreifens (Annahme).</li>
+              <li>Erforderliche Sichtweite A {u.A} m, dieselbe wie für die Motorfahrzeuge dieser Richtung ({r.massgebendText}).</li>
+              <SichtHerleitung t={u} />
+            </ul>
+            <VerdeckerListe liste={u.verdeckerListe} />
+            {u.hinweise.length > 0 && <><p>Hinweise:</p><ul>{u.hinweise.map((h, i) => <li key={i}>{h}</li>)}</ul></>}
+          </>} />}
         <TeilSpalte name="Velo" farbe={VELO_FARBE} zusatz={r.veloGegen ? 'gegen die Einbahn' : undefined} stand={veloStand(r)}
           A={v?.A} Aquelle="Tab. 3" t={v ?? undefined} leer={v ? undefined : nichtGeprueft ? 'nicht geprüft (Rechtsvortritt)' : 'kein Veloverkehr'}
           herleitung={<>
@@ -374,7 +434,8 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false 
                 {f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt ({achseQuelle}).</li> :
               <li>D' = B {f2(B_INNERORTS_M)} m hinter der Trottoirhinterkante (VSS 40 273 Ziffer 13.2), {velo ? 'auf der Veloachse' :
                 'am Fahrersitz'}; Zielpunkte auf der Trottoirachse ({achseQuelle}).</li>}
-              <li>Längsneigung in Gehrichtung zur Zufahrt {t.neigungUnbekannt ? 'unbekannt' : `${fi(t.neigung)} %`} ({t.neigungQuelle}).</li>
+              <li>Längsneigung in Gehrichtung zur Zufahrt {t.neigungUnbekannt ? 'unbekannt' : `${fi(t.neigung)} %`} ({t.neigungQuelle}).
+                {' '}{TROTTOIR_NEIGUNG_AUSLEGUNG}.</li>
               <li>Erforderliche Sichtweite A {t.A} m ({t.text}).</li>
               <SichtHerleitung t={t} />
             </ul>
@@ -391,7 +452,7 @@ const rvGrundText = (r: RichtungErgebnis) => (r.keinGrund?.startsWith('Rechtsvor
 /** Rechtsvortritt (E3c, Teil E), oben im Ergebnis: wem die Zufahrt den Vortritt lassen muss, die nicht geprüfte Seite und der
  *  Zustand nach Abb. 6; alles Weitere im Info-Zeichen */
 function RvBlock({ rv, links, linksName }: { rv: RechtsvortrittErgebnis; links: RichtungErgebnis | undefined; linksName: string }) {
-  const a = rv.arm, m = a.paare
+  const a = rv.arm, m = a.sichtfeld
   const breite = (b: number | null) => (b === null ? 'ohne AV-Querschnitt' : `${f1(b)} m`)
   // die Zufahrt hat vortrittsbelasteten Verkehr und es gibt einen Arm rechts: der Verkehr von links muss ihr den Vortritt lassen, der
   // Gegenverkehr hat beim Geradeausfahren kein Vortrittsverhältnis
@@ -402,17 +463,18 @@ function RvBlock({ rv, links, linksName }: { rv: RechtsvortrittErgebnis; links: 
         <p>Rechtsvortritt nach VSS 40 273 Teil E (Ziffern 15 bis 18): alle Arme sind vortrittsbelastet; jeder muss dem Verkehr von rechts
           den Vortritt lassen. Geprüft wird {a.armName} gegen den Arm rechts: {a.rechtsName}.</p>
         <ul>
-          <li>Tempo {rv.tempo} km/h fest (Ziffer 15), B {f2(rv.B)} m (Abb. 4).</li>
+          <li>{RV_TEMPO_TEXT} B {f2(rv.B)} m (Abb. 4).</li>
           <li>Wahrnehmbarkeit {WAHRNEHMBARKEIT_TEXT[rv.wahrnehmbarkeit]} ({rv.wahrnehmbarkeitGewaehlt ? 'gewählt' : 'Vorgabe, Annahme'}).</li>
           {a.status !== 'keine' && <li>Sichtweite vorhanden {a.bisEnde ? '≥ ' : ''}{f1(a.vorhanden)} m; {RV_A_M} m anzustreben, {RV_A_MIN_M} m Minimum
             bei sehr guter Wahrnehmbarkeit (Ziffer 16).</li>}
           <li>Fahrbahnbreite: Zufahrt {breite(a.breite)}, rechter Arm {breite(a.breiteRechts)}{a.schmal ? ` (schmal, höchstens ${f2(SCHMAL_M)} m: ` +
             'Abb. 5)' : ''}.</li>
-          {m && <li>Sichtfeld Abb. 5: {m.frei ? 'frei' : 'nicht frei'}, {m.sichtbar} von {m.paare.length} Sichtlinien frei
-            ({Math.round(m.anteil * 100)} %){m.erste ? `; erste verdeckte Kombination ${f1(m.erste.s1)} m auf der Zufahrt und ` +
-            `${f1(m.erste.s2)} m auf dem rechten Arm (${m.erste.verdecker})` : ''}. Punkte alle {PAAR_SCHRITT_M} m auf beiden Achsen ab
-            ihrem Schnittpunkt (schmaler Arm: Fahrbahnachse, breiter Arm: Fahrstreifen); geprüft die Paare, deren Abstände zusammen
-            höchstens {PAAR_LAENGE_M} m ergeben (Auslegung der Abb. 5, mit der Fachperson zu klären).</li>}
+          {m && <li>Sichtfeld Abb. 5: {m.frei ? 'frei' : 'nicht frei'}, {m.sichtbar} von {m.linien.length} Sichtlinien frei
+            ({Math.round(m.anteil * 100)} %){m.erste ? `; erste verdeckte bei ${f1(m.erste.s)} m Pfadlänge ab D (${f1(m.erste.sRechts)} m ` +
+            `auf dem rechten Arm; ${m.erste.verdecker})` : ''}. Konstruktion nach bfu BM.021 Kap. 3.2.2, Abb. 4: Sichtlinien von D zu
+            Punkten alle {ENG_SCHRITT_M} m auf einem Pfad von {ENG_LAENGE_M} m ab D über den Schnitt der Achsen ({f1(m.bisX)} m ab D) auf
+            den rechten Arm (schmaler Arm: Fahrbahnmitte, breiter Arm: Fahrstreifen); gezählt der Schnittpunkt und die Punkte dahinter
+            (Annahmen: Beobachter und Pfadbeginn in D).</li>}
           {a.status === 'keine' && a.grund && <li>Keine Prüfung nach Abb. 6: {a.grund}.</li>}
           {links?.keinGrund && <li>{rvGrundText(links)}.</li>}
         </ul></Info></p>}
@@ -434,7 +496,7 @@ function RvAlle({ rv, armWaehlen }: { rv: RechtsvortrittErgebnis; armWaehlen: (k
   if (!rv.alle) return null
   return <>
     <h4>Alle Arme<Info titel="Alle Arme"><p>Nur Motorfahrzeuge nach Abb. 6 bzw. Abb. 5 (ohne Velo und Trottoir); der gewählte Arm mit
-      seinen Eingaben, die übrigen mit den Vorgaben (ohne Haltelinie, D von Hand, Neigung). Ein Klick auf den Arm wählt ihn.</p>
+      seinen Eingaben, die übrigen mit den Vorgaben (ohne Halte- oder Wartelinie, D von Hand, Neigung). Ein Klick auf den Arm wählt ihn.</p>
       {rv.alle.filter(x => x.status === 'keine').map(x => <p key={x.arm}>{x.armName}: {x.grund}.</p>)}</Info></h4>
     <table className="zahlen">
       <thead><tr><th>Arm</th><th>gegen rechts</th><th>Sichtweite vorhanden</th><th>Status</th></tr></thead>
@@ -443,7 +505,7 @@ function RvAlle({ rv, armWaehlen }: { rv: RechtsvortrittErgebnis; armWaehlen: (k
           title="Diesen Arm wählen: die Karte zeigt ihn">{x.armName}</button></td>
         <td>{x.rechtsName}</td>
         <td>{x.status === 'keine' ? '–' : `${x.bisEnde ? '≥ ' : ''}${f1(x.vorhanden)} m`}{x.schmal ? ' · schmal' : ''}</td>
-        <td><b style={{ color: RV_STATUS_FARBE[x.status] }}>{RV_STATUS_TEXT[x.status]}</b>{x.paare && !x.paare.frei ?
+        <td><b style={{ color: RV_STATUS_FARBE[x.status] }}>{RV_STATUS_TEXT[x.status]}</b>{x.sichtfeld && !x.sichtfeld.frei ?
           <span className="warnung"> · Abb. 5</span> : ''}</td>
       </tr>)}</tbody>
     </table>
@@ -463,8 +525,7 @@ function VeloAbschnitt({ e, eingaben, setEingaben }: { e: Ergebnis; eingaben: Ei
             <ul>{e.richtungen.map(r => <li key={r.richtung}>{lageText(r)}: Vorgabe {VELOFUEHRUNG_TEXT[r.veloVorgabe]} aus{' '}
               {r.veloVorgabeQuelle}{r.veloGegen ? `; Einbahn vom Knoten weg mit Velo gegen die Einbahn (OSM ${r.veloGegen}): Veloachse am ` +
               'für das Velo rechten, aus Sicht des Autoverkehrs linken Fahrbahnrand' : ''}.</li>)}</ul>
-            {e.zufahrtVelo && <p>Zufahrt: Velo gegen die Einbahn (OSM {e.zufahrtVelo.quelle}), {VELOFUEHRUNG_TEXT[e.zufahrtVelo.fuehrung]} aus{' '}
-              {e.zufahrtVelo.fuehrungQuelle}; F<sub>B</sub> ist ein Velo, D auf seiner Achse ({e.zufahrtVelo.lageText}).</p>}</Info></td><td>
+            </Info></td><td>
             {e.richtungen.map(r => {
               const wert = eingaben.velo?.[r.richtung] ?? null
               return <div key={r.richtung} className="tempozeile">{lageText(r)}, {r.strasse}:{' '}
@@ -479,8 +540,7 @@ function VeloAbschnitt({ e, eingaben, setEingaben }: { e: Ergebnis; eingaben: Ei
                 {r.veloGegen ? <div className="klein">nur Velos (Einbahn vom Knoten weg)</div> :
                   r.status === 'keine_zufahrt' ? <div className="klein">kein Verkehr von dieser Seite</div> : null}</div>
             })}
-            {e.zufahrtVelo && <div className="tempozeile">Zufahrt {e.zufahrtName}: {VELOFUEHRUNG_TEXT[e.zufahrtVelo.fuehrung]} gegen die
-              Einbahn <span className="klein">(OSM {e.zufahrtVelo.quelle})</span></div>}
+            {e.zufahrtVelo && <div className="tempozeile">Zufahrt: Velos gegen die Einbahn</div>}
           </td></tr>
           <tr><td>Schnelle E-Bikes<Info titel="Schnelle E-Bikes">
             <p>Tab. 3, Zeile «schnelle E-Bikes verboten»: {TAB3_EBIKE.talwaerts} m talwärts, {TAB3_EBIKE.eben} m eben,{' '}
@@ -762,19 +822,22 @@ function RegelungAbschnitt({ e, eingaben, setEingaben }: { e: Ergebnis | null; e
   return (
     <table className="zahlen">
       <tbody>
-          <tr><td>Vortrittsregelung<Info titel="Vortrittsregelung">
-            <p>Vorgabe aus den Signalen in OSM an der Zufahrt (highway=stop: «Stop», sonst «Vortritt»){e ? `; hier ${e.regelungQuelle}: ` +
+          <tr><td>Regelung für die gewählte Zufahrt<Info titel="Regelung für die gewählte Zufahrt">
+            <p>Die Regelung gilt für die gewählte Zufahrt: «Kein Vortritt» (Signal 3.02) bzw. «Stop» (Signal 3.01) heisst, diese Zufahrt
+              muss den Vortritt gewähren; «Rechtsvortritt» ohne Signal.</p>
+            <p>Vorgabe aus den Signalen in OSM an der Zufahrt (highway=stop: «Stop», highway=give_way: «Kein Vortritt»), sonst nach der
+              Vortrittsstrasse{e ? `; hier ${e.regelungQuelle}: ` +
               `«${REGELUNG_TEXT[e.regelungVorgabe]}»` : ', sobald ein Arm gewählt ist'}.</p>
             {regelung === 'stop' && <p>Stop: B {f2(B_INNERORTS_M)} m auch ausserorts (Ziffer 12).</p>}
             {regelung === 'rechtsvortritt' && e?.zufahrtspunkt && <p>Rechtsvortritt gilt an einer Grundstückzufahrt nicht (VRV Art. 15
-              Abs. 3): gerechnet wie «Vortritt».</p>}
+              Abs. 3): gerechnet wie «Kein Vortritt».</p>}
             {regelung === 'rechtsvortritt' && !e?.zufahrtspunkt && <p>Rechtsvortritt: Prüfung nach Teil E (Ziffern 15 bis 18), alle Arme
-              vortrittsbelastet, geprüft gegen den Arm rechts der Zufahrt; B {f2(RV_B_M)} m, Tempo {RV_TEMPO} km/h.</p>}</Info></td><td>
-            <select value={regelung} aria-label="Vortrittsregelung der Zufahrt"
+              vortrittsbelastet, geprüft gegen den Arm rechts der Zufahrt; B {f2(RV_B_M)} m; die Norm geht von {RV_TEMPO} km/h aus.</p>}</Info></td><td>
+            <select value={regelung} aria-label="Regelung für die gewählte Zufahrt"
               onChange={ev => {
                 const r = ev.target.value as Regelung
                 // weg vom Rechtsvortritt: Wahrnehmbarkeit und «alle Arme» zurücksetzen (gelten nur dort)
-                setEingaben(x => ({ ...x, regelung: r, ...(r !== 'rechtsvortritt' ? { wahrnehmbarkeit: null, alleArme: false } : {}) }))
+                setEingaben(x => ({ ...x, regelung: r, ...(r !== 'rechtsvortritt' ? { wahrnehmbarkeit: null, alleArme: false, markierungRv: false } : {}) }))
               }}>
               {REGELUNGEN.map(r => <option key={r} value={r}>{REGELUNG_TEXT[r]}</option>)}
             </select>
@@ -783,21 +846,32 @@ function RegelungAbschnitt({ e, eingaben, setEingaben }: { e: Ergebnis | null; e
               eingaben.regelung !== null ? `(gewählt; Vorgabe ${REGELUNG_TEXT[e.regelungVorgabe]})` :
               <span className="warnung">({annahmeText(e.regelungQuelle)})</span>}</div>
             {regelung === 'rechtsvortritt' && e?.zufahrtspunkt && <div className="klein warnung">Gilt an einer Grundstückzufahrt nicht:
-              gerechnet wie «Vortritt».</div>}
+              gerechnet wie «Kein Vortritt».</div>}
             {eingaben.regelung === 'rechtsvortritt' && eingaben.trottoirueberfahrt && !e?.zufahrtspunkt && <div className="klein warnung">Gilt an
-              einer Trottoirüberfahrt nicht (VSS 40 242 Ziffer 12.3): gerechnet wie «Vortritt».</div>}
+              einer Trottoirüberfahrt nicht (VSS 40 242 Ziffer 12.3): gerechnet wie «Kein Vortritt».</div>}
           </td></tr>
           {regelung === 'rechtsvortritt' && !e?.zufahrtspunkt && !eingaben.trottoirueberfahrt && <tr><td>Wahrnehmbarkeit des Knotens<Info titel="Wahrnehmbarkeit">
-            <p>{WAHRNEHMBARKEIT_HILFE}</p>
-            <p>Vorgabe «{WAHRNEHMBARKEIT_TEXT[WAHRNEHMBARKEIT_VORGABE]}» ohne Eingabe: vor Ort beurteilen. Der Zustand nach Abb. 6 folgt
-              aus Wahrnehmbarkeit und vorhandener Sichtweite.</p>
-            <p>«alle Arme prüfen»: je Arm gegen seinen rechten Nachbarn, Tabelle im Ergebnis.</p></Info></td><td>
+            {/* Text vom Nutzer formuliert (31.10.2026) */}
+            <p><b>Wahrnehmbarkeit:</b> Wie gut erkennen Fahrende rechtzeitig, dass hier eine Kreuzung mit Rechtsvortritt kommt? Je
+              schlechter, desto mehr Sichtweite braucht es. Die App kann das nicht messen, bitte vor Ort einstufen.</p>
+            <p>Eher gut (Beispiele Abb. 7–9, S. 12–13): Hecken oder Gärten enden vor der Kreuzung; ein Gehweg führt sichtbar um die Ecke;
+              besondere Markierung «Rechtsvortritt» oder eine Aufpflästerung des Knotens.</p>
+            <p>Aus Wahrnehmbarkeit und gemessener Sichtweite folgt der Zustand nach Abb. 6: anzustreben, zulässig oder zu sanieren.</p>
+            <p>(VSS 40 273 Z. 9, S. 4; Z. 17 und 18, S. 11–13)</p>
+            <p>«besondere Markierung Rechtsvortritt vorhanden»: die Markierung nach VSS 40 851 lässt sich aus den Daten nicht erkennen; das
+              Häkchen erinnert an sie bei der Einstufung und erscheint im Bericht, die Rechnung bleibt gleich.</p>
+            <p>«alle Arme prüfen»: Die App prüft nicht nur die gewählte Zufahrt, sondern jeden Arm gegen den Arm rechts davon und zeigt
+              das Ergebnis als Tabelle.</p></Info></td><td>
             <select value={eingaben.wahrnehmbarkeit ?? 'vorgabe'} aria-label="Wahrnehmbarkeit des Knotens"
               onChange={ev => { const v = ev.target.value; setEingaben(x => ({ ...x, wahrnehmbarkeit: v === 'vorgabe' ? null : v as Wahrnehmbarkeit })) }}>
               <option value="vorgabe">Vorgabe ({WAHRNEHMBARKEIT_TEXT[WAHRNEHMBARKEIT_VORGABE]})</option>
               {WAHRNEHMBARKEITEN.map(w => <option key={w} value={w}>{WAHRNEHMBARKEIT_TEXT[w]}</option>)}
             </select>
             {' '}<span className={eingaben.wahrnehmbarkeit ? 'klein' : 'klein warnung'}>({eingaben.wahrnehmbarkeit ? 'gewählt' : 'Annahme'})</span>
+            <div><label><input type="checkbox" checked={!!eingaben.markierungRv}
+              onChange={ev => { const v = ev.target.checked; setEingaben(x => ({ ...x, markierungRv: v })) }} /> besondere Markierung
+              «Rechtsvortritt» vorhanden</label>{' '}<span className="klein">(VSS 40 851; Hilfe zur Einstufung, ohne Wirkung auf die
+              Rechnung)</span></div>
             <label><input type="checkbox" checked={!!eingaben.alleArme}
               onChange={ev => { const v = ev.target.checked; setEingaben(x => ({ ...x, alleArme: v })) }} /> alle Arme prüfen</label>
           </td></tr>}
@@ -866,18 +940,19 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
   return (
       <table className="zahlen">
         <tbody>
-          <tr><td>Haltelinie<Info titel="Haltelinie">
-            <p>B gilt ab der Vorderkante der Haltelinie (Ziffer 5). Liegt sie vor der Kante bzw. Trottoirhinterkante (vorverlegt), ist das
-              eine Ausnahme nach Ziffer 14: nur an bestehenden Knoten und Zufahrten.</p>
+          <tr><td>Halte- oder Wartelinie<Info titel="Halte- oder Wartelinie">
+            <p>Bei «Stop» die Haltelinie (SSV Markierung 6.10), bei «Kein Vortritt» die Wartelinie (SSV Markierung 6.13). B gilt ab ihrem
+              vorderen Rand, der Vorderkante (VSS 40 273 Ziffer 5, S. 4). Liegt sie vor der Kante bzw. Trottoirhinterkante (vorverlegt), ist
+              das eine Ausnahme nach Ziffer 14: nur an bestehenden Knoten und Zufahrten.</p>
             <p>Setzen: Vorderkante (Seite zur Vortrittsstrasse) nahe der Zufahrtsachse anklicken; die App lotet den Punkt auf die Achse.</p></Info></td><td>
             {e.haltelinie ? <>{f2(Math.abs(e.haltelinie.abstand))} m {e.haltelinie.abstand >= 0 ? 'hinter' : 'vor'} der Kante{' '}
               <span className="klein">(<Hand />{e.haltelinie.vorverlegt && <span className="warnung">, vorverlegt</span>})</span>{' '}</> :
               eingaben.haltelinie ? <span className="warnung">gesetzt, aber nicht gerechnet (siehe Hinweise) </span> : <>keine{' '}</>}
             <button className={halteAktiv ? 'aktiv klein' : 'zweit klein'} onClick={() => werkzeugWaehlen(halteAktiv ? null : 'haltelinie')}>
-              {eingaben.haltelinie ? 'neu setzen' : 'Haltelinie setzen'}</button>
+              {eingaben.haltelinie ? 'neu setzen' : 'Halte- oder Wartelinie setzen'}</button>
             {eingaben.haltelinie && <>{' '}<button className="zweit klein" onClick={() => setEingaben(x => ({ ...x, haltelinie: null }))}>entfernen</button></>}
-            {halteAktiv && <div className="werkzeughilfe"><b>Haltelinie:</b> Vorderkante (Seite zur Vortrittsstrasse) nahe der Zufahrtsachse
-              anklicken; die App lotet den Punkt auf die Achse.{' '}
+            {halteAktiv && <div className="werkzeughilfe"><b>Halte- oder Wartelinie:</b> Vorderkante (vorderer Rand, Seite zur
+              Vortrittsstrasse) nahe der Zufahrtsachse anklicken; die App lotet den Punkt auf die Achse.{' '}
               <button className="zweit klein" onClick={() => werkzeugWaehlen(null)}>Abbrechen</button></div>}
           </td></tr>
           <tr><td>Beobachtungspunkt D<Info titel="Beobachtungspunkt D">
@@ -925,7 +1000,7 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
               hinter der Kante, höchstens {TROTTOIR_MAX_M} m lang).{e.trottoir ? ` AV: Trottoir ${f1(e.trottoir.breite)} m zwischen Zufahrt und ` +
               'Vortrittsstrasse.' : ` Hier nicht wählbar: ${e.trottoirGrund}.`}</p>
             <p>Ohne Häkchen wartet F<sub>B</sub> vor dem Trottoir, B ab der Trottoirhinterkante; mit Häkchen («Trottoir ohne Hindernisse»)
-              an der Bordkante, B ab der Bordkante (Ziffer 13.1). Eine Haltelinie geht vor.</p></Info></td><td>
+              an der Bordkante, B ab der Bordkante (Ziffer 13.1). Eine Halte- oder Wartelinie geht vor.</p></Info></td><td>
             {e.trottoirueberfahrt ? <span className="klein">Trottoirüberfahrt: F<sub>B</sub> an der Bordkante (Phase Fahrbahn), D' = B{' '}
               {f2(B_INNERORTS_M)} m hinter dem hinteren Rand (Phase Trottoir, VSS 40 273 Ziffer 13.2); das Häkchen «ohne Hindernisse» gilt hier nicht.</span> : <>
             <label style={e.trottoir ? undefined : { opacity: 0.55 }}>
@@ -934,18 +1009,18 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
               F<sub>B</sub> an der Bordkante</label>
             {' '}<span className="klein">({e.trottoir ? `AV: ${f1(e.trottoir.breite)} m` : 'keines nach AV'})</span>
             {eingaben.trottoirFrei && !e.trottoir && <div className="klein warnung">Häkchen ohne Wirkung: kein Trottoir nach AV.</div>}
-            {eingaben.trottoirFrei && e.trottoir && e.haltelinie && <div className="klein warnung">Häkchen ohne Wirkung auf B: die Haltelinie
-              geht vor.</div>}</>}
+            {eingaben.trottoirFrei && e.trottoir && e.haltelinie && <div className="klein warnung">Häkchen ohne Wirkung auf B: die Halte- oder
+              Wartelinie geht vor.</div>}</>}
           </td></tr>
           <tr><td>Tempo je Richtung<Info titel="Tempo">
             <p>Welches Tempo massgebend ist, regelt Ziffer 10 (signalisiert, Projektierungsgeschwindigkeit VP, V85 bzw. fahrbares Tempo);
               Art und Begründung festhalten.</p>
-            {e.rechtsvortritt ? <p>Rechtsvortritt: {RV_TEMPO} km/h für alle Arme (Ziffer 15), keine Eingabe.</p> :
-              <ul>{e.richtungen.map(r => <li key={r.richtung}>{lageText(r)}: Vorgabe {r.tempoVorgabe} km/h aus{' '}
+            {e.rechtsvortritt && <p>Rechtsvortritt: {RV_TEMPO_TEXT} Das Tempo wirkt hier auf die Velos (Tab. 3, S. 9).</p>}
+            {<ul>{e.richtungen.map(r => <li key={r.richtung}>{lageText(r)}: Vorgabe {r.tempoVorgabe} km/h aus{' '}
                 {r.tempoVorgabeQuelle}</li>)}</ul>}</Info></td><td>
-            {e.rechtsvortritt ? <>{RV_TEMPO} km/h für alle Arme <span className="klein">(Rechtsvortritt)</span></> :
-            e.richtungen.map(r => <TempoZeile key={r.richtung} r={r} wert={eingaben.tempo[r.richtung]}
+            {e.richtungen.filter(r => !rvNichtGeprueft(r)).map(r => <TempoZeile key={r.richtung} r={r} wert={eingaben.tempo[r.richtung]}
               setzen={t => setEingaben(x => ({ ...x, tempo: { ...x.tempo, [r.richtung]: t } }))} />)}
+            {e.rechtsvortritt && <div className="klein">{RV_TEMPO_TEXT}</div>}
           </td></tr>
         </tbody>
       </table>
@@ -1112,15 +1187,17 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     [daten, ziel, eingaben, hindEingaben, hoehenVorgabe, tempoAmtlich, rechnen])
   // andere Zufahrt: andere Vortrittsstrasse und andere Achse, die Eingaben (E1, E2b) gelten nicht mehr
   const zAktuell = useRef<string | null>(null)              // gerechnete bzw. gewählte Zufahrt (unten gesetzt)
+  // Korrektur 31.10.2026 (Punkt 15): Arme mit sicherem Vortritt nur über den Schalter; nicht im Fall gespeichert
+  const [auchVortritt, setAuchVortritt] = useState(false)
   const zufahrtWaehlen = useCallback((z: string | null) => {
     const neu = z !== zAktuell.current && zAktuell.current !== null   // erste Wahl ohne bisherige Zufahrt: Eingaben (Regelung) bleiben
     // Rechtsvortritt (E3c): Regelung, Wahrnehmbarkeit und «alle Arme» gelten für den Knoten und bleiben beim Wechsel des Arms
     const alt = fallRef.current?.eingaben
     const knotenweit = alt?.regelung === 'rechtsvortritt' ? { regelung: alt.regelung, wahrnehmbarkeit: alt.wahrnehmbarkeit ?? null,
-      alleArme: !!alt.alleArme } : null
-    const n = alt ? eingabenGesetzt({ ...alt, ...(knotenweit ? { regelung: null, wahrnehmbarkeit: null, alleArme: false } : {}) }) : 0
+      alleArme: !!alt.alleArme, markierungRv: !!alt.markierungRv } : null
+    const n = alt ? eingabenGesetzt({ ...alt, ...(knotenweit ? { regelung: null, wahrnehmbarkeit: null, alleArme: false, markierungRv: false } : {}) }) : 0
     if (neu && n > 0 && !window.confirm(`Andere Zufahrt wählen? Die ${n} Eingaben zur bisherigen Zufahrt (Strassentyp, Neigung, ` +
-      'Vortrittsregelung, Haltelinie, D, Trottoir, Tempo) werden zurückgesetzt; Hindernisse bleiben.')) return
+      'Vortrittsregelung, Halte- oder Wartelinie, D, Trottoir, Tempo) werden zurückgesetzt; Hindernisse bleiben.')) return
     zAktuell.current = z
     aendern(f => { if (neu) { f.eingaben = { ...structuredClone(KEINE_ALLE_EINGABEN), ...knotenweit }; delete f.spiegel } f.ort.zufahrt = z; return f })
   }, [aendern])
@@ -1609,7 +1686,24 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   }, [laden])
 
   // gewählter Knoten immer dabei, auch wenn sein Ausschnitt aus dem Cache der Suche gefallen ist
-  const sichtbar = useMemo(() => (gewaehlt && !knoten.some(k => k.id === gewaehlt.id) ? [...knoten, gewaehlt] : knoten), [knoten, gewaehlt])
+  // Korrektur 31.10.2026 (Punkte 12, 13, 16, 17): Gabelungen, Kreisel und Fahrbahnteilungen aus dem geladenen Umkreis ausblenden, LSA-Knoten kennzeichnen
+  const [ausgeblendet, setAusgeblendet] = useState<Set<number>>(() => new Set())
+  const [lsaIds, setLsaIds] = useState<Set<number>>(() => new Set())
+  useEffect(() => {
+    const kk = rechnung?.keinKnoten ?? [], ll = rechnung?.lsaKnoten ?? []
+    if (kk.some(n => !ausgeblendet.has(n))) setAusgeblendet(a => new Set([...a, ...kk]))
+    if (ll.some(n => !lsaIds.has(n))) setLsaIds(a => new Set([...a, ...ll]))
+  }, [rechnung])   // eslint-disable-line react-hooks/exhaustive-deps
+  const sichtbar = useMemo(() => {
+    const k = knoten.filter(x => !ausgeblendet.has(x.id) || x.id === gewaehlt?.id)
+    return gewaehlt && !k.some(x => x.id === gewaehlt.id) ? [...k, gewaehlt] : k
+  }, [knoten, gewaehlt, ausgeblendet])
+  // Klick auf einen Arm in der Karte: gesperrte Arme (Punkte 11, 15) wie die Knöpfe nicht wählbar
+  const zufahrtAusKarte = (key: string | null) => {
+    const a = kn?.arme.find(x => x.key === key)
+    if (a && a.key !== zGewaehlt && (keineZufahrt(a) || (kn?.mitVortritt?.includes(a.key) && !auchVortritt && !erg?.rechtsvortritt))) return
+    zufahrtWaehlen(key)
+  }
   const namen = useMemo(() => {
     if (!daten) return namenKarte(namenAusschnitt)
     const ort = daten.ort
@@ -1623,7 +1717,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   zAktuell.current = zGewaehlt
   const vortritt = erg?.vortritt ?? kn?.vortritt ?? null       // in der Rechnung verwendetes Paar, sonst nach OSM
   const fehlerQuellen = Object.values(quellen).filter(q => q.fehler).length
-  const hervorRing = useMemo(() => (hervor ? erg?.richtungen.flatMap(r => r.verdeckerListe).find(t => t.id === hervor)?.ring ?? null : null),
+  const hervorRing = useMemo(() => (hervor ? erg?.richtungen.flatMap(r => [...r.verdeckerListe, ...(r.velo?.verdeckerListe ?? []),
+    ...(r.ueberholfall?.verdeckerListe ?? [])]).find(t => t.id === hervor)?.ring ?? null : null),
     [hervor, erg])
   const zp = fall?.ort.zufahrtspunkt ?? null
 
@@ -1633,9 +1728,9 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     const rs = erg.richtungen, rv = !!erg.rechtsvortritt
     const h = erg.haltelinie
     const halte = h ? `${f1(Math.abs(h.abstand))} m ${h.abstand >= 0 ? 'hinter' : 'vor'} der Kante` : eingaben.haltelinie ? 'nicht gerechnet' : 'keine'
-    const zufahrtStand = [`Haltelinie: ${halte}`, `D: ${erg.Dhand ? 'verschoben' : 'Vorgabe'}`,
+    const zufahrtStand = [`Halte-/Wartelinie: ${halte}`, `D: ${erg.Dhand ? 'verschoben' : 'Vorgabe'}`,
       ...(erg.trottoirueberfahrt ? ['Trottoirüberfahrt'] : erg.trottoir ? [`Trottoir: ${eingaben.trottoirFrei ? 'Bordkante' : 'Hinterkante'}`] : []),
-      rv ? `Tempo ${RV_TEMPO}` : `Tempo ${rs.map(r => (r.status === 'keine_zufahrt' ? '–' : r.tempo)).join('/')}`].join(' · ')
+      `Tempo ${rs.filter(r => !rv || !rvNichtGeprueft(r)).map(r => (r.status === 'keine_zufahrt' ? '–' : r.tempo)).join('/')}`].join(' · ')
     const zufahrtHand = eingaben.haltelinie !== null || eingaben.D !== null || eingaben.trottoirFrei || !!eingaben.trottoirueberfahrt ||
       !!eingaben.Dtrottoir ||
       (!rv && (eingaben.tempo.links !== null || eingaben.tempo.rechts !== null))
@@ -1643,11 +1738,12 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     const ungunst = erg.strasse.ungunst.fahrstreifen || erg.strasse.ungunst.neigung || erg.strasse.ungunst.schwerverkehr
     const erfStand = rv ? neigung : `${TYP_KURZ[eingaben.typ ?? erg.strasse.typ]}${ungunst ? ' · ungünstig' : ''} · ${neigung}`
     const erfHand = eingaben.neigung.links !== null || eingaben.neigung.rechts !== null ||
-      (!rv && (eingaben.typ !== null || eingaben.fahrstreifen !== null || eingaben.neigungGross !== null || eingaben.schwerverkehr))
+      (!rv && (eingaben.typ !== null || eingaben.fahrstreifen !== null || eingaben.neigungGross !== null || eingaben.schwerverkehr ||
+        (eingaben.schwerverkehrAnteil ?? null) !== null || (eingaben.ueberholen ?? null) !== null))
     // Velo gegen die Einbahn (E4): Führung mit dem Tag des Velozuflusses
     const veloStand = rs.map(r => (r.veloGegen ? `${VELOFUEHRUNG_TEXT[r.veloFuehrung]} gegen die Einbahn (${r.veloGegen})` :
       r.status === 'keine_zufahrt' ? '–' : VELOFUEHRUNG_TEXT[r.veloFuehrung])).join(' / ') +
-      (erg.zufahrtVelo ? ` · Zufahrt: Velo gegen die Einbahn (${erg.zufahrtVelo.quelle})` : '') +
+      (erg.zufahrtVelo ? ' · Zufahrt: Velos gegen die Einbahn' : '') +
       (eingaben.ebikeVerboten ? ' · schnelle E-Bikes verboten' : '')
     const veloHand = !!(eingaben.velo?.links || eingaben.velo?.rechts || eingaben.ebikeVerboten)
     return { zufahrtStand, zufahrtHand, erfStand, erfHand, veloStand, veloHand }
@@ -1661,7 +1757,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     <div className="app" style={{ '--panel-breite': `${panelBreite}px` } as CSSProperties}>
       <Karte mitte={START} av={av} kantone={kantone} knoten={sichtbar} strassennamen={namen} gewaehlt={gewaehlt?.id ?? null}
         rechnung={rechnung} zufahrt={zufahrt} hindernisse={fall?.hindernisse ?? []} werkzeug={werkzeug} knotenWerkzeug={knotenWerkzeug}
-        zufahrtErster={zufahrtErster} zeichnung={zeichnung} bearbeiten={bearbeiten} onKnoten={knotenWaehlen} onZufahrt={zufahrtWaehlen}
+        zufahrtErster={zufahrtErster} zeichnung={zeichnung} bearbeiten={bearbeiten} onKnoten={knotenWaehlen} onZufahrt={zufahrtAusKarte}
+        lsa={lsaIds}
         onKlick={klick} onKnotenKlick={knotenKlick} onD={p => setEingaben(e => ({ ...e, D: cm(p) }))}
         onDtrottoir={p => setEingaben(e => ({ ...e, Dtrottoir: cm(p) }))} onDoppelklick={doppelklick} onEcke={ecke}
         onHindernis={id => setBearbeiten(b => (b === id ? null : id))} onAusschnitt={ausschnitt} hinweis={suchHinweis} kartenRef={kartenRef}
@@ -1721,7 +1818,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
           </section>
         ) : kn && !kn.grundstueck && (
           <section>
-            <h2>1 Knoten: {kn.name}</h2>
+            <h2>1 Knoten: {kn.name}{kn.lsa ? ' (Lichtsignalanlage)' : ''}</h2>
             <details className="klein knotendaten">
               <summary>OSM-Knoten {kn.id}, {kn.arme.length} Arme</summary>
               <p>{erg?.rechtsvortritt ? `Rechtsvortritt: alle Arme vortrittsbelastet; ` +
@@ -1744,16 +1841,28 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
               <h3>{(eingaben.regelung ?? erg?.regelungVorgabe) === 'rechtsvortritt' ? <>Zu prüfender Arm<Info titel="Zu prüfender Arm">
                 <p>Rechtsvortritt: jeder Arm muss dem Arm rechts von ihm den Vortritt lassen. Geprüft wird die Sicht aus dem gewählten
                   Arm auf den Arm rechts davon; «von rechts» markiert diesen Arm.</p></Info></> : 'Zufahrt wählen (Arm ohne Vortritt)'}</h3>
+              {/* Korrektur 31.10.2026 (Punkte 11, 15): Arme ohne Zufahrt bzw. mit sicherem Vortritt ausgegraut */}
               <div className="knopfzeile">
-                {nachNr(kn.arme).map(a => (
-                  <button key={a.key} className={a.key === zGewaehlt ? 'aktiv' : 'zweit'} onClick={() => zufahrtWaehlen(a.key)}
-                    title={`OSM-Weg ${a.wid}, ${a.hw}${a.zufluss ? '' : `, Einbahn vom Knoten weg${a.veloZufluss ?
-                      `, Velo gegen die Einbahn (${a.veloZuflussQuelle})` : ''}`}`}>
+                {nachNr(kn.arme).map(a => {
+                  const keine = keineZufahrt(a), mitV = !!kn.mitVortritt?.includes(a.key) && !(erg?.rechtsvortritt)
+                  const gesperrt = a.key !== zGewaehlt && (keine || (mitV && !auchVortritt))
+                  return <button key={a.key} className={a.key === zGewaehlt ? 'aktiv' : 'zweit'} onClick={() => zufahrtWaehlen(a.key)}
+                    disabled={gesperrt} title={`OSM-Weg ${a.wid}, ${a.hw}${a.zufluss ? '' : `, Einbahn vom Knoten weg${a.veloZufluss ?
+                      `, Velo gegen die Einbahn (${a.veloZuflussQuelle})` : ': keine Zufahrt'}`}${mitV ? `; Vortritt nach OSM: ${kn.vortrittSicher}` : ''}`}>
                     {armText(a)}{erg?.rechtsvortritt ? (erg.rechtsvortritt.arm.rechts === a.key ? ' · von rechts' : '') :
-                      vortritt?.includes(a.key) ? ' · Vortritt' : ''}
+                      mitV ? ' · Vortritt, keine Zufahrt' : vortritt?.includes(a.key) ? ' · Vortritt' : ''}
+                    {a.zufluss ? '' : a.veloZufluss ? ' · Einbahn, nur Velos' : ' · Einbahn vom Knoten weg, keine Zufahrt'}
                   </button>
-                ))}
+                })}
               </div>
+              {(kn.mitVortritt?.length ?? 0) > 0 && !erg?.rechtsvortritt && <label className="klein"><input type="checkbox" checked={auchVortritt}
+                onChange={ev => setAuchVortritt(ev.target.checked)} /> auch Arme mit Vortritt wählen</label>}
+              {(() => {
+                const z = kn.arme.find(a => a.key === zGewaehlt)
+                // kurz (Korrektur 31.10.2026, Punkt 7): Einzelheiten im Hinweis und in den Annahmen
+                return z && !z.zufluss ? <p className="klein">Zufahrt {armText(z)}: Einbahn vom Knoten weg{z.veloZufluss ?
+                  ', nur Velos gegen die Einbahn' : '; von hier fährt niemand an den Knoten heran, geprüft wird nichts'}.</p> : null
+              })()}
             </>}
           </section>
         )}
@@ -1769,7 +1878,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
               <Block titel="Erforderliche Sichtweite" stand={kurz.erfStand} hand={kurz.erfHand} offen={offen.erforderlich}
                 setOffen={o => setOffen('erforderlich', o)}>
                 <ErforderlichBlock s={erg.strasse} eingaben={eingaben} setEingaben={setEingaben} richtungen={erg.richtungen}
-                  rv={!!erg.rechtsvortritt} />
+                  rv={!!erg.rechtsvortritt} ueber={erg.ueberholen ?? null} />
               </Block>
               <Block titel="Veloverkehr" stand={kurz.veloStand} hand={kurz.veloHand} offen={offen.velo} setOffen={o => setOffen('velo', o)}>
                 <VeloAbschnitt e={erg} eingaben={eingaben} setEingaben={setEingaben} />
@@ -1800,6 +1909,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
                   nicht erfüllt; grau: kein Verkehr bzw. nicht geprüft.</p>
                 <p>Unten je Richtung die erforderliche und die vorhandene Sichtweite, Status und der erste Verdecker; die Herleitung steht im Info-Zeichen des
                   Teils.</p></Info></p>
+            {erg.lsa && <p className="hinweis">{LSA_TEXT}</p>}
             {erg.rechtsvortritt && (() => {
               const links = erg.richtungen.find(r => r.richtung === 'links')
               const la = links && kn ? kn.arme.find(x => x.key === links.arm) : undefined
@@ -1813,19 +1923,19 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
                 <span className="felder">{rvNichtGeprueft(r) && !r.velo && !t ?
                   <Feld s={{ feld: r.lage === 'gegenueber' ? 'nicht geprüft (kein Vortrittsverhältnis)' : 'nicht geprüft (Rechtsvortritt)',
                     kurz: '', farbe: GRAU }} /> :
-                  <><Feld s={autoStand(r)} /><Feld s={veloStand(r)} /><Feld s={trottoirStand(t)} /></>}</span></li>
+                  <><Feld s={autoStand(r)} />{ueberStand(r) && <Feld s={ueberStand(r)!} />}<Feld s={veloStand(r)} /><Feld s={trottoirStand(t)} /></>}</span></li>
             })}{erg.seiteOhneArm === 'rechts' && <OhneArm seite="rechts" />}</ul>
             {erg.trottoirueberfahrt && <TueBlock t={erg.trottoirueberfahrt} />}
             <table className="zahlen kopf">
               <tbody>
-                <tr><td>Zufahrt</td><td>{erg.zufahrtName}</td></tr>
-                <tr><td>Vortrittsregelung</td><td>{REGELUNG_TEXT[erg.regelung]} <span className={erg.regelungGewaehlt ? '' : 'warnung'}>
+                <tr><td>Zufahrt</td><td>{erg.zufahrtName}{erg.zufahrtVelo ? ' (nur Velos)' : ''}</td></tr>
+                <tr><td>Regelung für die gewählte Zufahrt</td><td>{REGELUNG_TEXT[erg.regelung]} <span className={erg.regelungGewaehlt ? '' : 'warnung'}>
                   ({erg.regelungGewaehlt ? 'gewählt' : annahmeText(erg.regelungQuelle)})</span></td></tr>
                 <tr><td>Beobachtungsdistanz B</td><td>{f2(erg.B)} m ({erg.rechtsvortritt ? 'Rechtsvortritt, Abb. 4' : erg.ausserorts ? 'ausserorts' :
                   'innerorts'}{!erg.rechtsvortritt && erg.ausserorts && erg.regelung === 'stop' ? ', Stop' : ''}), ab der {erg.nullpunktText}{erg.radwegRand && !erg.haltelinie ? ' (Ziffer 12: Radweg näher als 2,00 m)' : ''}</td></tr>
                 <tr><td>Beobachtungspunkt D</td><td>{erg.Dhand ? <><span className="warnung">von Hand</span>, {f2(erg.Dlage.laengs)} m hinter der{' '}
                   {erg.nullpunktText}, {f2(Math.abs(erg.Dlage.seitlich))} m {erg.Dlage.seitlich >= 0 ? 'links' : 'rechts'} der Achse</> :
-                  erg.zufahrtVelo ? `Velofahrer auf der Achse des Velogegenverkehrs (${erg.zufahrtVelo.lageText})` :
+                  erg.zufahrtVelo ? `Auge des Velofahrers (${erg.zufahrtVelo.lageText})` :
                   `Fahrersitz, ${f2(FAHRERSITZ_M)} m links der Achse des Zufahrtsstreifens`}</td></tr>
                 <tr><td>Einbiegewinkel</td><td>rund {Math.round(erg.einbiegewinkel)}°</td></tr>
               </tbody>
@@ -1841,10 +1951,15 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
                 <ul className="annahmen">{erg.hinweise.map((h, i) => <li key={i}>{h}</li>)}</ul>
               </>}
               <h4>Annahmen</h4>
-              <ul className="annahmen">{erg.annahmen.map((h, i) => <li key={i}>{h}</li>)}</ul>
-              <p className="klein">{erg.zufahrtLageQuelle}. {erg.zufahrtNeigung?.i !== null && erg.zufahrtNeigung?.i !== undefined ?
-                `Längsneigung der Zufahrt ${fi(erg.zufahrtNeigung.i)} % in Fahrtrichtung von FB (${erg.zufahrtNeigung.quelle}; noch ohne ` +
-                `Wirkung${Math.abs(erg.zufahrtNeigung.i) > ZUFAHRT_STEIL_PROZENT ? ', steile Zufahrt' : ''}). ` : ''}Rechenzeit {Math.round(rechnung!.ms)} ms.</p>
+              {/* Korrektur 31.10.2026 (Punkte 6, 7): je Thema ein Punkt, Begriffe als dezente Verweise; technische Herleitung ausklappbar */}
+              {(() => { const gezeigt = new Set<string>()
+                return <ul className="annahmen">{(erg.annahmenThemen ?? erg.annahmen.map(text => ({ thema: text, titel: '', text }))).map(t =>
+                  <li key={t.thema}>{t.titel && <b>{t.titel}: </b>}<BegriffText text={t.text} gezeigt={gezeigt} /></li>)}</ul> })()}
+              {(erg.herleitung?.length ?? 0) > 0 && <details className="klein herleitung">
+                <summary>Herleitung (technisch)</summary>
+                <ul>{erg.herleitung!.map((h, i) => <li key={i}>{h}</li>)}</ul>
+              </details>}
+              <p className="klein">Rechenzeit {Math.round(rechnung!.ms)} ms.</p>
             </Block>
           </section>
         )}
@@ -1864,69 +1979,86 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
 
         <details className="abschnitt">
           <summary><h2>Legende</h2></summary>
+          {/* Korrektur 31.10.2026 (Punkte 8 und 10): Alltagssprache, Farbnamen statt Code-Namen; Farben selbst unverändert */}
           <ul className="legende">
-            <li><span className="farbe rund" style={{ background: KNOTEN_FARBE }} />Knoten (OSM, drei und mehr Strassenarme)</li>
-            <li><span className="farbe rund" style={{ background: D_FARBE, border: `2px solid ${D_RAND_FARBE}` }} />D Beobachtungspunkt am
-              Fahrersitz von F<sub>B</sub>, weiss mit dunklem Rand (ziehen: D von Hand,{' '}
-              <span className="farbe rund" style={{ background: D_FARBE, border: `2px solid ${D_HAND_FARBE}` }} />Rand Bernstein)</li>
-            <li><span className="farbe" style={{ background: HALTELINIE_FARBE, border: '2px solid #111827' }} />Haltelinie (Vorderkante, B ab hier);
-              Punkt orange: Beginn von B, wenn nicht an der Kante (Haltelinie, Trottoirhinterkante)</li>
+            <li><span className="farbe rund" style={{ background: KNOTEN_FARBE }} />Knoten: Punkt, an dem sich die Strassen in OSM treffen
+              (Lage aus OSM). Gemessen wird ab K.</li>
+            <li><span className="farbe" style={{ background: ZUFAHRT_FARBE }} /><span className="farbe" style={{ background: '#e2e8f0' }} />
+              <span className="farbe" style={{ background: '#94a3b8' }} />Arme: Richtung der Strassen vom Knoten weg (gerade Linie, nur
+              Orientierung); orange die gewählte Zufahrt, hellgrau Arme mit Vortritt, grau die übrigen.</li>
             <li><span className="arm-nr">1</span>Nummern: Arme im Uhrzeigersinn ab Norden, Z = Grundstückzufahrt (am Zufahrtspunkt);{' '}
               <span className="arm-nr gewaehlt">2</span>gewählte Zufahrt (Klick aufs Schild wählt den Arm)</li>
-            <li><span className="farbe" style={{ background: FB_FARBE }} />F<sub>B</sub> vortrittsbelastetes Fahrzeug auf der Zufahrt (Personenwagen 4,5 × 1,8 m, Lenker 2,0 m hinter der Front; Annahme, nur Darstellung);
-              F<sub>B</sub> als Velo (schwarz, Velofahrer bei D), wenn auf der Zufahrt nur Velos gegen die Einbahn fahren</li>
-            <li><span className="farbe" style={{ background: FA_FARBE, border: '1px solid #111827' }} />F<sub>A</sub> vortrittsberechtigtes Fahrzeug, Front am Ende der massgebenden Sichtweite A
-              (Personenwagen 4,5 × 1,8 m; Annahme, nur Darstellung)</li>
-            <li><span className="farbe rund" style={{ background: STATUS_FARBE.erfuellt, border: '1.5px solid #111827' }} />A: erforderliche Sichtweite
-              ab K (Punkt am Ende, Farbe nach Status)</li>
-            <li><span className="farbe" style={{ background: ZUFAHRT_FARBE }} />Zufahrt (Arm und Achse des Zufahrtsstreifens)</li>
-            <li><span className="farbe" style={{ background: FREI_FARBE }} />Sichtdreieck frei (bis A massgebend)</li>
-            <li><span className="farbe gestrichelt" style={{ borderColor: VELO_FARBE, background: 'rgba(15,118,110,0.12)' }} />Sichtdreieck Velo
-              (Petrol gestrichelt, frei; rot gestrichelt: verdeckt bis A), Veloachse Petrol gestrichelt</li>
-            <li><span className="farbe" style={{ background: VELO_FARBE }} />Velo F<sub>A</sub> am Ende von A auf der Veloachse (von oben, 1,8 × 0,6 m;
-              nur Darstellung)</li>
-            <li><span className="farbe" style={{ background: TROTTOIR_FARBE }} />Sichtdreiecke Trottoir von D' (Bernstein; rot: verdeckt bis A),
-              D' als Bernstein-Punkt mit dunklem Rand</li>
+            <li><span className="farbe gestrichelt" style={{ borderColor: ZUFAHRT_FARBE }} />Fahrlinie der Zufahrt (orange gestrichelt):
+              darauf stehen das wartende Fahrzeug F<sub>B</sub> und D.</li>
+            <li><span className="farbe rund" style={{ background: D_FARBE, border: `2px solid ${D_RAND_FARBE}` }} />D: Auge des wartenden
+              Lenkers (weisser Punkt). Auf der Karte verschiebbar; von Hand verschoben mit orangem Rand{' '}
+              <span className="farbe rund" style={{ background: D_FARBE, border: `2px solid ${D_HAND_FARBE}` }} />.</li>
+            <li><span className="farbe" style={{ background: HALTELINIE_FARBE, border: '2px solid #111827' }} />Halte- oder Wartelinie
+              (weiss): ab ihrer Vorderkante wird B gemessen.{' '}<span className="farbe rund" style={{ background: ZUFAHRT_FARBE,
+              border: '2px solid #111827' }} />Oranger Punkt: dort beginnt B, wenn nicht am Fahrbahnrand (z. B. hinter dem Trottoir).</li>
+            <li><span className="farbe" style={{ background: FB_FARBE }} />F<sub>B</sub>: wartendes Fahrzeug (dunkel); an einer Einbahn mit
+              Velo gegen die Einbahn ein Velo.</li>
+            <li><span className="farbe" style={{ background: FA_FARBE, border: '1px solid #111827' }} />F<sub>A</sub>: Fahrzeug mit Vortritt
+              (hell), seine Front am Ende der nötigen Sichtweite A.</li>
+            <li><span className="farbe gestrichelt" style={{ borderColor: '#94a3b8' }} />Fahrlinie der Fahrzeuge mit Vortritt (weiss gestrichelt).</li>
+            <li><span className="k-legende">K</span>K: wo sich die Fahrlinie der Zufahrt und die Fahrlinie mit Vortritt kreuzen; ab K wird A
+              gemessen.</li>
+            <li><span className="farbe rund" style={{ background: STATUS_FARBE.erfuellt, border: '1.5px solid #111827' }} /><span
+              className="farbe rund" style={{ background: STATUS_FARBE.massgebend, border: '1.5px solid #111827' }} /><span className="farbe rund"
+              style={{ background: STATUS_FARBE.nicht_erfuellt, border: '1.5px solid #111827' }} />A: Punkt am Ende der nötigen Sichtweite A;
+              Farbe = Ergebnis (grün erfüllt, gelb nur der massgebende Wert, rot nicht erfüllt).</li>
+            <li><span className="farbe" style={{ background: FREI_FARBE }} />Sichtdreieck frei (bis A)</li>
+            <li><span className="farbe" style={{ background: VERDECKT_FARBE }} />Sichtdreieck verdeckt (ab der ersten Verdeckung bis A) und
+              verdeckendes Gebäude</li>
+            <li><span className="farbe gestrichelt" style={{ borderColor: FREI_FARBE, background: 'rgba(34,197,94,0.12)' }} />Überholfall
+              (ausserorts): Sichtdreieck auf den Gegenfahrstreifen, schwächer und gestrichelt (rot gestrichelt: verdeckt bis A)</li>
+            <li><span className="farbe gestrichelt" style={{ borderColor: VELO_FARBE, background: 'rgba(15,118,110,0.12)' }} />Sichtdreieck
+              Velo (blaugrün gestrichelt, frei; rot gestrichelt: verdeckt bis A), Fahrlinie der Velos blaugrün fein gestrichelt</li>
+            <li><span className="farbe" style={{ background: VELO_FARBE }} />Velo am Ende von A auf der Fahrlinie der Velos</li>
+            <li><span className="farbe" style={{ background: TROTTOIR_FARBE }} />Sichtdreiecke Trottoir von D' (indigo; rot: verdeckt bis A),
+              D' als indigofarbener Punkt mit dunklem Rand</li>
             <li><span className="farbe rund" style={{ background: '#ffffff', border: `3px solid ${TROTTOIR_FARBE}` }} />Fussgänger am Ende von A
-              auf der Trottoirachse (Punkt mit Ring; Trottoirüberfahrt: auf der Gehlinie {f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt)</li>
-            <li><span className="farbe" style={{ background: TROTTOIR_FARBE }} />Trottoirüberfahrt: breiter Bernstein-Strich auf der Zufahrtsachse
-              von der Bordkante bis zum hinteren Rand, dort eine gestrichelte Querlinie</li>
-            <li><span className="farbe" style={{ background: VERDECKT_FARBE }} />Sichtdreieck verdeckt (ab der ersten Verdeckung bis A) und verdeckendes Gebäude</li>
-            <li><span className="farbe" style={{ background: SPAETER_FARBE }} />Gebäude bzw. Hindernis, das erst ausserhalb von A verdeckt</li>
-            <li><span className="farbe" style={{ background: 'transparent', border: `3px solid ${TREFFER_FARBE.voll}` }} />Verdecker im Sichtdreieck
-              bis A (Rand rot: verdeckt; gelb: Baum, Palisade; violett gestrichelt: nur Hinweis, Zweirad bzw. sichtdurchlässiger Zaun)</li>
-            <li><span className="farbe" style={{ background: HINDERNIS_FARBE.auto }} />Parkfeld Auto, Längsparkierung (amtlich bzw. von Hand; gilt als belegt)</li>
+              (Punkt mit Ring; Trottoirüberfahrt: auf der Gehlinie {f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt)</li>
+            <li><span className="farbe" style={{ background: TROTTOIR_FARBE }} />Trottoirüberfahrt: breiter indigofarbener Strich auf der Fahrlinie
+              der Zufahrt von der Bordkante bis zum hinteren Rand, dort eine gestrichelte Querlinie</li>
+            <li><span className="farbe" style={{ background: SPAETER_FARBE }} />Hindernis, das die Sicht erst weiter weg als A verdeckt (ohne
+              Wirkung).</li>
+            <li><span className="farbe" style={{ background: 'transparent', border: `3px solid ${TREFFER_FARBE.voll}` }} />Verdecker im
+              Sichtdreieck bis A (Rand rot: verdeckt; gelb: Baum, Palisade; violett gestrichelt: nur Hinweis, Zweirad bzw. durchlässiger Zaun)</li>
+            <li><span className="farbe" style={{ background: HINDERNIS_FARBE.auto }} />Parkfeld Auto, Längsparkierung (amtlich bzw. von Hand; gilt als besetzt)</li>
             <li><span className="farbe" style={{ background: HINDERNIS_FARBE.velo }} />Parkfeld Velo, <span className="farbe" style={{ background: HINDERNIS_FARBE.motorrad }} />Parkfeld Motorrad (nur Hinweis)</li>
             <li><span className="farbe rund" style={{ background: HINDERNIS_FARBE.baum }} />Baum (Stamm {String(BAUM_STAMM_M).replace('.', ',')} m)</li>
             <li><span className="farbe" style={{ background: HINDERNIS_FARBE.hecke }} />Hecke, Mauer (Linie, {String(LINIE_PUFFER_M).replace('.', ',')} m beidseits)</li>
-            <li><span className="farbe" style={{ background: HINDERNIS_FARBE.zaun }} />Zaun, Geländer (dicht durchgezogen, sichtdurchlässig gepunktet)</li>
+            <li><span className="farbe" style={{ background: HINDERNIS_FARBE.zaun }} />Zaun, Geländer (dicht durchgezogen, durchlässig gepunktet)</li>
             <li><span className="farbe" style={{ background: HINDERNIS_FARBE.uebrige }} />übriges Hindernis (Fläche)</li>
             <li><span className="farbe gestrichelt" style={{ borderColor: HINDERNIS_FARBE.auto }} />Vorschlag (OSM-Parkierung, Baumkataster): zählt erst nach «bestätigen»; verworfene amtliche Parkfelder gepunktet und blass</li>
-            <li><span className="farbe gestrichelt" style={{ borderColor: '#94a3b8' }} />Fahrstreifenachse (weiss gestrichelt), Punkt K Kreuzungspunkt</li>
             <li><span className="farbe gestrichelt" style={{ borderColor: HERVOR_FARBE }} />Massnahmen: in der Liste angeklicktes Hindernis</li>
-            <li><span className="farbe" style={{ background: VERDECKT_FARBE }} />Rechtsvortritt, schmale Zufahrt (Abb. 5): Fächer der Sichtlinien
-              zwischen den Punkten auf beiden Fahrbahnachsen; rot verdeckt, dünn grau frei, dick rot die erste verdeckte Kombination</li>
-            {Object.entries(AV_FARBEN).filter(([k]) => AV_NAME_KARTE[k]).map(([k, c]) =>
-              <li key={k}><span className="farbe" style={{ background: c }} />{AV_NAME_KARTE[k]} (AV)</li>)}
+            <li><span className="farbe" style={{ background: VERDECKT_FARBE }} />Enge Kreuzung (Fahrbahn bis 3,50 m): Sichtlinien vom wartenden
+              Fahrzeug zu Punkten alle {ENG_SCHRITT_M} m auf den letzten 20 m um die Ecke; rot verdeckt, grau frei.</li>
+            <li>{Object.entries(AV_FARBEN).filter(([k]) => AV_NAME_KARTE[k]).map(([k, c]) => <span key={k} className="farbe"
+              style={{ background: c }} />)}Fahrbahn bzw. Gebäude (amtliche Vermessung)</li>
           </ul>
         </details>
 
-        {/* Normbezüge nur als Nummern (Tabellen, Abbildungen, Ziffern), ohne Werte: die Normtabellen sind lizenziert (Entscheid
-            29.10.2026); die je Fall angewendeten Werte stehen im Ergebnis und im Bericht */}
-        <details className="abschnitt">
-          <summary><h2>Normbezüge</h2></summary>
-          <ul className="klein">
-            <li>VSS 40 273:2024 «Knoten, Sichtverhältnisse»: Ziffern 5 und 10 bis 18; Tab. 1 (Knotensichtweite Motorfahrzeuge nach Tempo
-              und Strassentyp), Tab. 2 (Trottoir), Tab. 3 (Velo, mit Längsneigung); Abb. 3 (Hindernisse, Palisadenwirkung), Abb. 4 und 5
-              (Rechtsvortritt, Beobachtungsdistanz und schmale Zufahrten), Abb. 6 (Zustand nach Wahrnehmbarkeit und Sichtweite); Ziffer 14
-              (Massnahmen).</li>
-            <li>VSS 40 090b «Sichtweiten»: Abb. 2 (Anhaltesichtweite auf übrigen Strassen nach Längsneigung), angewendet ab |i| über
-              {' '}{NEIGUNG_EBEN_PROZENT} % (die unteren Werte der VSS 40 273 Tab. 1 gelten für i ≤ ±{NEIGUNG_EBEN_PROZENT} %, Ziffer 13.1),
-              Kurven bei 0 % auf den unteren Wert der Tab. 1 bezogen (Entscheid 15.10.2026); gestrichelte Kurvenenden gelten als nicht
-              gezeichnet (Entscheid 31.10.2026); bei unbekannter Neigung der Wert bei {fi(ANHALTESICHT_I_MIN)} % (Entscheid 31.10.2026).</li>
-            <li>Die Normen sind beim VSS lizenziert; die App zeigt je Fall nur die angewendeten Werte mit ihrer Fundstelle, nicht die
-              Tabellen.</li>
-          </ul>
+        {/* Korrektur 31.10.2026 (Punkt 9, wie fgsCheck): Grundlagen und Quellen, Begriffe, Regeln; keine Normtabellen (lizenziert) */}
+        <details className="abschnitt" id="abschnitt-grundlagen">
+          <summary><h2>Grundlagen und Quellen</h2></summary>
+          <h3>Rechnung und Sichtweiten</h3>
+          <RechnungGrundlagen />
+          <h3>Daten</h3>
+          <DatenQuellen />
+          <p className="klein">Die App ersetzt keine Beurteilung vor Ort. Eingaben bleiben im Browser bzw. in der Fall-Datei.</p>
+          <h3>Quellen der Prüfungen</h3>
+          <QuellenTabelle />
+        </details>
+        <details className="abschnitt" id="abschnitt-begriffe">
+          <summary><h2>Begriffe</h2></summary>
+          <p className="klein">Fachbegriffe der App in Alltagssprache.</p>
+          <BegriffeListe />
+        </details>
+        <details className="abschnitt" id="abschnitt-regeln">
+          <summary><h2>Regeln</h2></summary>
+          <RegelUebersicht />
         </details>
 
         <details className="abschnitt">

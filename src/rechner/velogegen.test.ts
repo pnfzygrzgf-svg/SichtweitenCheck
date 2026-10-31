@@ -107,7 +107,7 @@ describe('E4: Hauptarm mit Einbahn vom Knoten weg und Velo gegen die Einbahn', (
     expect(r.profilLinie.length).toBeGreaterThan(1)
     nahe(r.profilLinie[0], 1.25, 2.5)
     expect(r.neigungQuelle).not.toContain('kein Verkehr')
-    expect(e.annahmen.join(' | ')).toContain('Velo gegen die Einbahn von rechts (OSM oneway:bicycle=no)')
+    expect(e.annahmen.join(' | ')).toContain('Von rechts kommen nur Velos (Einbahn vom Knoten weg, OSM oneway:bicycle=no)')
     // von links normal: Motorfahrzeuge und Velo
     const l = seite(e, 'links')
     expect(l.status).not.toBe('keine_zufahrt')
@@ -157,11 +157,22 @@ describe('E4: Zufahrt mit Einbahn vom Knoten weg und Velo gegen die Einbahn', ()
     nahe(e.D, 2.0, -6)
     nahe(e.Dachse, 2.0, -6)
     expect(e.Dlage.seitlich).toBe(0)
-    expect(e.hinweise).toContain('Die Zufahrt ist eine Einbahn vom Knoten weg; vortrittsbelastet sind nur die Velos im Gegenverkehr ' +
+    // Wortlaut des Auftraggebers (Korrektur 31.10.2026, Punkt 2)
+    expect(e.hinweise).toContain('Die Zufahrt ist eine Einbahn vom Knoten weg. Vortrittsbelastet sind nur die Velos im Gegenverkehr ' +
       '(OSM oneway:bicycle=no).')
     expect(e.hinweise.join(' | ')).not.toContain('Gerechnet wird trotzdem')
-    expect(e.annahmen.join(' | ')).toContain('Beobachtungspunkt D auf der Achse des Velogegenverkehrs')
+    // Velo gegen die Einbahn in den Annahmen nur einmal, im Thema «Wartendes Velo» (Korrektur 31.10.2026, Punkt 7)
+    const t = e.annahmen.join(' | ')
+    expect(t).toContain('Wartendes Velo: ')
+    expect(t).toContain('Auf dieser Zufahrt dürfen Velos gegen die Einbahn zum Knoten fahren (OSM oneway:bicycle=no). Die App prüft darum ' +
+      'die Sicht aus der Lage eines solchen Velos: 0,50 m vom für das Velo rechten Fahrbahnrand, das Auge des Velofahrers über dieser Linie.')
+    expect(t.match(/gegen die Einbahn/g)).toHaveLength(1)
+    expect(t.match(/oneway:bicycle/g)).toHaveLength(1)
+    expect(e.annahmenThemen!.filter(x => /Velo/.test(x.text) && /Einbahn/.test(x.text)).map(x => x.thema)).toEqual(['wartend'])
+    // technische Lage der Achse nur in der Herleitung
     expect(e.zufahrtLageQuelle).toContain('Achse des Velogegenverkehrs')
+    expect(e.herleitung![0]).toContain('Achse des Velogegenverkehrs')
+    expect(t).not.toContain('Achse des Velogegenverkehrs')
     // beide Richtungen der Hauptstrasse gerechnet wie sonst (Auto und Velo von D aus)
     expect(e.richtungen.every(r => r.status !== 'keine_zufahrt' && r.velo)).toBe(true)
   })
@@ -184,7 +195,9 @@ describe('E4: Zufahrt mit Einbahn vom Knoten weg und Velo gegen die Einbahn', ()
 // Velo gegen die Einbahn auf dem rechten Arm (Hauptstrasse nach Osten, opposite_lane, y +2,25), Gebäudeecke C = (10; −4), D (0,75; −8):
 // x = 0,75 + 9,25 · (2,25 + 8) / 4 = 24,453125, s = 23,203125 m < 25 m.
 describe('E4: Velo gegen die Einbahn beim Rechtsvortritt', () => {
-  const rv = { eingaben: { ...KEINE_EINGABEN, regelung: 'rechtsvortritt' as const } }
+  // Tempo 30 von Hand (OSM Hauptstrasse 50): seit Punkt 24 (31.10.2026) gilt beim Rechtsvortritt das Tempo der Strasse für die Velos
+  const rv = { eingaben: { ...KEINE_EINGABEN, regelung: 'rechtsvortritt' as const,
+    tempo: { links: null, rechts: { art: 'signalisiert' as const, wert: 30, begruendung: '' } } } }
   it('Zufahrt nur Velos gegen die Einbahn: Prüfung nach Teil E gegen den Arm rechts, D auf der Veloachse 5,00 m hinter dem Rand', () => {
     const e = rechne(osm({}, { oneway: 'yes', 'oneway:bicycle': 'no' }), { zufahrt: ZUFAHRT_NEBEN, ...rv })
     expect(e.zufahrtVelo).toMatchObject({ quelle: 'oneway:bicycle=no' })
@@ -194,7 +207,9 @@ describe('E4: Velo gegen die Einbahn beim Rechtsvortritt', () => {
     const r = seite(e, 'rechts')
     expect([r.status !== 'keine_zufahrt', r.rv, r.velo?.tempo]).toEqual([true, true, 30])
     expect(seite(e, 'links').keinGrund).toContain('muss dieser Zufahrt den Vortritt lassen')
-    expect(e.hinweise.join(' | ')).toContain('Prüfung nach Teil E von ihrem Beobachtungspunkt aus')
+    expect(e.hinweise).toContain('Die Zufahrt ist eine Einbahn vom Knoten weg. Vortrittsbelastet sind nur die Velos im Gegenverkehr ' +
+      '(OSM oneway:bicycle=no).')
+    expect(e.annahmen.join(' | ').match(/gegen die Einbahn/g)).toHaveLength(1)
   })
   it('Arm rechts nur Velos gegen die Einbahn: Velo von rechts nach Tab. 3 mit 30 km/h, 23,20 m < 25 m nicht erfüllt', () => {
     const e = rechne(osm({ oneway: 'yes', cycleway: 'opposite_lane' }), { zufahrt: ZUFAHRT_NEBEN, ...rv })
@@ -202,7 +217,7 @@ describe('E4: Velo gegen die Einbahn beim Rechtsvortritt', () => {
     nahe(e.D, 0.75, -8)
     const a = e.rechtsvortritt!.arm
     expect(a.status).toBe('keine')
-    expect(a.grund).toContain('von rechts kommen nur Velos (OSM cycleway=opposite_lane), geprüft nach Tab. 3 mit 30 km/h')
+    expect(a.grund).toContain('von rechts kommen nur Velos (OSM cycleway=opposite_lane), geprüft nach Tab. 3')
     expect(a.nurVelo).toBe('cycleway=opposite_lane')
     const r = seite(e, 'rechts')
     expect([r.status, r.veloGegen, r.veloFuehrung]).toEqual(['keine_zufahrt', 'cycleway=opposite_lane', 'radstreifen'])

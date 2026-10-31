@@ -187,6 +187,10 @@ describe('Fall-Datei E3c: Wahrnehmbarkeit und alle Arme (Version 5)', () => {
     const [u, hu] = fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, wahrnehmbarkeit: 'mittel', alleArme: 'ja' } }))
     expect(u.eingaben.wahrnehmbarkeit ?? null).toBe(null)
     expect(hu).toEqual(['Eingabe «wahrnehmbarkeit» ungültig, Vorgabe', 'Eingabe «alleArme» ungültig, Vorgabe'])
+    // 31.10.2026: besondere Markierung «Rechtsvortritt» bleibt erhalten, fehlt in alten Dateien (= false)
+    const [m] = fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, markierungRv: true } }))
+    expect(m.eingaben.markierungRv).toBe(true)
+    expect(v4.eingaben.markierungRv ?? false).toBe(false)
   })
 })
 
@@ -315,5 +319,22 @@ describe('Fall-Datei K0: D\' von Hand (Dtrottoir, Version 7)', () => {
     expect(fallLesen(JSON.stringify({ ...roh, eingaben: ohne }))[0].eingaben.Dtrottoir ?? null).toBeNull()
     const [u, hu] = fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, Dtrottoir: [1, 2] } }))
     expect([u.eingaben.Dtrottoir ?? null, hu]).toEqual([null, ['Eingabe «Dtrottoir» ungültig, Vorgabe']])
+  })
+})
+
+describe('Fall-Datei Block 5: Schwerverkehrsanteil und Überholen (Version 7, optional)', () => {
+  it('hin und zurück; fehlen in älteren Dateien (= Vorgabe); ungültig -> Vorgabe, gemeldet', () => {
+    const f = fallMit(x => { x.eingaben.schwerverkehrAnteil = 12.5; x.eingaben.ueberholen = false })
+    const text = fallSchreiben(f)
+    expect(JSON.parse(text).version).toBe(7)
+    const [g, h] = fallLesen(text)
+    expect([g.eingaben.schwerverkehrAnteil, g.eingaben.ueberholen, h, eingabenZahl(g)]).toEqual([12.5, false, [], 2])
+    const roh = JSON.parse(text)
+    const { schwerverkehrAnteil: _s, ueberholen: _u, ...ohne } = roh.eingaben
+    const [a] = fallLesen(JSON.stringify({ ...roh, eingaben: ohne }))
+    expect([a.eingaben.schwerverkehrAnteil ?? null, a.eingaben.ueberholen ?? null, eingabenZahl(a)]).toEqual([null, null, 0])
+    const [u, hu] = fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, schwerverkehrAnteil: 150, ueberholen: 'ja' } }))
+    expect([u.eingaben.schwerverkehrAnteil ?? null, u.eingaben.ueberholen ?? null, hu]).toEqual([null, null,
+      ['Eingabe «schwerverkehrAnteil» ungültig, Vorgabe', 'Eingabe «ueberholen» ungültig, Vorgabe']])
   })
 })

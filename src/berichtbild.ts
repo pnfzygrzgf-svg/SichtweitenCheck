@@ -83,6 +83,8 @@ export function berichtPunkte(e: Ergebnis, kn: KnotenInfo | null = null): P[] {
       const fa = faLage(r.sichtpunkte, iA)
       if (fa) aus.push(...autoUmriss(...fa))
       ringe(r.verdeckerListe)
+      // Überholfall (Block 5): Sichtdreieck auf den Gegenfahrstreifen
+      if (r.ueberholfall) { aus.push(...r.ueberholfall.dreieckFrei, ...r.ueberholfall.dreieckVerdeckt); ringe(r.ueberholfall.verdeckerListe) }
     }
     // Velo, auch ohne Motorfahrzeuge von dieser Seite (E4: Velo gegen die Einbahn)
     const v = r.velo
@@ -100,8 +102,8 @@ export function berichtPunkte(e: Ergebnis, kn: KnotenInfo | null = null): P[] {
   }
   if (e.haltelinie) aus.push(...e.haltelinie.quer)
   if (e.zufahrtspunkt) aus.push(e.zufahrtspunkt.eingabe)
-  const m = e.rechtsvortritt?.arm.paare
-  if (m) aus.push(...m.punkte1, ...m.punkte2)
+  const m = e.rechtsvortritt?.arm.sichtfeld
+  if (m) aus.push(...m.pfad, ...m.linien.map(l => l.p))
   if (kn) aus.push(...schilder(kn, e).map(x => x.p))
   return aus.filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1]))
 }
@@ -116,4 +118,12 @@ export function imAusschnitt(ring: P[], box: Box): boolean {
   let e0 = Infinity, e1 = -Infinity, n0 = Infinity, n1 = -Infinity
   for (const [e, n] of ring) { e0 = Math.min(e0, e); e1 = Math.max(e1, e); n0 = Math.min(n0, n); n1 = Math.max(n1, n) }
   return e1 >= box[0] && e0 <= box[2] && n1 >= box[1] && n0 <= box[3]
+}
+
+/** Kreuzungspunkte K für Karte und Kartenbild (Korrektur 31.10.2026, Punkt 10): je geprüfte Richtung mit Motorfahrzeugen ein Punkt mit
+ *  Beschriftung «K» und Tooltip */
+export function kreuzungspunkte(e: Pick<Ergebnis, 'richtungen'>): { richtung: string; p: P; text: 'K'; tooltip: string }[] {
+  return e.richtungen.filter(r => r.status !== 'keine_zufahrt').map(r => ({ richtung: r.richtung, p: r.K, text: 'K' as const,
+    tooltip: `K ${r.lage === 'gegenueber' ? 'zum Gegenverkehr' : `nach ${r.lage}`} (${r.strasse}): Kreuzung der Fahrlinie der Zufahrt mit der ` +
+      'Fahrlinie mit Vortritt; ab hier wird A gemessen' }))
 }

@@ -60,7 +60,7 @@ export default function Startseite({ onStart }: { onStart: () => void }) {
       <div className="start-daten">
         <div className="start-daten-titel">Datenspeicherung</div>
         <div>Alle Berechnungen laufen im Browser. Eingaben und Ergebnisse werden an keinen Server übermittelt; sie bleiben im
-          Speicher dieses Browsers (je Knoten bzw. Grundstückzufahrt) und in einer Fall-Datei, wenn Sie sie speichern.</div>
+          Speicher dieses Browsers (je Knoten bzw. Grundstückzufahrt) und in einer Fall-Datei, wenn du sie speicherst.</div>
         <ul>
           <li>Für Karte, Rechnung und Bericht fragt die App den Kartenausschnitt bei swisstopo, geodienste.ch, OpenStreetMap
             (Overpass) und in Bern bei map.bern.ch ab; gesendet werden nur Koordinaten. Den Suchbegriff der Ortssuche erhält

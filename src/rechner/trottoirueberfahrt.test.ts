@@ -214,7 +214,7 @@ describe('K0: Vortritt fest (VSS 40 242 Ziffer 12.3)', () => {
   })
   it('Haltelinie geht der Bordkante vor', () => {
     const e = rechne(osm(), [fbT, neben, trottoirQuer], { eingaben: eg({ ...TUE, haltelinie: lv(1.25, -6) }) })
-    expect(e.nullpunktText).toBe('Vorderkante der Haltelinie')
+    expect(e.nullpunktText).toBe('Vorderkante der Halte- oder Wartelinie')
     nahe(e.D, 0.75, -9, 0.06)
     expect(e.trottoirueberfahrt).toBeDefined()
   })
@@ -421,11 +421,11 @@ describe('K0: D\' der Phase Trottoir von Hand (Dtrottoir)', () => {
     expect([t.vorderkante, t.hinterkante]).toEqual([v.trottoirueberfahrt!.vorderkante, v.trottoirueberfahrt!.hinterkante])
     nahe(e.trottoirPruefung!.richtungen[0].K, 1.25, -4.5, 0.06)  // Gehlinie unverändert
     expect(e.hinweise.join(' | ')).not.toContain("D' von Hand")   // 4,98 m hinter dem hinteren Rand
-    expect(e.annahmen.join(' | ')).toContain("Beobachtungspunkt D' von Hand, 4,98 m hinter dem hinteren Rand der Überfahrt (Vorgabe " +
-      "D' = B 3,00 m, VSS 40 273 Ziffer 13.2)")
-    // ohne D' von Hand: D' = B 3,00 m hinter dem hinteren Rand, mit Fundstelle
-    expect(v.annahmen.join(' | ')).toContain("Beobachtungspunkt D' = B 3,00 m hinter dem hinteren Rand der Überfahrt (VSS 40 273 " +
-      'Ziffer 13.2), am Fahrersitz 0,50 m links der Zufahrtsachse')
+    expect(e.annahmen.join(' | ')).toContain("Für die Sicht aufs Trottoir liegt das Auge D' von Hand 4,98 m hinter dem hinteren Rand der " +
+      'Überfahrt (Vorgabe 3,00 m, VSS 40 273 Ziffer 13.2, S. 8).')
+    // ohne D' von Hand: D' 3,00 m hinter dem hinteren Rand, mit Fundstelle
+    expect(v.annahmen.join(' | ')).toContain("Für die Sicht aufs Trottoir liegt das Auge D' 3,00 m hinter dem hinteren Rand der Überfahrt, " +
+      'am Fahrersitz (VSS 40 273 Ziffer 13.2, S. 8).')
   })
   it('Hinweis unter 3,00 m hinter dem hinteren Rand bzw. weit weg; ohne Häkchen ohne Wirkung', () => {
     const n = rechne(osm(), av, { eingaben: eg({ ...TUE, Dtrottoir: lv(0.75, -6.5) }) })

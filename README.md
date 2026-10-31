@@ -93,7 +93,8 @@ mit dem Häkchen «Trottoir ohne Hindernisse» ab der Bordkante).
      secondary, tertiary und deren links, `priority_road`, `maxspeed` ab 50) Vortritt, Quartierstrasse (residential, living_street) mit
      Tempo 30 bzw. 20 oder unclassified in einer Tempo-30-Zone Rechtsvortritt (SVG Art. 36 Abs. 2), sonst Vortritt; Grundstückzufahrt
      immer Vortritt. Ohne Signal ist die Vorgabe eine Annahme (braun, mit Grund); «Vorgabe» setzt zurück. Rechtsvortritt: siehe Punkt 9.
-   - **Haltelinie:** «Haltelinie setzen», dann die Vorderkante (Seite zur Vortrittsstrasse) nahe der Zufahrtsachse anklicken; die
+   - **Halte- oder Wartelinie** (Stop: Haltelinie 6.10, Kein Vortritt: Wartelinie 6.13; SSV Art. 75; Nullpunkt an ihrer Vorderkante,
+     VSS 40 273 Ziffer 5): «Halte- oder Wartelinie setzen», dann die Vorderkante (Seite zur Vortrittsstrasse) nahe der Zufahrtsachse anklicken; die
      App lotet den Punkt auf die Achse, B gilt ab dort. «neu setzen», «entfernen». Karte: weisse Querlinie mit dunklem Rand.
    - **D:** «D setzen» und auf der Karte klicken, oder den Punkt auf der Karte ziehen (D von Hand, Rand Bernstein); Panel und Ergebnis nennen den Abstand hinter dem Nullpunkt und links
      bzw. rechts der Achse; «zurücksetzen». F<sub>B</sub> folgt D.
@@ -178,12 +179,15 @@ Zwischenwert bei Hauptverkehrsstrassen (Mittel des Bereichs, so rechnet der Kant
   Vortritt (Annahme). Stop: B 3,00 m auch ausserorts (Ziffer 12).
 - **Erforderliche Sichtweite** (`rechner/sichtweite.ts`, Tab. 1): Tempo auf die Stufe aufgerundet (über 80 km/h wie 80, Hinweis).
   Erschliessungs-, Sammel- und Verbindungsstrassen der untere Wert, Hauptverkehrsstrassen der Zwischenwert (aufgerundet),
-  mit ungünstigen Verhältnissen (mehr als zwei Fahrstreifen, |i| über 4 %, Schwerverkehr; Ziffer 13.1) der obere Wert. Vorgaben
-  aus OSM `highway` und `lanes`. Massgebend = max(Wert nach Strassentyp, Anhaltesichtweite), die Anhaltesichtweite nur bei |i|
+  mit ungünstigen Verhältnissen (Ziffer 13.1) der obere Wert. Die Norm nennt dafür keine Masse; die App nimmt die Masse des Kantons
+  Solothurn (AVT, Richtlinien Strassenverkehrsanlagen, Sichtverhältnisse in Knoten und Grundstückzufahrten, 12/2024, S. 3) als
+  Annahme: Gefälle über 5 % in einer Richtung, mehr als ein Fahrstreifen je Richtung (OSM `lanes:forward/backward`, bei Einbahn
+  `lanes` > 1, sonst `lanes` > 2), Schwerverkehrsanteil über 8 % (Eingabe in %, das Häkchen geht vor). Vorgabe Strassentyp aus OSM `highway`. Massgebend = max(Wert nach Strassentyp, Anhaltesichtweite), die Anhaltesichtweite nur bei |i|
   über 2 % (die unteren Werte der Tab. 1 gelten für i ≤ ±2 %, Ziffer 13.1). Der Zwischenwert ist ein Entscheid (15.10.2026), die
   Norm nennt für Hauptverkehrsstrassen nur den Bereich; Panel und Bericht sagen das so. Status: erfüllt (≥ oberer und ≥ massgebender
   Wert), massgebender Wert erfüllt, nicht erfüllt.
-- **Anhaltesichtweite** (`rechner/anhaltesicht.ts`, VSS 40 090b Abb. 2): aus dem Diagramm abgelesen (±2 m), VP 30 bis 80 km/h,
+- **Anhaltesichtweite** (`rechner/anhaltesicht.ts`, VSS 40 090b Abb. 2): aus dem Diagramm abgelesen (±2 m; seit 31.10.2026 die Ablesung
+  vom 30./31.10.2026, wo sie fehlt die Digitalisierung vom 15.10.2026), VP 30 bis 80 km/h,
   i −12 bis +12 %, linear dazwischen; jede Kurve so verschoben, dass sie bei 0 % den unteren Wert der Tab. 1 trifft (aus Abb. 2 zählt
   nur die Wirkung der Neigung). Durchgezogen sind die Kurven 30 und 40 km/h über den ganzen Bereich, 50 km/h von −11 bis +10 %,
   60 km/h −10 bis +10 %, 70 km/h −9 bis +9 %, 80 km/h −8 bis +8 % (am 300-dpi-Render nachgemessen); die gestrichelten Enden gelten
@@ -275,6 +279,73 @@ Trottoir nicht in den Massnahmen; Vortrittsvorgabe und «ausserorts» weiter nac
 
 ### Versionen
 
+- Block 5 der Regelprüfung (31.10.2026): Schmale Zufahrten (Abb. 5) nach bfu BM.021-2022 Kap. 3.2.2/Abb. 4: Sichtlinien vom
+  Beobachtungspunkt D zu Punkten alle 2 m auf einem Pfad von 20 m (doppelte Anhaltestrecke bei rund 25 km/h) entlang der Zufahrtsachse
+  und der Achse des rechten Arms (`sichtfeldEng` statt Paarmatrix). Überholfall S' (Ziffer 6, Abb. 1): ausserorts und wenn Überholen
+  erlaubt ist (Vorgabe aus OSM `overtaking`, Häkchen im Panel), zweite Sichtlinie von D auf die Achse des Gegenfahrstreifens bis A,
+  eigener Teil je Richtung im Gesamtstatus, Karte, Bericht. Hinweise ohne Statuswirkung: Einbiegewinkel unter 45° bzw. über 135°
+  (Ziffer 10; Grenze als Annahme), Voraussetzungen des Rechtsvortritts (Ziffer 15), Reduktion der Anhaltesichtweite auf
+  verkehrsberuhigten Strassen (VSS 40 090b Ziffer 6, nicht gerechnet), «Kein Vortritt statt Stop möglich», wenn die Sicht reicht
+  (SSV Art. 36 Abs. 7; Praxis Bern, Luzern, Basel-Stadt). Massnahmen: Halte- oder Wartelinie vorverlegen mit Zusatzmassnahmen und
+  bfu-Vermerk (nur Bestand, Sicht ab B 1,50 m), Hindernis entfernen mit Vermerk SVG Art. 4 und Pflanzabstände, neu
+  Geschwindigkeitsdrosselung (VSS 40 213, Vermerk). Feld «Halte- oder Wartelinie» (Feldname `haltelinie` bleibt). Ungünstige
+  Verhältnisse nach den Massen des Kantons Solothurn (siehe oben), neues Feld Schwerverkehrsanteil. Bericht: Vergleichswerte der bfu
+  (BM.021 Tab. 2 Velo, Tab. 3 Trottoir; `rechner/bfu.ts`), ohne Wirkung. Trottoirneigung als Auslegung gekennzeichnet (Gehrichtung
+  auf die Zufahrt zu; gestützt auf bfu Tab. 3, Fussnote). Fall-Datei Version 7 mit den optionalen Feldern `schwerverkehrAnteil` und
+  `ueberholen`. Knöpfe «klein» mit weisser Schrift (vorher grau auf blau).
+- Fahrstreifenachsen je Querschnitt (31.10.2026, Fehler an OSM-Knoten 270973574): Die Achse des Zufahrtsstreifens und die
+  Fahrstreifenachsen der vortrittsberechtigten Arme (F_A, Zielpunkte, K, Velo, Überholfall, schmale Zufahrt, Trottoirüberfahrt-Band)
+  folgen den AV-Rändern an jeder Querschnittstelle statt einer festen Verschiebung der OSM-Linie (`randProfil`, `fahrstreifenLagen`
+  in `rechner/fahrstreifen.ts`, `versetztVariabel` in `rechner/hauptachsen.ts`); Ausreisser (Breite mehr als 25 % bzw. 1,50 m vom
+  Median, z. B. Trichter, Parkbucht) fallen weg, gleitender Median über 5 Stellen, zum Knoten hin konstant fortgeführt (Annahmen).
+  Unter 3 gültigen Stellen bzw. ohne AV gilt die feste Lage wie bisher. Liegt die OSM-Linie schräg zur Fahrbahn, liegen D, F_B und
+  F_A damit trotzdem in der richtigen Fahrbahnhälfte. Wahrnehmbarkeit: Info-Text neu (vom Nutzer formuliert); beim Rechtsvortritt
+  heisst die nicht geprüfte Richtung «entfällt: diese Richtung wird beim Rechtsvortritt nicht geprüft».
+  Neues Häkchen «besondere Markierung Rechtsvortritt vorhanden» (VSS 40 851) bei der Wahrnehmbarkeit: aus den Daten nicht
+  erkennbar, darum Eingabe; nur Hilfe zur Einstufung und Vermerk im Bericht, ohne Wirkung auf die Rechnung (Fall-Datei: optionales
+  Feld `eingaben.markierungRv`).
+- Achsen Feinschliff (31.10.2026, Diagnose an den Knoten 270973574 und 2329426997 mit echten Daten): Bezugsbreite der Querschnitte
+  nach Häufigkeit statt Median (`bezugsBreite`), Prüfung je Rand (`stetig`: höchstens 0,15 m Änderung je m, Lücken bis 4 m), ein
+  springender Rand (Eckausrundung, Einmündung) wird aus dem anderen Rand und der Breite ersetzt; die Spurachsen der Vortrittsstrasse
+  (F_A, Zielpunkte) folgen damit weder der Eckausrundung am Knoten noch Einmündungen. Die Achse der Zufahrt folgt in der Mündung
+  dem rechten Rand mit dem Abstand der Strecke (`lageMuendung`, Lageänderung höchstens 0,15 m je m; Annahmen). Bei mehreren Spuren
+  liegt D auf der rechten Spur (Nutzerentscheid, keine Spurwahl nach `turn:lanes`).
+- Korrekturrunde nach dem Browsertest (31.10.2026): Annahmen nach Themen in Alltagssprache, technische Angaben in der ausklappbaren
+  «Herleitung (technisch)» (im Bericht als Anhang); Legende überarbeitet, K als beschrifteter Punkt auf der Karte. Statt
+  «Normbezüge» die Abschnitte «Grundlagen und Quellen», «Begriffe» (`begriffe.ts`) und «Regeln» (`regeln.ts`, Anzeige
+  `RegelUebersicht.tsx`, nach Quelle bzw. Thema; Verweise in `verweise.ts`). Regelung beschriftet als «Kein Vortritt (Signal 3.02)»,
+  «Stop (Signal 3.01)», «Rechtsvortritt (ohne Signal)» und «Regelung für die gewählte Zufahrt». Nicht als Zufahrt wählbar
+  (ausgegraut): Einbahn vom Knoten weg ohne Velos gegen die Einbahn und, mit Signal an einem Arm bzw. `priority_road`, die Arme
+  der Vortrittsstrasse (Schalter «auch Arme mit Vortritt wählen», nicht gespeichert). Gabelungen (höchstens ein Arm zum Knoten,
+  `knotenArt` in `rechner/knoten.ts`) und Kreisel (`junction=roundabout`, auch aus der Overpass-Suche abgezogen) werden nicht
+  gerechnet, mit Meldung. Lichtsignalanlage (`highway=traffic_signals` am Knoten bis 3 m bzw. auf einem Arm bis 30 m, Annahme):
+  gerechnet ist die Rückfallebene bei ausgeschalteter Anlage, mit Hinweis; Massnahme «Lichtsignalanlage» entfällt.
+- Platz neben einem Arm (31.10.2026, Fehler an OSM-Knoten 132629283): Querschnitte, die innert der Suchstrecke keinen Fahrbahnrand
+  finden, zählen nicht mehr als Rand (auch in `fahrstreifenmitte`). Fehlt der Rand an mehr als der Hälfte der Querschnitte
+  (`SEHNE_OFFEN_ANTEIL`, Annahme), gilt die Lage aus der AV nicht: Zufahrt und Vortrittsstrasse nehmen Lage und Breite aus OSM, mit
+  Hinweis. Trottoir-Elemente (D', Sichtdreiecke Trottoir, Trottoirüberfahrt) neu indigo, damit Orange nur die Zufahrt meint.
+- Fahrbahnteilung und kurze Arme (31.10.2026, Fehler an den OSM-Knoten 10189490380 und 132629283): Teilt sich eine Strasse mit
+  Gegenverkehr in eine zuführende und eine wegführende Einbahn (wegführende rechts, höchstens `TEILUNG_WINKEL_GRAD` auseinander,
+  ohne Velos gegen die wegführende Einbahn; `knotenArt` «fahrbahnteilung»), rechnet die App nicht und meldet es, mit Zusatz, wenn
+  eine der Einbahnen innert `TEILUNG_KREISEL_M` in einen Kreisel führt (Annahmen). Signale zählen nur auf Armen mit Verkehr zum
+  Knoten (`knotenSignale`). Wird die Fahrlinie nach dem Ende der OSM-Linie gerade verlängert und reicht A darüber hinaus, kommt
+  ein Hinweis mit Länge des Arms und Querstrasse (`armEnde`); die Rechnung bleibt gleich. Hilfe und Begriffe: «einbiegen» ersetzt
+  (prüft auch das Überqueren, Grundstückzufahrten, Rechtsvortritt, wartende Velos).
+- Parkfelder an der Fahrlinie (31.10.2026, Fehler an OSM-Knoten 281428230): Für die Lage der Fahrlinie (Parkstreifen-Abzug
+  1,90 m) zählen Parkfelder aller Klassen, auch Velo und Motorrad (`HindernisDaten.parkAlle`); als Sichthindernis bleiben
+  Zweiradfelder nur Hinweis. Regelübersicht mit Herkunft (Recht, Norm, Fachempfehlung, kantonale Praxis, Annahme, Entscheid) und
+  Wirkung (rechnet mit, nur Hinweis), alle Texte in Alltagssprache; «So funktioniert's» nur noch Bedienschritte; Nummernschilder
+  der Arme in eigenem Pane über den Linien.
+- Tempo beim Rechtsvortritt (31.10.2026): wie sonst aus OSM bzw. Geoportal oder von Hand (ohne Angabe 30 km/h), die Sicht fürs
+  Auto bleibt nach Abb. 6 (die Norm geht von 30 km/h aus), die Velos rechnen nach Tab. 3 mit diesem Tempo; über 30 km/h ein Hinweis
+  auf die Voraussetzung des Rechtsvortritts (`RV_TEMPO_TEXT`). Texte durchgehend in Du-Form.
+- Arm teilt sich in zwei Einbahnen (31.10.2026, Fehler an OSM-Knoten 282773328): Ab der Teilung folgt die Fahrlinie des Verkehrs
+  zum Knoten der zuführenden Einbahn (`einbahnTeilung`, `teilungsFortsetzung`, `spurMitEnde` mit Vorzug); Rand, Breite und
+  Parkierung von deren Fahrbahn, Randprofil je Abschnitt; Veloführung ab der Teilung nach den Tags der zuführenden Einbahn (Wechsel
+  Mischverkehr/Radstreifen über `VELO_WECHSEL_M`, Annahme). Teilt sich die Zufahrt, gilt das ebenso.
+- Zusammenführung (31.10.2026, OSM-Knoten 31413260): Laufen zwei Einbahnen höchstens `TEILUNG_WINKEL_GRAD` auseinander zusammen
+  und führt eine Einbahn weg (`knotenArt` «zusammenfuehrung»), rechnet die App vorerst nicht und meldet es; die Suche blendet den
+  Punkt aus. Massnahmen-Texte zu Lichtsignalanlage, Geschwindigkeitsdrosselung und Aufhebung der Ausfahrt mit Ziffer 14, S. 9.
 - 0.6.0 (23.10.2026): Trottoirüberfahrt (VSS 40 242 Ziffern 12.3, 14.4) und amtliches Tempo der Stadt Bern (V_sig), Fall-Datei Version 7.
 - 0.5.0: Beta, Stand nach E4a (Bericht und Hilfe).
 
@@ -297,7 +368,7 @@ erfüllt. Prüfrunden je Etappe (Sonnet, Code-Lektüre, eigene Fälle): Abb. 2 n
   Hand eingeben); das Profil wird zu A der ersten Rechnung geholt.
 - Trottoir nur erkannt, wenn es höchstens 1,5 m hinter der Kante beginnt (Radweg oder Grünstreifen dazwischen: keine Prüfung); D'
   fest 3,00 m hinter der Hinterkante; Trottoir nicht in den Massnahmen.
-- Rechtsvortritt: Wahrnehmbarkeit nur als Eingabe, Abb. 6 ohne Längsneigung, Abb. 5 in der Auslegung «Summe höchstens 20 m», bei
+- Rechtsvortritt: Wahrnehmbarkeit nur als Eingabe, Abb. 6 ohne Längsneigung, Abb. 5 nach der Konstruktion der bfu (BM.021 Abb. 4), bei
   mehreren Armen rechts nur der nächste, Linksabbieger gegen den Gegenverkehr nicht geprüft, Tabelle «alle Arme» ohne Velo und Trottoir.
 - Keine Kreisel, keine Lichtsignalanlagen (nur als Massnahme vermerkt), Kurven nur als Hinweis; Radstreifen- und Radwegbreite
   angenommen. Velo gegen die Einbahn nur aus OSM-Tags; auf der Zufahrt ohne Wahl der Veloführung.
@@ -318,7 +389,7 @@ den Knoten umgebaut. Neu: `rechner/typen.ts`, `sichtweite.ts`, `knoten.ts`, `beo
 `rechner/massnahmen.ts` (Ziffer 14), Abschnitt «Massnahmen» in `App.tsx`, `fall.ts` Version 3. E3b: `rechner/velo.ts` (Tab. 2 und 3,
 Veloführung, Radwege aus OSM, Trottoirachse), Velo und Trottoir in `rechnen.ts`, Velosymbol in `fahrzeug.ts`, Abschnitt «Veloverkehr»
 und Ergebniszeilen in `App.tsx`, Darstellung in `Karte.tsx`, `fall.ts` Version 4. E3c: `rechner/rechtsvortritt.ts` (Abb. 6,
-rechter Arm, Paarmatrix nach Abb. 5), Rechtsvortritt in `rechnen.ts` und `massnahmen.ts`, Block «Rechtsvortritt» in `App.tsx`, Fächer
+rechter Arm, Sichtfeld der schmalen Zufahrt nach Abb. 5 bzw. bfu Abb. 4), Rechtsvortritt in `rechnen.ts` und `massnahmen.ts`, Block «Rechtsvortritt» in `App.tsx`, Fächer
 in `Karte.tsx`, `fall.ts` Version 5. E4a: `Bericht.tsx` (Druckansicht), `berichtbild.ts` (Ausschnitt,
 Bildgrösse, LV95 -> SVG, Massstab), `texte.ts` (Textbausteine zum Status, aus `App.tsx`), Hilfe und Datenschutz in `Hilfe.tsx`,
 Druckregeln in `index.css`, `fall.ts` Version 6. E4 Velo gegen die Einbahn: `veloGegenTag` und `veloZufluss` in `rechner/netz.ts`,
@@ -343,7 +414,7 @@ Haltelinie, Tempo, Rechtsabbiegegebot, Spiegel, Stop ausserorts, Grundstückzufa
 mit Handlösung nach Strahlensatz, Radweg mit B ab der Aussenkante, Trottoir am T-Knoten mit Hecke, Neigung des Trottoirs,
 Gesamtstatus, Massnahmen mit Velo, Velosymbol, Fall-Datei Version 4), `rechner/rechtsvortritt.test.ts` (E3c: Abb. 6 mit allen 16
 Feldern und Zwischenwerten, rechter Arm an Kreuzung, schiefen Knoten und T-Einmündung, T-Knoten mit Gebäudeecke nach Strahlensatz
-je Wahrnehmbarkeit, alle Arme einer Kreuzung, Paarmatrix an einer schmalen Zufahrt 3,0 m mit Hauswand, Handlösung), dazu die
+je Wahrnehmbarkeit, alle Arme einer Kreuzung, Sichtfeld an einer schmalen Zufahrt 3,0 m mit Hauswand, Handlösung), dazu die
 übernommenen Tests des Unterbaus. E4a: `berichtbild.test.ts` (Ausschnitt flach, hoch und Mindestgrösse, alle Dreiecke,
 Verdecker und Fahrzeuge eines Ergebnisses im Bild, Bildgrösse, Verschiebung und Skalierung nach SVG, Massstab, Textbausteine je
 Status), `fall.test.ts` (Version 6 mit Bezeichnung, Version 5 lesbar). E4: `rechner/velogegen.test.ts` (Tags des Velos gegen die

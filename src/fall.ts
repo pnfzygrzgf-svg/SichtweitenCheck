@@ -14,13 +14,17 @@
 // Version 4 (E3b): Veloführung je Richtung (null = Vorgabe aus OSM) und «schnelle E-Bikes verboten»; im Auszug des Ergebnisses Velo,
 // Trottoir und Gesamtstatus. Version 1 bis 3 werden weiter gelesen (ohne Velo-Eingaben: Vorgabe).
 // Version 5 (E3c): Wahrnehmbarkeit des Knotens (null = Vorgabe «gut») und «alle Arme prüfen» beim Rechtsvortritt; im Auszug des
-// Ergebnisses der Rechtsvortritt (Zustand nach Abb. 6, Paarmatrix). Version 1 bis 4 werden weiter gelesen.
+// Ergebnisses der Rechtsvortritt (Zustand nach Abb. 6, bis K0 die Paarmatrix, seit Block 5 das Sichtfeld). Version 1 bis 4 werden weiter gelesen.
 // Version 6 (E4a): Bezeichnung des Falls (ort.bezeichnung, frei eingebbar im Bericht, höchstens BEZEICHNUNG_MAX Zeichen; zu lange
 // werden gekürzt, ungültige übergangen und gemeldet). Version 1 bis 5 werden weiter gelesen (ohne Bezeichnung).
 // Version 7 (K0): Trottoirüberfahrt über die Einmündung der Zufahrt (eingaben.trottoirueberfahrt: { breite } bzw. fehlt = kein Modus;
 // Breite von Hand TUE_BREITE_MIN bis TUE_BREITE_MAX m oder null), Quelle «vsig» (signalisierte Höchstgeschwindigkeit Stadt Bern); im
 // Auszug des Ergebnisses die Trottoirüberfahrt je Phase. Version 1 bis 6 werden weiter gelesen (ohne Trottoirüberfahrt). Seit K0+ (gleiche
 // Version 7, ältere Leser übergehen das Feld) eingaben.Dtrottoir: D' der Phase Trottoir von Hand (LV95) bzw. null.
+// Block 5 (31.10.2026, gleiche Version 7, alle Felder optional, ältere Leser übergehen sie): eingaben.schwerverkehrAnteil
+// (Schwerverkehrsanteil in %, 0 bis 100, bzw. null) und eingaben.ueberholen («Überholen im Knotenbereich erlaubt» von Hand: true,
+// false bzw. null = Vorgabe aus OSM); im Auszug des Ergebnisses der Überholfall je Richtung und beim Rechtsvortritt das Sichtfeld der
+// schmalen Zufahrt (bfu BM.021 Abb. 4) statt der Paarmatrix. Der Feldname «haltelinie» bleibt (Halte- oder Wartelinie).
 
 import type { P } from './geo'
 import type { Hindernis, ParkKlasse } from './rechner/hindernisse'
@@ -47,10 +51,14 @@ export interface FallErgebnis {
     // E3b
     velo?: { fuehrung: string; A: number; text: string; vorhanden: number; status: string } | null
     trottoir?: { neigung: number; A: number; vorhanden: number; status: string } | null
-    gesamt?: string; gesamtFehlt?: string[] }[]
+    gesamt?: string; gesamtFehlt?: string[]
+    // Block 5: Überholfall (Ziffer 6), nur wenn geprüft
+    ueberholfall?: { A: number; vorhanden: number; status: string } | null }[]
   // E3c
   rechtsvortritt?: { wahrnehmbarkeit: string; arme: { arm: string; rechts: string; vorhanden: number; zustand: string | null; status: string
-    schmal: boolean; paare: { sichtbar: number; gesamt: number; erste: { s1: number; s2: number } | null } | null }[] } | null
+    schmal: boolean
+    // Block 5: Sichtfeld der schmalen Zufahrt (bfu BM.021 Abb. 4; s = Pfadlänge ab D der ersten verdeckten Linie); bis K0 «paare»
+    sichtfeld?: { sichtbar: number; gesamt: number; erste: { s: number; sRechts: number } | null } | null }[] } | null
   // K0
   trottoirueberfahrt?: { breite: number; breiteQuelle: string; laenge: number; phaseTrottoir: string; phaseFahrbahn: string } | null
 }
@@ -86,12 +94,14 @@ export function ergebnisAuszug(e: Ergebnis, regelungText: string): FallErgebnis 
         status: r.velo.status } : null,
       trottoir: ((t) => (t ? { neigung: t.neigung, A: t.A, vorhanden: Math.round(t.vorhanden * 10) / 10, status: t.status } : null))(
         e.trottoirPruefung?.richtungen.find(t => t.richtung === r.richtung)),
-      gesamt: r.gesamt, gesamtFehlt: r.gesamtFehlt })),
+      gesamt: r.gesamt, gesamtFehlt: r.gesamtFehlt,
+      ueberholfall: r.ueberholfall ? { A: r.ueberholfall.A, vorhanden: Math.round(r.ueberholfall.vorhanden * 10) / 10,
+        status: r.ueberholfall.status } : null })),
     rechtsvortritt: e.rechtsvortritt ? { wahrnehmbarkeit: e.rechtsvortritt.wahrnehmbarkeit,
       arme: (e.rechtsvortritt.alle ?? [e.rechtsvortritt.arm]).map(a => ({ arm: a.armName, rechts: a.rechtsName,
         vorhanden: Math.round(a.vorhanden * 10) / 10, zustand: a.zustand, status: a.status, schmal: a.schmal,
-        paare: a.paare ? { sichtbar: a.paare.sichtbar, gesamt: a.paare.paare.length, erste: a.paare.erste ? { s1: a.paare.erste.s1,
-          s2: a.paare.erste.s2 } : null } : null })) } : null,
+        sichtfeld: a.sichtfeld ? { sichtbar: a.sichtfeld.sichtbar, gesamt: a.sichtfeld.linien.length, erste: a.sichtfeld.erste ?
+          { s: Math.round(a.sichtfeld.erste.s * 10) / 10, sRechts: Math.round(a.sichtfeld.erste.sRechts * 10) / 10 } : null } : null })) } : null,
     ...(e.trottoirueberfahrt ? { trottoirueberfahrt: { breite: Math.round(e.trottoirueberfahrt.breite * 100) / 100,
       breiteQuelle: e.trottoirueberfahrt.breiteQuelle, laenge: Math.round(e.trottoirueberfahrt.laenge * 100) / 100,
       phaseTrottoir: e.trottoirueberfahrt.phaseTrottoir.status, phaseFahrbahn: e.trottoirueberfahrt.phaseFahrbahn.status } } : {}) }
@@ -128,6 +138,8 @@ export function eingabenPruefen(x: unknown, hinweise: string[], version = FALL_V
   feld('fahrstreifen', oderNull(bool), v => { e.fahrstreifen = v })
   feld('neigungGross', oderNull(bool), v => { e.neigungGross = v })
   feld('schwerverkehr', bool, v => { e.schwerverkehr = v })
+  // Block 5: Schwerverkehrsanteil [%]
+  feld('schwerverkehrAnteil', oderNull((v): v is number => zahl(v) && v >= 0 && v <= 100), v => { if (v !== null) e.schwerverkehrAnteil = v })
   if (x.neigung !== undefined) {
     if (!istObjekt(x.neigung)) falsch('neigung')
     else for (const r of ['links', 'rechts'] as Richtung[]) {
@@ -169,6 +181,10 @@ export function eingabenPruefen(x: unknown, hinweise: string[], version = FALL_V
   // E3c (Version 5)
   feld('wahrnehmbarkeit', oderNull((v): v is Wahrnehmbarkeit => WAHRNEHMBARKEITEN.includes(v as Wahrnehmbarkeit)), v => { if (v) e.wahrnehmbarkeit = v })
   feld('alleArme', bool, v => { if (v) e.alleArme = true })
+  // 31.10.2026: besondere Markierung «Rechtsvortritt» vorhanden (Hilfe zur Wahrnehmbarkeit)
+  feld('markierungRv', bool, v => { if (v) e.markierungRv = true })
+  // Block 5: Überholen im Knotenbereich erlaubt (von Hand; null = Vorgabe aus OSM)
+  feld('ueberholen', oderNull(bool), v => { if (v !== null) e.ueberholen = v })
   // K0 (Version 7): Trottoirüberfahrt; ungültige Breite -> ohne Breite (Modus bleibt), gemeldet
   if (x.trottoirueberfahrt !== undefined && x.trottoirueberfahrt !== null) {
     const t = x.trottoirueberfahrt
@@ -304,9 +320,10 @@ export function fallSchreiben(fall: Fall, ergebnis: FallErgebnis | null = null):
 export function eingabenGesetzt(e: Eingaben): number {
   const v = KEINE_ALLE_EINGABEN
   return [e.typ !== v.typ, e.fahrstreifen !== v.fahrstreifen, e.neigungGross !== v.neigungGross, e.schwerverkehr !== v.schwerverkehr,
+    (e.schwerverkehrAnteil ?? null) !== null, (e.ueberholen ?? null) !== null,
     e.neigung.links !== null, e.neigung.rechts !== null, e.regelung !== null, e.haltelinie !== null, e.D !== null, e.trottoirFrei,
     e.tempo.links !== null, e.tempo.rechts !== null, (e.velo?.links ?? null) !== null, (e.velo?.rechts ?? null) !== null,
-    !!e.ebikeVerboten, (e.wahrnehmbarkeit ?? null) !== null, !!e.alleArme, !!e.trottoirueberfahrt, (e.Dtrottoir ?? null) !== null,
+    !!e.ebikeVerboten, (e.wahrnehmbarkeit ?? null) !== null, !!e.alleArme, !!e.markierungRv, !!e.trottoirueberfahrt, (e.Dtrottoir ?? null) !== null,
     (e.trottoirueberfahrt?.breite ?? null) !== null].filter(x => x).length
 }
 

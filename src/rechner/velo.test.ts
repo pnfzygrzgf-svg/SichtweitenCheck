@@ -118,7 +118,7 @@ describe('E3b: Veloachse und Strahlensatz am T-Knoten', () => {
     const r = seite(e, 'rechts')
     nahe(r.velo!.K, 1.25, 2.5)
     expect([r.velo!.status, r.gesamt]).toEqual(['erfuellt', 'erfuellt'])
-    expect(e.annahmen.join(' | ')).toContain('Veloachse im Mischverkehr 0,50 m vom rechten Fahrbahnrand')
+    expect(e.annahmen.join(' | ')).toContain('Velos fahren hier im Mischverkehr, 0,50 m vom rechten Fahrbahnrand (VSS 40 273 Ziffer 10 und 13.3')
   })
   it('Radstreifen (OSM cycleway=lane): Velo 0,75 m vom Rand (20,66 m), Autoachse 1,50 m neben dem Streifen (32,75 m)', () => {
     const e = rechne(osm({ cycleway: 'lane' }), [fahrbahn, ecke])
@@ -196,7 +196,7 @@ describe('E3b: Radweg (Ziffer 12, Abb. 2)', () => {
     nahe(e.radwegRand!, 1.25, -5.5)
     expect(l.velo!.vorhanden).toBeCloseTo(0.5 + 10.75 * 4 / 1.5, 1)
     expect(l.velo!.status).toBe('erfuellt')
-    expect(e.annahmen.join(' | ')).toContain('näher als 2,00 m (Ziffer 12, Abb. 2): B ab der Aussenkante des Radwegs')
+    expect(e.annahmen.join(' | ')).toContain('näher als 2,00 m: das Fahrzeug wartet vor dem Radweg, B zählt ab seiner Aussenkante')
     // nach rechts: derselbe Radweg in beiden Richtungen (ohne oneway) auf der Gegenseite des Verkehrs von rechts
     const r = seite(e, 'rechts')
     expect(r.velo!.radweg).toMatchObject({ id: 50, eigeneSeite: false, zweiRichtungen: true })
@@ -256,7 +256,8 @@ describe('E3b: Trottoir (Ziffer 13.2, Tab. 2)', () => {
     nahe(l.sichtpunkte[10], 1.25 - 10, -4, 0.06); nahe(r.sichtpunkte[10], 1.25 + 10, -4, 0.06)
     expect([l.A, l.status, r.A, r.status, l.text]).toEqual([15, 'erfuellt', 15, 'erfuellt', 'Tab. 2, Spalte ≥ 0 %'])
     expect(e.trottoirProfil.length).toBeGreaterThan(10)
-    expect(e.annahmen.join(' | ')).toContain('Beobachtungspunkt D\' = B 3,00 m hinter der Trottoirhinterkante (VSS 40 273 Ziffer 13.2), am Fahrersitz')
+    expect(e.annahmen.join(' | ')).toContain('Für die Sicht aufs Trottoir liegt das Auge D\' 3,00 m hinter der Trottoirhinterkante, am Fahrersitz ' +
+      '(VSS 40 273 Ziffer 13.2, S. 8).')
   })
   it('Hecke 1 m hinter der Hinterkante: nach links 5,28 m < 15 m nicht erfüllt (Strahlensatz), Gesamtstatus nicht erfüllt', () => {
     const e = rechne(osm(), [fbT, neben, trottoir], { hindernisse: hg })
