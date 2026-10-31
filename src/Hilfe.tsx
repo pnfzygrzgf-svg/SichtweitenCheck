@@ -164,6 +164,7 @@ export function Fusszeile() {
       <a href="https://creativecommons.org/licenses/by/4.0/deed.de" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>{' '}
       (eingebundene Daten behalten ihre eigenen Lizenzen) ·{' '}
       <a href={QUELLCODE} target="_blank" rel="noopener noreferrer">Quellcode auf GitHub</a> · Vibecoding. Don't trust, verify!
+      {' '}· <a href="https://ko-fi.com/pnfzygrzgfsvg" target="_blank" rel="noopener noreferrer">Unterstützen ↗</a>
     </footer>
   )
 }

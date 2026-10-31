@@ -57,6 +57,23 @@ export default function Startseite({ onStart }: { onStart: () => void }) {
       <Querverweis href="https://veloroutencheck.ch/" bild="veloroutencheck.svg" titel="VeloroutenCheck"
         text="Qualität der Veloinfrastruktur bewerten." />
 
+      {/* Unterstützen (Ko-fi, 31.10.2026): wie im VeloroutenCheck als eigene Karte auf der Startseite */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 22, flexWrap: 'wrap', textAlign: 'left',
+                    background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '14px 16px' }}>
+        <div style={{ flex: '1 1 260px' }}>
+          <div style={{ fontWeight: 700 }}>SichtweitenCheck unterstützen</div>
+          <div style={{ fontSize: 13, lineHeight: 1.5, opacity: 0.8 }}>
+            Der Rechner ist frei nutzbar und quelloffen. Wer die Weiterentwicklung unterstützen möchte, kann über
+            Ko-fi spenden.
+          </div>
+        </div>
+        <a href="https://ko-fi.com/pnfzygrzgfsvg" target="_blank" rel="noopener noreferrer"
+           style={{ flexShrink: 0, background: '#ea580c', color: '#fff', textDecoration: 'none', borderRadius: 8,
+                    padding: '8px 14px', fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap' }}>
+          Über Ko-fi unterstützen ↗
+        </a>
+      </div>
+
       <div className="start-daten">
         <div className="start-daten-titel">Datenspeicherung</div>
         <div>Alle Berechnungen laufen im Browser. Eingaben und Ergebnisse werden an keinen Server übermittelt; sie bleiben im
@@ -73,6 +90,7 @@ export default function Startseite({ onStart }: { onStart: () => void }) {
         SichtweitenCheck v{__APP_VERSION__} · Code unter <a href="https://opensource.org/license/mit" target="_blank" rel="noopener noreferrer">MIT</a>, eigene Inhalte unter{' '}
         <a href="https://creativecommons.org/licenses/by/4.0/deed.de" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>
         {' '}· <a href={QUELLCODE} target="_blank" rel="noopener noreferrer">Quellcode auf GitHub</a>
+        {' '}· <a href="https://ko-fi.com/pnfzygrzgfsvg" target="_blank" rel="noopener noreferrer">Unterstützen ↗</a>
       </p>
     </main>
   )
