@@ -537,11 +537,12 @@ export default function Karte(props: {
         bubblingMouseEvents: true, icon: L.divIcon({ className: dtHand ? 'd-punkt dstrich hand' : 'd-punkt dstrich', iconSize: [14, 14],
           html: "<span>D'</span>" }) })
         .bindTooltip(dtHand ? "Beobachtungspunkt D' der Phase Trottoir von Hand<br><i>ziehen: verschieben; im Panel zurücksetzen</i>" :
-          "Beobachtungspunkt D' der Phase Trottoir (3,00 m hinter dem hinteren Rand der Trottoirüberfahrt)<br><i>ziehen: D' von Hand</i>")
+          "Beobachtungspunkt D' der Phase Trottoir (B 3,00 m hinter dem hinteren Rand der Trottoirüberfahrt, VSS 40 273 Ziffer 13.2)" +
+          "<br><i>ziehen: D' von Hand</i>")
         .on('dragend', (ev: L.LeafletEvent) => { const g = (ev.target as L.Marker).getLatLng(); cb.current.onDtrottoir(lv95(g.lat, g.lng)) })
         .addTo(eb.sicht)
       else L.circleMarker(ll(tp.D), { radius: 5, color: '#111827', weight: 2, fillColor: TROTTOIR_FARBE, fillOpacity: 1, pane: OBEN_PANE })
-        .bindTooltip("Beobachtungspunkt D' für das Trottoir").addTo(eb.sicht)
+        .bindTooltip("Beobachtungspunkt D' für das Trottoir (B 3,00 m hinter der Trottoirhinterkante, VSS 40 273 Ziffer 13.2)").addTo(eb.sicht)
     }
     // Trottoirüberfahrt (K0): Band vom vorderen Rand (Bordkante) zum hinteren Rand auf der Zufahrtsachse, Querlinie am hinteren Rand
     const tue = e.trottoirueberfahrt
@@ -551,7 +552,8 @@ export default function Karte(props: {
       L.polyline([tue.vorderkante, tue.hinterkante].map(ll), { color: TROTTOIR_FARBE, weight: 6, opacity: 0.8, pane: OBEN_PANE })
         .bindTooltip(text, { sticky: true }).addTo(eb.sicht)
       if (t[0] || t[1]) L.polyline(querlinie(tue.hinterkante, t, 2).map(ll), { color: '#111827', weight: 2, dashArray: '4 3', pane: OBEN_PANE })
-        .bindTooltip(`hinterer Rand der Trottoirüberfahrt: Nullpunkt der Phase Trottoir (D' ${f2(B_INNERORTS_M)} m dahinter)`, { sticky: true })
+        .bindTooltip(`hinterer Rand der Trottoirüberfahrt: Nullpunkt der Phase Trottoir (D' = B ${f2(B_INNERORTS_M)} m dahinter, VSS 40 273 ` +
+          'Ziffer 13.2)', { sticky: true })
         .addTo(eb.sicht)
     }
     L.polyline(e.zufahrtAchse.map(ll), { color: ZUFAHRT_FARBE, weight: 2, dashArray: '6 5', interactive: false, pane: OBEN_PANE }).addTo(eb.sicht)

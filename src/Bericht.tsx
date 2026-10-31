@@ -32,7 +32,7 @@ import { STRASSENTYP_TEXT, UNGUNST_TEXT, NEIGUNG_EBEN_PROZENT } from './rechner/
 import { VELOFUEHRUNG_TEXT } from './rechner/velo'
 import { WAHRNEHMBARKEIT_TEXT, ZUSTAND_TEXT, RV_A_M, RV_A_MIN_M, SCHMAL_M, PAAR_LAENGE_M } from './rechner/rechtsvortritt'
 import { HALTELINIE_MIN_M } from './rechner/massnahmen'
-import { FAHRERSITZ_M } from './rechner/beobachtung'
+import { FAHRERSITZ_M, B_INNERORTS_M } from './rechner/beobachtung'
 
 import { MARKE, APP_ADRESSE } from './marke'
 const NEIGUNG_ZEITGRENZE_MS = 20000    // Längsneigung: danach Drucken mit vorläufig 0 % (Hinweis im Bericht)
@@ -266,10 +266,12 @@ function ErgebnisTabelle({ e }: { e: Ergebnis }) {
           {zeile('Tempo', auto(r => <>{r.tempo} km/h<div className="klein">{r.tempoArt ? `von Hand: ${TEMPO_ART_TEXT[r.tempoArt]}` +
             `${r.tempoBegruendung ? ` («${r.tempoBegruendung}»)` : ''}; Vorgabe ${r.tempoVorgabe} km/h (${r.tempoVorgabeQuelle})` :
             `${r.tempoQuelle}${r.tempoAnnahme ? ' (Annahme)' : ''}`}</div></>))}
-          {zeile('Längsneigung i', auto(r => <>{fi(r.neigung)} %<div className="klein">{r.neigungQuelle}</div></>))}
+          {zeile('Längsneigung i', auto(r => <>{r.neigungUnbekannt ? 'unbekannt' : `${fi(r.neigung)} %`}<div className="klein">{r.neigungQuelle}</div></>))}
           {zeile('A nach Strassentyp', auto(r => <>{r.typWert} m<div className="klein">{r.typText}; Tab. 1 {r.erforderlichUnten} bis {r.erforderlichOben} m</div></>))}
           {zeile('Anhaltesichtweite', auto(r => r.anhalte ? <>{r.anhalte.meter} m<div className="klein">VSS 40 090b Abb. 2, VP {r.anhalte.stufe} km/h;{' '}
-            {r.anhalteAngewendet ? 'angewendet' : `nicht angewendet (|i| bis ${NEIGUNG_EBEN_PROZENT} %)`}{r.anhalte.unsicher ? '; Kurve verlängert, unsicher' : ''}</div></> :
+            {r.anhalteAngewendet ? (r.neigungUnbekannt ? `angewendet, Neigung unbekannt (strengster Wert bei ${fi(r.anhalte.i)} %)` : 'angewendet') :
+              `nicht angewendet (|i| bis ${NEIGUNG_EBEN_PROZENT} %)`}{r.anhalte.unsicher ? `; Kurve ${r.anhalte.verlaengert ? 'verlängert' :
+              'gestrichelt'}, unsicher` : ''}</div></> :
             leer('unter 30 km/h keine Kurve')))}
           {zeile('A massgebend', auto(r => <><b>{r.massgebend} m</b><div className="klein">{r.massgebendText}</div></>))}
           {zeile('A vorhanden', auto(r => <><b>{vorhandenText(r.vorhanden, r.bisEnde)}</b>{r.bisEnde && <div className="klein">geprüft bis {r.sMax} m</div>}</>))}
@@ -280,14 +282,17 @@ function ErgebnisTabelle({ e }: { e: Ergebnis }) {
           ' – Phase Fahrbahn' : ''}</td></tr>
         {zeile('Veloführung', r => <>{VELOFUEHRUNG_TEXT[r.veloFuehrung]}<div className="klein">{r.veloGewaehlt ?
           `von Hand; Vorgabe ${VELOFUEHRUNG_TEXT[r.veloVorgabe]} (${r.veloVorgabeQuelle})` : r.veloVorgabeQuelle}</div></>)}
-        {zeile('A Velo', r => r.velo ? <><b>{r.velo.A} m</b><div className="klein">{r.velo.text}; {r.velo.tempo} km/h, i {fi(r.velo.neigung)} %
+        {zeile('A Velo', r => r.velo ? <><b>{r.velo.A} m</b><div className="klein">{r.velo.text}; {r.velo.tempo} km/h, i {r.velo.neigungUnbekannt ?
+          'unbekannt' : `${fi(r.velo.neigung)} %`}
           {r.velo.ebike ? '; schnelle E-Bikes verboten' : ''}; {r.velo.lageText}</div></> : leer('keine Prüfung'), 'A Velo')}
         {zeile('A vorhanden Velo', r => r.velo ? <b>{vorhandenText(r.velo.vorhanden, r.velo.bisEnde)}</b> : leer('–'), 'vV')}
         {zeile('Status Velo', r => r.velo ? <b>{statusMarke(r.velo.status)} {STATUS_TEXT_TEIL[r.velo.status]}</b> : leer('–'), 'sV')}
         <tr className="bericht-zwischen"><td colSpan={rs.length + 1}><b>Trottoir</b> (Tab. 2, von D'){e.trottoirueberfahrt ?
-          ` – Trottoirüberfahrt, Phase Trottoir (D' hinter dem hinteren Rand, Gehlinie ${f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt)` : ''}</td></tr>
+          ` – Trottoirüberfahrt, Phase Trottoir (D' = B ${f2(B_INNERORTS_M)} m hinter dem hinteren Rand, VSS 40 273 Ziffer 13.2; Gehlinie ` +
+          `${f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt)` : ''}</td></tr>
         {e.trottoirPruefung ? <>
-          {zeile('Längsneigung Trottoir', r => { const t = tr(r); return t ? <>{fi(t.neigung)} %<div className="klein">{t.neigungQuelle}</div></> : leer('–') }, 'iT')}
+          {zeile('Längsneigung Trottoir', r => { const t = tr(r); return t ? <>{t.neigungUnbekannt ? 'unbekannt' : `${fi(t.neigung)} %`}
+            <div className="klein">{t.neigungQuelle}</div></> : leer('–') }, 'iT')}
           {zeile('A Trottoir', r => { const t = tr(r); return t ? <><b>{t.A} m</b><div className="klein">{t.text}</div></> : leer('–') }, 'AT')}
           {zeile('A vorhanden Trottoir', r => { const t = tr(r); return t ? <b>{vorhandenText(t.vorhanden, t.bisEnde)}</b> : leer('–') }, 'vT')}
           {zeile('Status Trottoir', r => { const t = tr(r); return t ? <b>{statusMarke(t.status)} {STATUS_TEXT_TEIL[t.status]}</b> : leer('–') }, 'sT')}
@@ -409,7 +414,8 @@ export function eingabenListe(fall: Fall, e: Ergebnis): string[] {
   for (const r of ['links', 'rechts'] as Richtung[]) {
     const n = g.neigung[r]
     if (n !== null) { const x = e.richtungen.find(y => y.richtung === r)
-      aus.push(`Längsneigung ${rName(r)}: ${fi(n)} %${x ? ` (Vorgabe ${fi(x.neigungVorgabe)} %, ${x.neigungVorgabeQuelle})` : ''}`) }
+      aus.push(`Längsneigung ${rName(r)}: ${fi(n)} %${x ? ` (Vorgabe ${x.neigungVorgabeUnbekannt ? '' : `${fi(x.neigungVorgabe)} %, `}` +
+        `${x.neigungVorgabeQuelle})` : ''}`) }
     const t = g.tempo[r]
     if (t) aus.push(`Tempo ${rName(r)}: ${t.wert} km/h, ${TEMPO_ART_TEXT[t.art]}${t.begruendung ? `, Begründung «${t.begruendung}»` : ''}`)
     const v = g.velo?.[r] ?? null

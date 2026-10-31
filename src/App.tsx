@@ -29,8 +29,8 @@ import { zufahrtspunktKey, zufahrtspunktLesen } from './rechner/grundstueck'
 import { armText, nachNr } from './rechner/knoten'
 import { lageText, lageNach } from './rechner/lage'
 import { TAB1, ZIEL_FAKTOR, STRASSENTYP_TEXT, UNGUNST_TEXT, NEIGUNG_GROSS_PROZENT, NEIGUNG_EBEN_PROZENT,
-  neigungLesen, type Strassentyp, type Ungunst } from './rechner/sichtweite'
-import { ANHALTESICHT_STUFEN } from './rechner/anhaltesicht'
+  ZWISCHENWERT_TEXT, neigungLesen, type Strassentyp, type Ungunst } from './rechner/sichtweite'
+import { ANHALTESICHT_STUFEN, ANHALTESICHT_I_MIN } from './rechner/anhaltesicht'
 import { FAHRERSITZ_M, B_INNERORTS_M, TROTTOIR_BIS_M, TROTTOIR_MAX_M } from './rechner/beobachtung'
 import { D_MFZ_M } from './rechner/hauptachsen'
 import { Anleitung, Datenschutz, Fusszeile } from './Hilfe'
@@ -123,18 +123,22 @@ const HOEHEN_NAME = 'Höhenmodell (swisstopo, swissALTI3D, Profile)'
 const cm = (p: P): P => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]
 
 /** Eingabefeld Längsneigung [%]; übernimmt den Wert 300 ms nach dem letzten Tastendruck (nicht jede Taste eine Rechnung).
- *  wert null = Vorgabe (aus dem Höhenmodell, E3a): das Feld zeigt die Vorgabe; eine Eingabe gilt als «von Hand» */
+ *  wert null = Vorgabe (aus dem Höhenmodell, E3a): das Feld zeigt die Vorgabe; eine Eingabe gilt als «von Hand». Vorgabe
+ *  unbekannt (Entscheid 31.10.2026): das Feld bleibt leer mit «unbekannt» als Platzhalter */
 const NEIGUNG_PAUSE_MS = 300
 const neigungText = (x: number) => String(x).replace('.', ',').replace('-', '−')
-function NeigungFeld({ wert, vorgabe, onWert, name }: { wert: number | null; vorgabe: number; onWert: (v: number | null) => void; name: string }) {
+function NeigungFeld({ wert, vorgabe, unbekannt, onWert, name }: { wert: number | null; vorgabe: number; unbekannt: boolean
+  onWert: (v: number | null) => void; name: string }) {
   const gilt = wert ?? vorgabe
-  const [text, setText] = useState(neigungText(gilt))
+  const leer = wert === null && unbekannt
+  const [text, setText] = useState(leer ? '' : neigungText(gilt))
   const timer = useRef(0)
-  useEffect(() => { setText(t => (neigungLesen(t) === gilt ? t : neigungText(gilt))) }, [gilt])
+  useEffect(() => { setText(t => (leer ? '' : neigungLesen(t) === gilt ? t : neigungText(gilt))) }, [gilt, leer])
   useEffect(() => () => clearTimeout(timer.current), [])
   const ok = neigungLesen(text) !== null
   return <>
     <input type="text" inputMode="decimal" aria-label={`Längsneigung ${name} in Prozent`} value={text} className={ok ? '' : 'falsch'}
+      placeholder={leer ? 'unbekannt' : undefined} size={leer ? 9 : undefined}
       onChange={e => {
         setText(e.target.value)
         clearTimeout(timer.current)
@@ -143,9 +147,11 @@ function NeigungFeld({ wert, vorgabe, onWert, name }: { wert: number | null; vor
       }} />
     {wert !== null && <>{' '}<button className="zweit klein" title="Vorgabe aus dem Höhenmodell übernehmen" onClick={() => {
       clearTimeout(timer.current); onWert(null) }}>Vorgabe</button></>}
-    {!ok && <span className="fehler klein"> Zahl zwischen −30 und +30 eingeben (gilt weiter: {fi(gilt)} %)</span>}
+    {!ok && <span className="fehler klein"> Zahl zwischen −30 und +30 eingeben (gilt weiter: {leer ? 'unbekannt' : `${fi(gilt)} %`})</span>}
   </>
 }
+/** Vorgabe der Längsneigung kurz: Zahl bzw. «unbekannt» */
+const neigungVorgabeKurz = (r: RichtungErgebnis) => (r.neigungVorgabeUnbekannt ? 'unbekannt' : `${fi(r.neigungVorgabe)} %`)
 
 /** Block «Erforderliche Sichtweite» (Schritt 3): Strassentyp, ungünstige Verhältnisse, Längsneigung je Richtung (E1); beim
  *  Rechtsvortritt nur die Längsneigung */
@@ -155,6 +161,8 @@ function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false }:
   const typ = eingaben.typ ?? s.typVorgabe
   // Neigung wie gerechnet: von Hand (sofort), sonst die Vorgabe aus dem Höhenmodell (aus dem Ergebnis)
   const neigungVorgabe = richtungen.some(r => Math.abs(eingaben.neigung[r.richtung] ?? r.neigungVorgabe) > NEIGUNG_GROSS_PROZENT + 1e-9)
+  // Neigung einer Richtung unbekannt (ohne Eingabe von Hand): die Vorgabe «grosse Längsneigung» bleibt aus (Entscheid 31.10.2026)
+  const neigungOffen = !neigungVorgabe && richtungen.some(r => r.neigungVorgabeUnbekannt && eingaben.neigung[r.richtung] === null)
   const gesetzt: Ungunst = { fahrstreifen: eingaben.fahrstreifen ?? s.ungunstVorgabe.fahrstreifen,
     neigung: eingaben.neigungGross ?? neigungVorgabe, schwerverkehr: eingaben.schwerverkehr }
   const haekchen = (k: keyof Ungunst, quelle: string, warn = false) => (
@@ -171,9 +179,10 @@ function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false }:
         <tbody>
           {!rv && <><tr><td>Strassentyp (Vortrittsstrasse)<Info titel="Strassentyp">
             <p>Wert der Tab. 1 nach Strassentyp: Erschliessungs-, Sammel- und Verbindungsstrassen der untere Wert, Hauptverkehrsstrassen
-              der Zwischenwert (Mittel von unterem und oberem Wert, aufgerundet), mit ungünstigen Verhältnissen der obere Wert.</p>
-            <p>Vorgabe aus OSM: trunk, primary, secondary, tertiary und deren links = Hauptverkehrsstrasse, sonst Erschliessungsstrasse
-              (hier {s.typQuelle}: {STRASSENTYP_TEXT[s.typVorgabe]}).</p></Info></td><td>
+              der Zwischenwert ({ZWISCHENWERT_TEXT}), mit ungünstigen Verhältnissen der obere Wert.</p>
+            <p>Vorgabe aus OSM als Annahme der App: trunk, primary, secondary, tertiary und deren links = Hauptverkehrsstrasse (tertiary
+              damit auf der sicheren Seite), sonst Erschliessungsstrasse (hier {s.typQuelle}: {STRASSENTYP_TEXT[s.typVorgabe]}); im Feld
+              wählbar.</p></Info></td><td>
             <select value={typ} aria-label="Strassentyp der Vortrittsstrasse"
               onChange={ev => { const t = ev.target.value as Strassentyp; setEingaben(e => ({ ...e, typ: t })) }}>
               {(['es', 'hvs'] as Strassentyp[]).map(t => <option key={t} value={t}>{STRASSENTYP_TEXT[t]}</option>)}
@@ -185,10 +194,12 @@ function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false }:
             <p>Bei einer Hauptverkehrsstrasse hebt ein Häkchen den Wert der Tab. 1 vom Zwischenwert auf den oberen Wert. Bei
               Erschliessungs-, Sammel- und Verbindungsstrassen sind ungünstige Verhältnisse nur ein Hinweis: der untere Wert bleibt.</p>
             <p>Vorgaben: mehr als zwei Fahrstreifen aus OSM lanes ({s.fahrstreifenQuelle}); grosse Längsneigung, wenn |i| in einer
-              Richtung über {NEIGUNG_GROSS_PROZENT} % liegt; hoher Schwerverkehrsanteil nur von Hand.</p></Info></td><td>
+              Richtung über {NEIGUNG_GROSS_PROZENT} % liegt (bei unbekannter Neigung nicht gesetzt: kein Mass bekannt); hoher
+              Schwerverkehrsanteil nur von Hand.</p></Info></td><td>
             {haekchen('fahrstreifen', eingaben.fahrstreifen === null ? `Vorgabe ${quelleText(s.fahrstreifenQuelle)}` :
               `gewählt; Vorgabe ${vorgabe(s.ungunstVorgabe.fahrstreifen)}`)}
-            {haekchen('neigung', eingaben.neigungGross === null ? `Vorgabe aus der Längsneigung` : `gewählt; Vorgabe ${vorgabe(neigungVorgabe)}`)}
+            {haekchen('neigung', eingaben.neigungGross === null ? `Vorgabe aus der Längsneigung${neigungOffen ? '; unbekannt, nicht gesetzt' :
+              ''}` : `gewählt; Vorgabe ${vorgabe(neigungVorgabe)}`, eingaben.neigungGross === null && neigungOffen)}
             {haekchen('schwerverkehr', 'nur von Hand')}
             {ohneWirkung && <div className="klein warnung">Häkchen ohne Wirkung: bei einer Erschliessungsstrasse bleibt der untere Wert.</div>}
           </td></tr></>}
@@ -199,17 +210,20 @@ function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false }:
               negativ. Auf einer durchgehenden Steigung haben die beiden Richtungen entgegengesetzte Vorzeichen.</p>
             <p>Vorgabe aus dem Höhenmodell swissALTI3D (Ausgleichsgerade über das Profil der Fahrstreifenachse ab K bis A massgebend,
               mindestens {PROFIL_MIN_M} m); von Hand überschreibbar. Die Anhaltesichtweite gilt ab |i| über {NEIGUNG_EBEN_PROZENT} % als
-              Untergrenze.</p>
+              Untergrenze (die unteren Werte der Tab. 1 gelten für i ≤ ±{NEIGUNG_EBEN_PROZENT} %, VSS 40 273 Ziffer 13.1).</p>
+            <p>Ohne Messung (kein Höhenprofil, zu kurz, Dienst-Fehler) ist die Neigung unbekannt: die App nimmt den strengsten Wert der
+              Tab. 3 (Spalte ≤ −4 %) und die Anhaltesichtweite bei {fi(ANHALTESICHT_I_MIN)} % (Entscheid 31.10.2026); eine Neigung von
+              Hand verfeinert das. Solange das Höhenmodell lädt, vorerst 0 %.</p>
             <ul>{richtungen.map(r => <li key={r.richtung}>{lageText(r)}: {eingaben.neigung[r.richtung] !== null ?
-              `von Hand; Vorgabe ${fi(r.neigungVorgabe)} % (${r.neigungVorgabeQuelle})` : `Vorgabe: ${r.neigungQuelle}`}</li>)}</ul></Info></td><td>
+              `von Hand; Vorgabe ${neigungVorgabeKurz(r)} (${r.neigungVorgabeQuelle})` : `Vorgabe: ${r.neigungQuelle}`}</li>)}</ul></Info></td><td>
             {richtungen.map(r => {
               const hand = eingaben.neigung[r.richtung] !== null
               const modell = r.neigungQuelle.startsWith(HOEHEN_QUELLE + ',')
               return <div key={r.richtung} className="neigungzeile"><label>{lageText(r)}, {r.strasse}:{' '}
-                <NeigungFeld wert={eingaben.neigung[r.richtung]} vorgabe={r.neigungVorgabe} name={lageText(r)}
+                <NeigungFeld wert={eingaben.neigung[r.richtung]} vorgabe={r.neigungVorgabe} unbekannt={r.neigungVorgabeUnbekannt} name={lageText(r)}
                   onWert={v => setEingaben(e => ({ ...e, neigung: { ...e.neigung, [r.richtung as Richtung]: v } }))} /> %{' '}
                 <span className={hand || modell ? 'klein' : 'klein warnung'}>
-                  {hand ? <>(<Hand />; Vorgabe {fi(r.neigungVorgabe)} %)</> : modell ? '(Höhenmodell)' :
+                  {hand ? <>(<Hand />; Vorgabe {neigungVorgabeKurz(r)})</> : modell ? '(Höhenmodell)' :
                   `(${r.neigungQuelle})`}</span></label></div>
             })}
           </td></tr>
@@ -313,11 +327,11 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false 
             <ul>
               <li>Tempo {r.tempo} km/h ({r.tempoQuelle}{r.tempoArt ? `; Vorgabe ${r.tempoVorgabe} km/h, ${r.tempoVorgabeQuelle}` : ''}).</li>
               {r.status === 'keine_zufahrt' ? <li>{r.keinGrund ?? STATUS_TEXT.keine_zufahrt}.</li> : <>
-                {!r.rv && <li>Tab. 1 nach Strassentyp: {r.typWert} m ({r.typText}); Bereich {r.erforderlichUnten} … {r.erforderlichOben} m
-                  {r.typStufe === 'zwischen' ? ', Mittel aufgerundet' : ''}.</li>}
-                {!r.rv && <li>Anhaltesichtweite (VSS 40 090b Abb. 2): {r.anhalte ? <>bei {fi(r.neigung)} %: {r.anhalte.meter} m (VP{' '}
+                {!r.rv && <li>Tab. 1 nach Strassentyp: {r.typWert} m ({r.typText}); Bereich {r.erforderlichUnten} … {r.erforderlichOben} m.</li>}
+                {!r.rv && <li>Anhaltesichtweite (VSS 40 090b Abb. 2): {r.anhalte ? <>bei {fi(r.anhalte.i)} %{r.neigungUnbekannt ?
+                  ' (Neigung unbekannt: strengster Wert)' : ''}: {r.anhalte.meter} m (VP{' '}
                   {r.anhalte.stufe} km/h{r.anhalteAngewendet ? '' : `; nicht angewendet, |i| bis ${NEIGUNG_EBEN_PROZENT} %`}
-                  {r.anhalte.unsicher ? '; Kurve verlängert, unsicher' : ''}{r.anhalte.abweichung !== 0 ? `; Diagramm ` +
+                  {r.anhalte.unsicher ? `; Kurve ${r.anhalte.verlaengert ? 'verlängert' : 'gestrichelt'}, unsicher` : ''}{r.anhalte.abweichung !== 0 ? `; Diagramm ` +
                   `${Math.ceil(r.anhalte.roh - 1e-9)} m, auf Tab. 1 verschoben: bei 0 % ${TAB1[r.anhalte.stufe][0] + r.anhalte.abweichung} ` +
                   `statt ${TAB1[r.anhalte.stufe][0]} m` : ''})</> : `unter ${ANHALTESICHT_STUFEN[0]} km/h keine Kurve`}.</li>}
                 {r.rv && <li>{r.typText}.</li>}
@@ -341,7 +355,8 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false 
             {v ? <>
               <ul>
                 <li>Veloachse: {v.lageText}.</li>
-                <li>Erforderliche Sichtweite A {v.A} m ({v.text}; {v.tempo} km/h zulässig, {v.tempoQuelle}; i {fi(v.neigung)} %).</li>
+                <li>Erforderliche Sichtweite A {v.A} m ({v.text}; {v.tempo} km/h zulässig, {v.tempoQuelle}; i {v.neigungUnbekannt ?
+                  'unbekannt' : `${fi(v.neigung)} %`}).</li>
                 <SichtHerleitung t={v} faktorText={`${String(ZIEL_FAKTOR).replace('.', ',')} × A`} />
               </ul>
               <VerdeckerListe liste={v.verdeckerListe} />
@@ -354,11 +369,12 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false 
           herleitung={t ? <>
             <p>Trottoir: Fussgänger und fahrzeugähnliche Geräte, die von dieser Seite auf dem Trottoir zur Zufahrt kommen (Tab. 2).</p>
             <ul>
-              {gehlinie ? <li>Trottoirüberfahrt, Phase Trottoir (VSS 40 242 Ziffer 14.4): D' {velo ? 'auf der Veloachse' : 'am Fahrersitz'}{' '}
-                {f2(B_INNERORTS_M)} m hinter dem hinteren Rand der Überfahrt; Zielpunkte auf der Gehlinie {f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt ({achseQuelle}).</li> :
-              <li>D' {velo ? 'auf der Veloachse' : 'am Fahrersitz'} {f2(B_INNERORTS_M)} m hinter der Trottoirhinterkante; Zielpunkte auf der
-                Trottoirachse ({achseQuelle}).</li>}
-              <li>Längsneigung in Gehrichtung zur Zufahrt {fi(t.neigung)} % ({t.neigungQuelle}).</li>
+              {gehlinie ? <li>Trottoirüberfahrt, Phase Trottoir (VSS 40 242 Ziffer 14.4): D' = B {f2(B_INNERORTS_M)} m hinter dem hinteren
+                Rand der Überfahrt (VSS 40 273 Ziffer 13.2), {velo ? 'auf der Veloachse' : 'am Fahrersitz'}; Zielpunkte auf der Gehlinie{' '}
+                {f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt ({achseQuelle}).</li> :
+              <li>D' = B {f2(B_INNERORTS_M)} m hinter der Trottoirhinterkante (VSS 40 273 Ziffer 13.2), {velo ? 'auf der Veloachse' :
+                'am Fahrersitz'}; Zielpunkte auf der Trottoirachse ({achseQuelle}).</li>}
+              <li>Längsneigung in Gehrichtung zur Zufahrt {t.neigungUnbekannt ? 'unbekannt' : `${fi(t.neigung)} %`} ({t.neigungQuelle}).</li>
               <li>Erforderliche Sichtweite A {t.A} m ({t.text}).</li>
               <SichtHerleitung t={t} />
             </ul>
@@ -821,7 +837,8 @@ function TueBlock({ t }: { t: TueErgebnis }) {
       <h3>Trottoirüberfahrt<Info titel="Trottoirüberfahrt (VSS 40 242)">
         <p>Sicht in zwei Phasen (VSS 40 242 Ziffer 14.4, Werte nach VSS 40 273):</p>
         <ul>
-          <li>Phase Trottoir: D' {f2(B_INNERORTS_M)} m hinter dem hinteren Rand der Überfahrt, Zielpunkte auf der Gehlinie{' '}
+          <li>Phase Trottoir: D' = B {f2(B_INNERORTS_M)} m hinter dem hinteren Rand der Überfahrt (VSS 40 273 Ziffer 13.2), Zielpunkte
+            auf der Gehlinie{' '}
             {f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt (Tab. 2, nach der Längsneigung des Trottoirs). Spalte «Trottoir» unten.</li>
           <li>Phase Fahrbahn: B ab der Bordkante (vorderer Rand der Überfahrt), Motorfahrzeuge Tab. 1, Velo Tab. 3. Spalten «Auto» und
             «Velo» unten.</li>
@@ -882,7 +899,8 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
           <tr><td>Trottoirüberfahrt<Info titel="Trottoirüberfahrt (VSS 40 242)">
             <p>Häkchen, wenn über diese Einmündung eine Trottoirüberfahrt führt bzw. geplant ist. Dann gilt kein Rechtsvortritt (die Zufahrt
               ist vortrittsbelastet, VSS 40 242 Ziffer 12.3), und die Sicht wird in zwei Phasen geprüft (Ziffer 14.4): aufs Trottoir ab dem
-              hinteren Rand der Überfahrt (D' {f2(B_INNERORTS_M)} m dahinter, Gehlinie {f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt,
+              hinteren Rand der Überfahrt (D' = B {f2(B_INNERORTS_M)} m dahinter, VSS 40 273 Ziffer 13.2; Gehlinie {f2(TUE_GEHLINIE_M)} m vor
+              dem hinteren Rand der Überfahrt,
               Tab. 2), auf die Fahrbahn ab der Bordkante (B ab dem vorderen Rand, Tab. 1 und Tab. 3).</p>
             <p>Breite der Überfahrt: von Hand, sonst AV-Trottoir quer über die Zufahrt, sonst das schmalere angrenzende AV-Trottoir links
               bzw. rechts, begrenzt auf 2,00 bis 3,50 m (an vielen Einmündungen ist die Zufahrt in der AV durchgehend Strasse), sonst
@@ -898,7 +916,7 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
               (geht der AV vor)</div>}
             {e.trottoirueberfahrt && <div className="klein">D' (Phase Trottoir): {e.trottoirueberfahrt.DtrottoirQuelle === 'hand' ?
               <><Hand />{' '}<button className="zweit klein" onClick={() => setEingaben(x => ({ ...x, Dtrottoir: null }))}>zurücksetzen</button></> :
-              `${f2(B_INNERORTS_M)} m hinter dem hinteren Rand (Vorgabe; auf der Karte ziehen)`}</div>}
+              `B ${f2(B_INNERORTS_M)} m hinter dem hinteren Rand (VSS 40 273 Ziffer 13.2; Vorgabe, auf der Karte ziehen)`}</div>}
             {!e.trottoirueberfahrt && eingaben.Dtrottoir && <div className="klein warnung">D' von Hand gesetzt, gilt nur mit dem Häkchen{' '}
               <button className="zweit klein" onClick={() => setEingaben(x => ({ ...x, Dtrottoir: null }))}>entfernen</button></div>}
           </td></tr>
@@ -908,8 +926,8 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
               'Vortrittsstrasse.' : ` Hier nicht wählbar: ${e.trottoirGrund}.`}</p>
             <p>Ohne Häkchen wartet F<sub>B</sub> vor dem Trottoir, B ab der Trottoirhinterkante; mit Häkchen («Trottoir ohne Hindernisse»)
               an der Bordkante, B ab der Bordkante (Ziffer 13.1). Eine Haltelinie geht vor.</p></Info></td><td>
-            {e.trottoirueberfahrt ? <span className="klein">Trottoirüberfahrt: F<sub>B</sub> an der Bordkante (Phase Fahrbahn), D' hinter
-              dem hinteren Rand (Phase Trottoir); das Häkchen «ohne Hindernisse» gilt hier nicht.</span> : <>
+            {e.trottoirueberfahrt ? <span className="klein">Trottoirüberfahrt: F<sub>B</sub> an der Bordkante (Phase Fahrbahn), D' = B{' '}
+              {f2(B_INNERORTS_M)} m hinter dem hinteren Rand (Phase Trottoir, VSS 40 273 Ziffer 13.2); das Häkchen «ohne Hindernisse» gilt hier nicht.</span> : <>
             <label style={e.trottoir ? undefined : { opacity: 0.55 }}>
               <input type="checkbox" disabled={!e.trottoir && !eingaben.trottoirFrei} checked={eingaben.trottoirFrei}
                 onChange={ev => { const v = ev.target.checked; setEingaben(x => ({ ...x, trottoirFrei: v })) }} /> ohne Hindernisse:
@@ -1550,7 +1568,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
       setzeQuelle('hoehen', { name: HOEHEN_NAME, objekte: `${res.length} Profile (${res.map(([k, [m]]) => `${name(k)} ${m.i === null ? 'Fehler' :
         `${fi(m.i)} %, ${m.punkte} Punkte`}`).join('; ')})`, ...(abrufe.length ? { ms: Math.max(...abrufe.map(a => a.ms)),
         bytes: abrufe.reduce((x, a) => x + a.bytes, 0), server: abrufe[0].quelle } : {}),
-        ...(fehler.length ? { fehler: fehler.map(([k, [, a]]) => `${name(k)}: ${a}`).join('; ') + ' (0 % angenommen)' } : {}) })
+        ...(fehler.length ? { fehler: fehler.map(([k, [, a]]) => `${name(k)}: ${a}`).join('; ') + ' (Neigung unbekannt, strengster Wert)' } : {}) })
       if (abrufe.length) setFall(f => (f ? { ...f, quellen: { ...f.quellen, hoehen: `${HOEHEN_QUELLE} über ${abrufe[0].quelle}` } } : f))
     }, err => {
       if (ctrl.signal.aborted || istAbbruch(err)) return
@@ -1903,7 +1921,9 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
               (Rechtsvortritt, Beobachtungsdistanz und schmale Zufahrten), Abb. 6 (Zustand nach Wahrnehmbarkeit und Sichtweite); Ziffer 14
               (Massnahmen).</li>
             <li>VSS 40 090b «Sichtweiten»: Abb. 2 (Anhaltesichtweite auf übrigen Strassen nach Längsneigung), angewendet ab |i| über
-              {' '}{NEIGUNG_EBEN_PROZENT} %, Kurven bei 0 % auf den unteren Wert der Tab. 1 bezogen.</li>
+              {' '}{NEIGUNG_EBEN_PROZENT} % (die unteren Werte der VSS 40 273 Tab. 1 gelten für i ≤ ±{NEIGUNG_EBEN_PROZENT} %, Ziffer 13.1),
+              Kurven bei 0 % auf den unteren Wert der Tab. 1 bezogen (Entscheid 15.10.2026); gestrichelte Kurvenenden gelten als nicht
+              gezeichnet (Entscheid 31.10.2026); bei unbekannter Neigung der Wert bei {fi(ANHALTESICHT_I_MIN)} % (Entscheid 31.10.2026).</li>
             <li>Die Normen sind beim VSS lizenziert; die App zeigt je Fall nur die angewendeten Werte mit ihrer Fundstelle, nicht die
               Tabellen.</li>
           </ul>

@@ -57,7 +57,7 @@ mit dem Häkchen «Trottoir ohne Hindernisse» ab der Bordkante).
 3. Panel, Schritt 3, Block «Erforderliche Sichtweite»: Strassentyp der Vortrittsstrasse (Vorgabe aus OSM `highway`), drei Häkchen für
    ungünstige Verhältnisse (Vorgaben aus OSM `lanes` und der Neigung, Schwerverkehr von Hand), Längsneigung je Richtung in %
    (Vorgabe aus dem Höhenmodell, Stand «(Höhenmodell)», die Quelle «swissALTI3D (swisstopo), Profil x m, n Punkte» im Info-Zeichen; eine Eingabe gilt «von Hand»,
-   «Vorgabe» setzt zurück; bis das Profil da ist bzw. bei einem Fehler des Dienstes 0 % mit Hinweis). Je Richtung Tempo mit Quelle, A nach Strassentyp, Anhaltesichtweite bei i, A massgebend mit Herkunft,
+   «Vorgabe» setzt zurück; bis das Profil da ist 0 % mit Hinweis; liefert das Höhenmodell kein brauchbares Profil (Fehler des Dienstes, Profil zu kurz), gilt die Neigung als unbekannt und die App nimmt den strengsten Tabellenwert, siehe «Längsneigung»). Je Richtung Tempo mit Quelle, A nach Strassentyp, Anhaltesichtweite bei i, A massgebend mit Herkunft,
    vorhandene Sichtweite, Status, verdeckendes Gebäude stehen im Ergebnis (Schritt 4) unter «Verkehr von links / rechts» bzw. «Gegenverkehr»; dazu
    Vortrittsregelung, B mit Nullpunkt, D und eingeklappt «Hinweise und Annahmen» mit der Rechenzeit.
    Die Eingaben gelten für die gewählte Zufahrt (eine andere Zufahrt setzt sie zurück) und bleiben im Browser bzw. in der
@@ -180,15 +180,22 @@ Zwischenwert bei Hauptverkehrsstrassen (Mittel des Bereichs, so rechnet der Kant
   Erschliessungs-, Sammel- und Verbindungsstrassen der untere Wert, Hauptverkehrsstrassen der Zwischenwert (aufgerundet),
   mit ungünstigen Verhältnissen (mehr als zwei Fahrstreifen, |i| über 4 %, Schwerverkehr; Ziffer 13.1) der obere Wert. Vorgaben
   aus OSM `highway` und `lanes`. Massgebend = max(Wert nach Strassentyp, Anhaltesichtweite), die Anhaltesichtweite nur bei |i|
-  über 2 %. Status: erfüllt (≥ oberer und ≥ massgebender Wert), massgebender Wert erfüllt, nicht erfüllt.
+  über 2 % (die unteren Werte der Tab. 1 gelten für i ≤ ±2 %, Ziffer 13.1). Der Zwischenwert ist ein Entscheid (15.10.2026), die
+  Norm nennt für Hauptverkehrsstrassen nur den Bereich; Panel und Bericht sagen das so. Status: erfüllt (≥ oberer und ≥ massgebender
+  Wert), massgebender Wert erfüllt, nicht erfüllt.
 - **Anhaltesichtweite** (`rechner/anhaltesicht.ts`, VSS 40 090b Abb. 2): aus dem Diagramm abgelesen (±2 m), VP 30 bis 80 km/h,
   i −12 bis +12 %, linear dazwischen; jede Kurve so verschoben, dass sie bei 0 % den unteren Wert der Tab. 1 trifft (aus Abb. 2 zählt
-  nur die Wirkung der Neigung). Kurven 70 und 80 km/h an den Rändern verlängert (unsicher).
+  nur die Wirkung der Neigung). Durchgezogen sind die Kurven 30 und 40 km/h über den ganzen Bereich, 50 km/h von −11 bis +10 %,
+  60 km/h −10 bis +10 %, 70 km/h −9 bis +9 %, 80 km/h −8 bis +8 % (am 300-dpi-Render nachgemessen); die gestrichelten Enden gelten
+  seit 31.10.2026 als nicht gezeichnet, Werte dort und jenseits der Kurve (verlängert) sind «unsicher» mit Hinweis.
 - **Tempo** (`rechner/tempo.ts`): OSM `maxspeed`, sonst `zone:maxspeed` bzw. `maxspeed:type`, Mehrheit entlang der Achse; ohne
   Angabe 50 km/h (Annahme). Von Hand je Richtung mit Art (signalisiert, VP, V85, fahrbar; Ziffer 10) und Begründung.
 - **Längsneigung** (`daten/hoehen.ts`, `rechner/neigung.ts`): je Richtung ein Profil entlang der Fahrstreifenachse ab K bis
   max(20 m, A), dazu Zufahrt und Trottoir, über `api3.geo.admin.ch/rest/services/profile.json` (swissALTI3D, 20 Punkte);
   Ausgleichsgerade mit Ausreisser-Regel, in Fahrtrichtung zum Knoten (bergab negativ), auf 0,1 %. Von Hand überschreibbar.
+  Ohne brauchbares Profil (Dienst-Fehler, zu kurz) und ohne Eingabe gilt die Neigung als unbekannt (Entscheid 31.10.2026): die App
+  nimmt den strengsten Wert, Tab. 3 Spalte ≤ −4 %, Tab. 2 Spalte ≤ −6 %, Anhaltesichtweite bei −12 %; die Vorgabe «grosse Längsneigung»
+  bleibt aus (kein Mass). Solange das Höhenmodell lädt, vorerst 0 %. Panel und Bericht nennen die Quelle «unbekannt, strengster Wert».
 - **Achsen** (`rechner/hauptachsen.ts`, `fahrstreifen.ts`): Mittellinie je Arm entlang des OSM-Netzes, Querschnitt aus der
   AV-Fahrbahn; Fahrstreifenachse d = 1,50 m vom rechten Rand, nach links nahe, nach rechts ferne Fahrbahnhälfte. Parkstreifen aus
   zählenden Auto-Parkfeldern bzw. Längsparkierung (mindestens 2 Treffer an 2 Feldern bzw. 4 an einem): Achse 1,90 m weiter innen.
@@ -218,8 +225,8 @@ Zwischenwert bei Hauptverkehrsstrassen (Mittel des Bereichs, so rechnet der Kant
   eine solche Einbahn, gewähren die Velos dem Arm rechts den Vortritt (Teil E von D auf der Veloachse, bei schmaler Zufahrt Abb. 5 mit
   den Punkten auf der Veloachse); ist der Arm rechts eine solche Einbahn, kommen von rechts nur Velos: keine Prüfung nach Abb. 6, das
   Velo von rechts nach Tab. 3 mit 30 km/h, nicht nach Abb. 6 (Entscheid vom 17.10.2026; Block Rechtsvortritt «nur Velos von rechts»).
-- **Trottoir** (Ziffer 13.2, Tab. 2): nur mit Trottoir an der Zufahrt nach AV; D' 3,00 m hinter der Trottoirhinterkante, Zielpunkte auf
-  der Trottoirachse, Neigung in Gehrichtung zur Zufahrt.
+- **Trottoir** (Ziffer 13.2, Tab. 2): nur mit Trottoir an der Zufahrt nach AV; D' = B 3,00 m hinter der Trottoirhinterkante (Ziffer 13.2),
+  Zielpunkte auf der Trottoirachse, Neigung in Gehrichtung zur Zufahrt (Auslegung; die Norm nennt keine Richtung).
 - **Gesamtstatus** je Richtung: schlechtester von Motorfahrzeugen, Velo und Trottoir, mit den fehlenden Teilen.
 - **Rechtsvortritt** (`rechner/rechtsvortritt.ts`, Teil E, Ziffern 15 bis 18): alle Arme vortrittsbelastet, geprüft der Arm rechts der
   Zufahrt (mehr als 25° rechts der Fahrt), Tempo 30 km/h, B 5,00 m (Abb. 4); Zustand nach Abb. 6 aus Wahrnehmbarkeit (Eingabe,
@@ -245,7 +252,7 @@ Zwischenwert bei Hauptverkehrsstrassen (Mittel des Bereichs, so rechnet der Kant
 Häkchen «Trottoirüberfahrt» (Block «Zufahrt», je Zufahrt; Fall-Datei Version 7, Feld `eingaben.trottoirueberfahrt` mit `breite`):
 kein Rechtsvortritt (VSS 40 242 Ziffer 12.3; Vorgabe Vortritt bzw. Stop aus OSM, «Rechtsvortritt» wird wie Vortritt gerechnet) und die
 Sicht in zwei Phasen nach Ziffer 14.4 mit den Werten der VSS 40 273: Phase Fahrbahn mit B ab der Bordkante (vorderer Rand der
-Überfahrt; Haltelinie und Radweg nach Ziffer 12 gehen vor), Motorfahrzeuge Tab. 1, Velo Tab. 3; Phase Trottoir mit D' 3,00 m hinter dem
+Überfahrt; Haltelinie und Radweg nach Ziffer 12 gehen vor), Motorfahrzeuge Tab. 1, Velo Tab. 3; Phase Trottoir mit D' = B 3,00 m (Ziffer 13.2) hinter dem
 hinteren Rand der Überfahrt und Zielpunkten auf der Gehlinie 0,50 m vor dem hinteren Rand der Überfahrt, Tab. 2 nach der Längsneigung (Profil
 entlang der Gehlinie). Breite der Überfahrt in dieser Reihenfolge (Ziffer 16): Eingabe von Hand, AV-Fläche Trottoir quer über die
 Zufahrt, das schmalere angrenzende AV-Trottoir links bzw. rechts, begrenzt auf 2,00 bis 3,50 m (an vielen Einmündungen ist die Zufahrt in

@@ -18,6 +18,7 @@ import { rechneKnoten } from './rechnen'
 import { tab3Spalte, veloSichtweite, tab2Spalte, trottoirSichtweite, TAB3, TAB2, istRadweg, veloVorgabe } from './velo'
 import { veloTeile, veloLage, VELO_LAENGE_M, VELO_BREITE_M } from './fahrzeug'
 import { KEINE_ALLE_EINGABEN, type Eingaben, type Ergebnis, type KnotenFall } from './typen'
+import { neigungMessung } from './neigung'
 
 const O: P = [2600000, 1200000]
 const lv = (x: number, y: number): P => [O[0] + x, O[1] + y]
@@ -65,6 +66,14 @@ describe('E3b: Tab. 3 (Veloverkehr)', () => {
     expect([-5, -2, 0, 3].map(i => veloSichtweite(30, i, true).A)).toEqual([30, 25, 25, 20])   // bis 30 km/h ohne Wirkung
     expect(veloSichtweite(50, 1, true)).toMatchObject({ ebike: true, text: 'Tab. 3, über 30 km/h, schnelle E-Bikes verboten, bergwärts (Spalte > 0 %)' })
   })
+  it('Neigung unbekannt (Entscheid 31.10.2026): Spalte ≤ −4, unabhängig von i; E-Bikes verboten: talwärts 35 m', () => {
+    expect([30, 31, 50].map(t => veloSichtweite(t, 0, false, true).A)).toEqual([30, 55, 55])
+    expect(veloSichtweite(50, 3, false, true)).toMatchObject({ A: 55, spalte: 0,
+      text: 'Tab. 3, über 30 km/h, Spalte ≤ −4 % (Neigung unbekannt: strengster Wert)' })
+    expect(veloSichtweite(30, 0, false, true).text).toBe('Tab. 3, bis 30 km/h, Spalte ≤ −4 % (Neigung unbekannt: strengster Wert)')
+    expect(veloSichtweite(50, 0, true, true)).toMatchObject({ A: 35, ebike: true,
+      text: 'Tab. 3, über 30 km/h, schnelle E-Bikes verboten, talwärts (Spalte ≤ −4 %; Neigung unbekannt: strengster Wert)' })
+  })
 })
 
 describe('E3b: Tab. 2 (Trottoir)', () => {
@@ -72,6 +81,10 @@ describe('E3b: Tab. 2 (Trottoir)', () => {
     expect([-7, -6, -5, -4, -3, -0.1, 0, 4].map(tab2Spalte)).toEqual([0, 0, 1, 1, 2, 2, 3, 3])
     expect([-7, -5, -3, 0, 4].map(i => trottoirSichtweite(i).A)).toEqual([30, 20, 20, 15, 15])
     expect(TAB2).toEqual([30, 20, 20, 15])
+  })
+  it('Neigung unbekannt (Entscheid 31.10.2026): Spalte ≤ −6, 30 m', () => {
+    expect(trottoirSichtweite(4, true)).toEqual({ A: 30, spalte: 0, text: 'Tab. 2, Spalte ≤ −6 % (Neigung unbekannt: strengster Wert)' })
+    expect(trottoirSichtweite(4).A).toBe(15)
   })
 })
 
@@ -243,7 +256,7 @@ describe('E3b: Trottoir (Ziffer 13.2, Tab. 2)', () => {
     nahe(l.sichtpunkte[10], 1.25 - 10, -4, 0.06); nahe(r.sichtpunkte[10], 1.25 + 10, -4, 0.06)
     expect([l.A, l.status, r.A, r.status, l.text]).toEqual([15, 'erfuellt', 15, 'erfuellt', 'Tab. 2, Spalte ≥ 0 %'])
     expect(e.trottoirProfil.length).toBeGreaterThan(10)
-    expect(e.annahmen.join(' | ')).toContain('Beobachtungspunkt D\' am Fahrersitz 3,00 m hinter der Trottoirhinterkante')
+    expect(e.annahmen.join(' | ')).toContain('Beobachtungspunkt D\' = B 3,00 m hinter der Trottoirhinterkante (VSS 40 273 Ziffer 13.2), am Fahrersitz')
   })
   it('Hecke 1 m hinter der Hinterkante: nach links 5,28 m < 15 m nicht erfüllt (Strahlensatz), Gesamtstatus nicht erfüllt', () => {
     const e = rechne(osm(), [fbT, neben, trottoir], { hindernisse: hg })
@@ -261,6 +274,23 @@ describe('E3b: Trottoir (Ziffer 13.2, Tab. 2)', () => {
     const [l, r] = e.trottoirPruefung!.richtungen
     expect([l.neigung, l.A, r.neigung, r.A]).toEqual([-5, 20, 5, 15])
     expect(l.neigungQuelle).toContain('Trottoirachse')
+    expect([l.neigungUnbekannt, r.neigungUnbekannt]).toEqual([false, false])
+  })
+  it('Neigung des Trottoirs unbekannt (Entscheid 31.10.2026): nach dem Laden ohne Messung Spalte ≤ −6 -> 30 m; lädt: 0 % -> 15 m', () => {
+    // Höhenmodell geladen, Trottoir-Profil fehlt bzw. Dienst-Fehler: strengster Wert der Tab. 2
+    for (const hoehen of [{}, { trottoir: neigungMessung(new Error('HTTP 500')) }]) {
+      const e = rechne(osm(), [fbT, neben, trottoir], { hoehen })
+      const [l, r] = e.trottoirPruefung!.richtungen
+      expect([l.A, r.A, l.neigung, l.neigungUnbekannt, r.neigungUnbekannt]).toEqual([30, 30, 0, true, true])
+      expect(l.text).toBe('Tab. 2, Spalte ≤ −6 % (Neigung unbekannt: strengster Wert)')
+      expect(l.neigungQuelle).toContain('unbekannt, strengster Wert')
+      expect(e.annahmen.join(' | ')).toContain('Längsneigung des Trottoirs in Gehrichtung auf die Zufahrt zu unbekannt (kein Höhenprofil): ' +
+        'strengster Wert der Tab. 2 (Spalte ≤ −6 %) angenommen (Entscheid 31.10.2026)')
+    }
+    // Höhenmodell lädt noch: bisheriges Verhalten (vorerst 0 %)
+    const n = rechne(osm(), [fbT, neben, trottoir])
+    const [l] = n.trottoirPruefung!.richtungen
+    expect([l.A, l.neigungUnbekannt, l.neigungQuelle]).toEqual([15, false, 'Höhenmodell lädt: vorerst 0 %'])
   })
   it('ohne Trottoir: keine Trottoirprüfung', () => {
     expect(rechne(osm(), [fahrbahn]).trottoirPruefung).toBeNull()

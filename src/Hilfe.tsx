@@ -19,15 +19,17 @@ export function Anleitung() {
         <li><b>Vortritt und Zufahrt:</b> Vortrittsregelung wählen, dann den Arm, aus dem die Sicht geprüft wird (im Panel oder auf
           der Karte den Arm bzw. sein Nummernschild anklicken; das gewählte Fahrzeug ist schwarz).</li>
         <li><b>Eingaben:</b> Blöcke aufklappen und anpassen: Zufahrt (Haltelinie, «D setzen» oder D auf der Karte ziehen, Trottoir, Tempo),
-          Erforderliche Sichtweite (Strassentyp, Längsneigung; auf Brücken von Hand), Veloverkehr, Hindernisse (auf dem Luftbild
+          Erforderliche Sichtweite (Strassentyp, Längsneigung; auf Brücken von Hand; ohne Höhenprofil rechnet die App mit dem
+          strengsten Wert, bis Sie die Neigung eingeben), Veloverkehr, Hindernisse (auf dem Luftbild
           zeichnen, Vorschläge bestätigen, Höhe vor Ort prüfen). Alles rechnet sofort neu; «von Hand» zeigt, wo etwas gesetzt ist.</li>
         <li><b>Ergebnis:</b> Status je Richtung für Auto, Velo und Trottoir. Braun markiert sind Annahmen, die Sie prüfen sollten;
           die Karte erklärt die «Legende».</li>
         <li><b>Massnahmen:</b> reicht die Sicht nicht, zeigt das Panel Varianten; «übernehmen» setzt sie als Eingabe.</li>
       </ol>
       <p><b>Trottoirüberfahrt:</b> führt (bzw. soll) ein Trottoir durchgehend über die Einmündung, im Block «Zufahrt» das Häkchen
-        «Trottoirüberfahrt» setzen. Dann gilt kein Rechtsvortritt, und die App prüft zwei Phasen: die Sicht aufs Trottoir ab dem hinteren
-        Rand der Überfahrt (Fussgänger 0,50 m vor dem hinteren Rand der Überfahrt) und die Sicht auf die Fahrbahn ab der Bordkante. Die
+        «Trottoirüberfahrt» setzen. Dann gilt kein Rechtsvortritt, und die App prüft zwei Phasen: die Sicht aufs Trottoir von D' = B
+        3,00 m hinter dem hinteren Rand der Überfahrt (VSS 40 273 Ziffer 13.2; Fussgänger 0,50 m vor dem hinteren Rand der Überfahrt) und
+        die Sicht auf die Fahrbahn ab der Bordkante. Die
         Breite: die Eingabe, sonst aus der AV (Trottoir quer über die Zufahrt, sonst das schmalere angrenzende Trottoir, 2,00 bis
         3,50 m), sonst 2,00 m als Annahme. In der Stadt Bern rechnet die App mit dem signalisierten Tempo des Geoportals (OSM nur, wo es fehlt).</p>
       <p><b>Bericht und Fall:</b> «Bericht drucken / als PDF» für die Druckansicht, «Fall speichern» und «Fall laden» für die Datei.</p>

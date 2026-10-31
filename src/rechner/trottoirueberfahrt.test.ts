@@ -421,11 +421,15 @@ describe('K0: D\' der Phase Trottoir von Hand (Dtrottoir)', () => {
     expect([t.vorderkante, t.hinterkante]).toEqual([v.trottoirueberfahrt!.vorderkante, v.trottoirueberfahrt!.hinterkante])
     nahe(e.trottoirPruefung!.richtungen[0].K, 1.25, -4.5, 0.06)  // Gehlinie unverändert
     expect(e.hinweise.join(' | ')).not.toContain("D' von Hand")   // 4,98 m hinter dem hinteren Rand
-    expect(e.annahmen.join(' | ')).toContain("Beobachtungspunkt D' von Hand, 4,98 m hinter dem hinteren Rand der Überfahrt")
+    expect(e.annahmen.join(' | ')).toContain("Beobachtungspunkt D' von Hand, 4,98 m hinter dem hinteren Rand der Überfahrt (Vorgabe " +
+      "D' = B 3,00 m, VSS 40 273 Ziffer 13.2)")
+    // ohne D' von Hand: D' = B 3,00 m hinter dem hinteren Rand, mit Fundstelle
+    expect(v.annahmen.join(' | ')).toContain("Beobachtungspunkt D' = B 3,00 m hinter dem hinteren Rand der Überfahrt (VSS 40 273 " +
+      'Ziffer 13.2), am Fahrersitz 0,50 m links der Zufahrtsachse')
   })
   it('Hinweis unter 3,00 m hinter dem hinteren Rand bzw. weit weg; ohne Häkchen ohne Wirkung', () => {
     const n = rechne(osm(), av, { eingaben: eg({ ...TUE, Dtrottoir: lv(0.75, -6.5) }) })
-    expect(n.hinweise).toContain("D' von Hand 1,48 m hinter dem hinteren Rand: weniger als 3,00 m (VSS 40 273 Ziffer 13.2).")
+    expect(n.hinweise).toContain("D' von Hand 1,48 m hinter dem hinteren Rand der Überfahrt: weniger als B = 3,00 m (VSS 40 273 Ziffer 13.2).")
     const w = rechne(osm(), av, { eingaben: eg({ ...TUE, Dtrottoir: lv(0.75, -60) }) })
     expect(w.hinweise.join(' | ')).toContain("D' von Hand liegt 55 m vom hinteren Rand entfernt: Lage prüfen.")
     const o = rechne(osm(), av, { eingaben: eg({ Dtrottoir: lv(0.75, -10) }) })
