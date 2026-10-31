@@ -1,7 +1,7 @@
 {
   "name": "sichtweitencheck-web",
   "private": true,
-  "license": "CC-BY-NC-4.0",
+  "license": "MIT",
   "version": "0.7.0",
   "type": "module",
   "scripts": {

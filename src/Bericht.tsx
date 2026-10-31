@@ -680,7 +680,7 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
         <footer className="bericht-fuss">
           <p><b>Die App ersetzt keine Beurteilung vor Ort.</b> Daten aus offenen Quellen können veraltet oder unvollständig sein (Parkierung,
             Hecken, Mauerhöhen, Signalisation); die Höhe der Hindernisse (Sichtraum) prüft die App nicht.</p>
-          <p>SichtweitenCheck v{__APP_VERSION__} ({MARKE}, Stand {__BUILD_DATUM__}) · {APP_ADRESSE} · Code und eigene Inhalte unter CC BY-NC 4.0 ·
+          <p>SichtweitenCheck v{__APP_VERSION__} ({MARKE}, Stand {__BUILD_DATUM__}) · {APP_ADRESSE} · Code unter MIT, eigene Inhalte unter CC BY 4.0 ·
             eingebundene Daten unter ihren eigenen Lizenzen (siehe Quellen).</p>
         </footer>
         </td></tr></tbody>

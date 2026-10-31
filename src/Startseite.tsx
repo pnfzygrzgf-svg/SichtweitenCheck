@@ -70,8 +70,8 @@ export default function Startseite({ onStart }: { onStart: () => void }) {
         </ul>
       </div>
       <p className="start-fuss">
-        SichtweitenCheck v{__APP_VERSION__} · Code &amp; eigene Inhalte unter{' '}
-        <a href="https://creativecommons.org/licenses/by-nc/4.0/deed.de" target="_blank" rel="noopener noreferrer">CC BY-NC 4.0</a>
+        SichtweitenCheck v{__APP_VERSION__} · Code unter <a href="https://opensource.org/license/mit" target="_blank" rel="noopener noreferrer">MIT</a>, eigene Inhalte unter{' '}
+        <a href="https://creativecommons.org/licenses/by/4.0/deed.de" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>
         {' '}· <a href={QUELLCODE} target="_blank" rel="noopener noreferrer">Quellcode auf GitHub</a>
       </p>
     </main>
