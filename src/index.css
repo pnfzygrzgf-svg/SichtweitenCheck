@@ -387,3 +387,4 @@ button.info-knopf:focus-visible { outline: 2px solid var(--accent); outline-offs
 /* Korrektur 31.10.2026 (Punkt 13): Kennzeichnung eines LSA-Knotens auf der Karte */
 .lsa-marke span { position: absolute; left: 10px; top: 8px; padding: 0 3px; font: 700 11px/14px system-ui, sans-serif; color: #ffffff;
   background: #b91c1c; border-radius: 3px; white-space: nowrap; pointer-events: none; }
+.streetview-link { white-space: nowrap; }

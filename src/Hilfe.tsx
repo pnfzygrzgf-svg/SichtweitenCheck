@@ -145,6 +145,8 @@ export function Datenschutz() {
               die signalisierte Höchstgeschwindigkeit und, wenn zugeschaltet, das Baumkataster.</li>
           </ul>
           Der eigene Standort (Standort-Knopf) wird nur im Browser ermittelt und angezeigt, nicht gespeichert und nicht gesendet.</li>
+        <li>Street View: die Links «Street View ↗» öffnen Google Maps erst auf Klick in einem neuen Fenster; dabei gehen die
+          Koordinaten des Standpunkts und die Blickrichtung an Google. Die App bettet nichts von Google ein.</li>
         <li>Nutzungsstatistik: Seitenaufrufe werden mit GoatCounter gezählt, ohne Cookies und ohne Speicherung der IP-Adresse. Erfasst
           werden Seitenpfad, Herkunftsseite (Referrer), Bildschirmbreite, Browser und Betriebssystem, Sprache sowie das Land (aus der
           IP-Adresse abgeleitet), nicht deine Eingaben oder Ergebnisse. GitHub Pages protokolliert zudem Zugriffe (IP-Adresse,

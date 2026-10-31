@@ -10,6 +10,7 @@ import { ladeOsmRoh, ladeOsmUmKnoten, ladeKnoten, overpassSperre, strassennamen,
   type StrassenMitte } from './daten/osm'
 import { istAbbruch, type Abruf } from './daten/holen'
 import { lv95, wgs, dist, sub, type P } from './geo'
+import { richtungStreetView, richtungStreetViewTitel } from './streetview'
 import { type Box, type CacheEintrag, enthaelt, abfrageBox, zuGross, imCache, aufnehmen, vereinigen, vereinigenNamen,
   vorrang } from './ausschnitt'
 import { KEINE_ALLE_EINGABEN, KEINE_HINDERNISSE, REGELUNGEN, TEMPO_ARTEN, TEMPO_MIN, TEMPO_MAX, type Eingaben, type Ergebnis,
@@ -350,8 +351,8 @@ function TeilSpalte({ name, farbe, zusatz, stand, A, Aquelle, t, herleitung, lee
 }
 
 /** Ergebnis einer Richtung (Schritt 4): Überschrift mit Tempo, darunter Auto, Velo und (mit Trottoir) Trottoir nebeneinander */
-function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false }: { r: RichtungErgebnis; t: TrottoirRichtung | null
-  mitTrottoir: boolean; achseQuelle: string; velo: boolean; gehlinie?: boolean }) {
+function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false, D }: { r: RichtungErgebnis; t: TrottoirRichtung | null
+  mitTrottoir: boolean; achseQuelle: string; velo: boolean; gehlinie?: boolean; D: P }) {
   const v = r.velo
   const nichtGeprueft = rvNichtGeprueft(r)
   // Rechtsvortritt, Verkehr von links bzw. Gegenverkehr: nur die graue Statuszeile, keine Spalten (ausser ein Trottoir ist geprüft)
@@ -359,12 +360,16 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false 
   const warn = avGrenze([...r.hinweise, ...(v?.hinweise ?? []), ...(t?.hinweise ?? [])])
   const u = r.ueberholfall ?? null
   const auto = autoStand(r)
+  // Street View (31.10.2026): Blick von D zum Ende von A, sonst zum Ende von A für die Velos
+  const sv = r.sichtpunkte.length ? richtungStreetView(D, r.sichtpunkte, r.massgebend) : v ? richtungStreetView(D, v.sichtpunkte, v.A) : null
   const autoA = r.rv ? 'Abb. 6, Minimum' : r.anhalteAngewendet && r.massgebendText.startsWith('Anhaltesichtweite') ? 'Anhaltesichtweite' :
     `Tab. 1, ${STUFE_KURZ[r.typStufe]}`
   return (
     <div className="richtung">
       <h3>{lageText(r)}: {r.strasse}<span className="klein">, {r.spur === 'nah' ? 'nahe' : 'ferne'} Fahrspur</span>
-        {' '}<span className={r.tempoAnnahme ? 'klein warnung' : 'klein'}>· {r.tempo} km/h, {tempoKurz(r)}</span></h3>
+        {' '}<span className={r.tempoAnnahme ? 'klein warnung' : 'klein'}>· {r.tempo} km/h, {tempoKurz(r)}</span>
+        {sv && <>{' '}<a className="streetview-link klein" href={sv} target="_blank" rel="noopener noreferrer"
+          title={richtungStreetViewTitel(lageText(r).toLowerCase(), r.strasse)}>Street View ↗</a></>}</h3>
       {warn.map(w => <p key={w} className="klein warnung">{w}</p>)}
       <div className={mitTrottoir && u ? 'teile vier' : mitTrottoir || u ? 'teile drei' : 'teile'}>
         <TeilSpalte name="Auto" stand={auto} A={r.massgebend} Aquelle={autoA} t={r}
@@ -1943,7 +1948,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
             {erg.rechtsvortritt && <RvAlle rv={erg.rechtsvortritt} armWaehlen={zufahrtWaehlen} />}
             {erg.richtungen.map(r => <RichtungZeile key={r.richtung} r={r} velo={!!erg.zufahrtVelo} mitTrottoir={!!erg.trottoirPruefung}
               t={erg.trottoirPruefung?.richtungen.find(t => t.richtung === r.richtung) ?? null} achseQuelle={erg.trottoirPruefung?.achseQuelle ?? ''}
-              gehlinie={!!erg.trottoirPruefung?.gehlinie} />)}
+              gehlinie={!!erg.trottoirPruefung?.gehlinie} D={erg.D} />)}
             <Block titel={`Hinweise und Annahmen (${erg.hinweise.length + erg.annahmen.length})`} offen={offen.hinweise}
               setOffen={o => setOffen('hinweise', o)}>
               {erg.hinweise.length > 0 && <>

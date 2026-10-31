@@ -279,6 +279,8 @@ Trottoir nicht in den Massnahmen; Vortrittsvorgabe und «ausserorts» weiter nac
 
 ### Versionen
 
+- 0.7.0 (31.10.2026): Block 4 und 5 der Regelprüfung und Korrekturrunde nach dem Browsertest; Einzelheiten in den
+  datierten Einträgen bis 0.6.0 unten.
 - Block 5 der Regelprüfung (31.10.2026): Schmale Zufahrten (Abb. 5) nach bfu BM.021-2022 Kap. 3.2.2/Abb. 4: Sichtlinien vom
   Beobachtungspunkt D zu Punkten alle 2 m auf einem Pfad von 20 m (doppelte Anhaltestrecke bei rund 25 km/h) entlang der Zufahrtsachse
   und der Achse des rechten Arms (`sichtfeldEng` statt Paarmatrix). Überholfall S' (Ziffer 6, Abb. 1): ausserorts und wenn Überholen
@@ -346,6 +348,8 @@ Trottoir nicht in den Massnahmen; Vortrittsvorgabe und «ausserorts» weiter nac
 - Zusammenführung (31.10.2026, OSM-Knoten 31413260): Laufen zwei Einbahnen höchstens `TEILUNG_WINKEL_GRAD` auseinander zusammen
   und führt eine Einbahn weg (`knotenArt` «zusammenfuehrung»), rechnet die App vorerst nicht und meldet es; die Suche blendet den
   Punkt aus. Massnahmen-Texte zu Lichtsignalanlage, Geschwindigkeitsdrosselung und Aufhebung der Ausfahrt mit Ziffer 14, S. 9.
+- Street View (31.10.2026): je geprüfte Richtung ein Link «Street View ↗» auf Google Maps, Blick von D zum Ende von A
+  (`src/streetview.ts`, wie im fgsCheck).
 - 0.6.0 (23.10.2026): Trottoirüberfahrt (VSS 40 242 Ziffern 12.3, 14.4) und amtliches Tempo der Stadt Bern (V_sig), Fall-Datei Version 7.
 - 0.5.0: Beta, Stand nach E4a (Bericht und Hilfe).
 
@@ -439,6 +443,7 @@ Browser. Der Browser fragt direkt an (die Dienste sehen technisch die IP-Adresse
 | wms.geo.admin.ch (swisstopo) | Kartenbild des Berichts (Ausschnitt um Sichtdreiecke und Fahrzeuge), nur beim Öffnen des Berichts |
 | api3.geo.admin.ch (swisstopo) | Ortssuche: der eingegebene Suchbegriff; Flugjahr der 1-km-Kachel (Bericht); Höhenprofile: bis vier Linien je Fall (Fahrstreifenachsen, Zufahrt, Trottoir) |
 | geodienste.ch (AV-WFS) | Rechteck ±150 m um den Knoten bzw. Zufahrtspunkt, nach Bedarf bis ±400 m |
+| google.com/maps (Street View) | nur auf Klick auf «Street View ↗»: Standpunkt D und Blickrichtung (`src/streetview.ts`), neues Fenster, nichts eingebettet |
 | Overpass: overpass.osm.ch, ersatzweise overpass-api.de, overpass.kumi.systems, overpass.private.coffee | Kartenausschnitt (Knoten und Strassennamen) mit Rand bzw. Umkreis 300 m um den Knoten |
 | map.bern.ch (nur Stadt Bern) | Rechteck ±150 m (amtliche Parkfelder, auf Wunsch Baumkataster; signalisierte Höchstgeschwindigkeit) |
 
