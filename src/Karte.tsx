@@ -16,6 +16,7 @@ import Ortssuche from './Ortssuche'
 import { ortZoom, type Ort } from './daten/ortssuche'
 import { autoUmriss, autoScheibe, fbLage, fbVeloLage, faLage, veloLage, kreiselFahrzeug } from './rechner/fahrzeug'
 import { kreuzungspunkte } from './berichtbild'
+import { BESCHRIFT_ZOOM, EBENEN, ebenenFarbe, ebenenSichtbar, ebenenSymbol, type EbeneId, type EbenenDaten, type EbenenObjekt } from './quellenEbenen'
 
 // Unterbau aus fgsCheck (Karte.tsx): Hintergründe, Standort, Strassennamen, Ortssuche, Hinweise. Neu in E0: Knoten statt
 // Übergänge, Arme zum Wählen der Zufahrt, Beobachtungspunkt D, Sichtdreiecke, Fahrstreifenachsen, verdeckende Gebäude.
@@ -173,6 +174,17 @@ function schraffur(ring: P[], abstand = 0.8): P[][] {
 export const nrIcon = (a: Pick<ArmInfo, 'nr'>, gewaehlt: boolean): L.DivIcon =>
   L.divIcon({ className: gewaehlt ? 'arm-nr gewaehlt' : 'arm-nr', iconSize: [22, 22], html: `<span>${esc(a.nr)}</span>` })
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
+// Geladene Quellen (quellenEbenen.ts, seit 01.11.2026): unter den Objekten der Prüfung, ohne Mausereignisse
+const Q_PANE = 'quellen'
+/** Tags des OSM-Wegs eines Arms, die die Rechnung liest (Fahrstreifen, Parkierung, Radstreifen, Tempo, Zone, Vortritt, Überholen; S6,
+ *  01.11.2026), als Zeile im Tooltip; ohne solche Tags leer */
+const OSM_TAG_MUSTER = /^(highway|lanes|turn:lanes|oneway|maxspeed|zone:maxspeed|cycleway|parking|width|overtaking|priority_road|sidewalk)(:|$)/
+function osmTagZeile(weg: number, tags?: ReadonlyMap<number, Record<string, string>> | null): string {
+  const t = tags?.get(weg)
+  if (!t) return ''
+  const z = Object.entries(t).filter(([k]) => OSM_TAG_MUSTER.test(k)).map(([k, v]) => `${k}=${v}`)
+  return z.length ? `<br><span style="font-size:11px">OSM way ${weg}: ${esc(z.join(', '))}</span>` : ''
+}
 const f1 = (x: number) => x.toFixed(1).replace('.', ',')
 /** Verdecker im Tooltip: Name ohne Quelle in Klammern am Schluss; Art davor, wenn der Name sie nicht schon nennt */
 function verdeckerName(v: { art: string; name: string }): string {
@@ -242,6 +254,10 @@ export default function Karte(props: {
   onAusschnitt: () => void                           // nach jedem Verschieben bzw. Zoomen (moveend)
   hinweis: KartenHinweis | null
   kartenRef: React.MutableRefObject<L.Map | null>
+  /** gelesene Objekte je Quelle (quellenEbenen.ts), im Fenster «Geladene Quellen» einzeln einblendbar */
+  quellenEbenen?: EbenenDaten
+  /** OSM-Tags der Strassen nach Weg-Id: der Tooltip eines Arms nennt die Tags, die die Rechnung liest (S6, seit 01.11.2026) */
+  osmTags?: ReadonlyMap<number, Record<string, string>> | null
 }) {
   const { mitte, av, kantone, knoten, strassennamen, gewaehlt, rechnung, zufahrt, hindernisse, werkzeug, knotenWerkzeug, zufahrtErster,
     zeichnung, bearbeiten, kartenRef, hervor = null } = props
@@ -251,6 +267,45 @@ export default function Karte(props: {
   const ebenenRef = useRef<Record<string, L.LayerGroup> | null>(null)
   const cb = useRef(props)
   cb.current = props
+  // «Geladene Quellen» (seit 01.11.2026, wie VeloroutenCheck und fgsCheck): Fenster unten links, an der Kopfzeile verschiebbar; Wahl gemerkt
+  const [qAn, setQAn] = useState<Set<EbeneId>>(() => {
+    try { const v = JSON.parse(localStorage.getItem('swc.quellen') ?? 'null'); if (Array.isArray(v)) return new Set(v as EbeneId[]) } catch { /* ohne Speicher */ }
+    return new Set<EbeneId>()
+  })
+  const qSchalten = (id: EbeneId, an: boolean) => setQAn(prev => {
+    const n = new Set(prev); if (an) n.add(id); else n.delete(id)
+    try { localStorage.setItem('swc.quellen', JSON.stringify([...n])) } catch { /* nur für diese Sitzung */ }
+    return n
+  })
+  const [qOffen, setQOffen] = useState(false)
+  const [qPos, setQPos] = useState<{ x: number; y: number } | null>(() => {
+    try { const v = JSON.parse(localStorage.getItem('swc.quellenPos') ?? 'null'); return v && Number.isFinite(v.x) && Number.isFinite(v.y) ? v : null } catch { return null }
+  })
+  const [qZoom, setQZoom] = useState(18)
+  const qFensterRef = useRef<HTMLDivElement>(null)
+  const quellenRef = useRef<L.LayerGroup | null>(null)
+  const qTrefferRef = useRef<((p: P, tolM: number) => string | null) | null>(null)
+  const qZiehen = (e: React.PointerEvent<HTMLDivElement>) => {
+    const fenster = qFensterRef.current, rahmen = fenster?.parentElement
+    if (!fenster || !rahmen || (e.target as HTMLElement).closest('button')) return
+    e.preventDefault()
+    const r = rahmen.getBoundingClientRect(), f = fenster.getBoundingClientRect(), dx = e.clientX - f.left, dy = e.clientY - f.top
+    let zuletzt: { x: number; y: number } | null = null
+    const bewegen = (ev: PointerEvent) => {
+      zuletzt = { x: Math.round(Math.min(Math.max(0, ev.clientX - r.left - dx), Math.max(0, r.width - f.width))),
+        y: Math.round(Math.min(Math.max(0, ev.clientY - r.top - dy), Math.max(0, r.height - 40))) }
+      setQPos(zuletzt)
+    }
+    const los = () => {
+      window.removeEventListener('pointermove', bewegen); window.removeEventListener('pointerup', los); window.removeEventListener('pointercancel', los)
+      if (zuletzt) try { localStorage.setItem('swc.quellenPos', JSON.stringify(zuletzt)) } catch { /* nur für diese Sitzung */ }
+    }
+    window.addEventListener('pointermove', bewegen); window.addEventListener('pointerup', los); window.addEventListener('pointercancel', los)
+  }
+  useEffect(() => {
+    const fenster = qFensterRef.current, rahmen = fenster?.parentElement
+    if (qOffen && qPos && fenster && rahmen && (qPos.x + 60 > rahmen.clientWidth || qPos.y + 60 > rahmen.clientHeight)) setQPos(null)
+  }, [qOffen])   // eslint-disable-line react-hooks/exhaustive-deps
   const markerRef = useRef(new Map<number, { k: OsmKnoten; m: L.CircleMarker }>())
   const namenRef = useRef<{ s: Strassenname; m: L.Marker | null }[]>([])
   // Nummernschilder der Arme: Abstand vom Knoten je Zoom (NR_MIN_PX)
@@ -320,6 +375,28 @@ export default function Karte(props: {
     namenPane.style.zIndex = '450'
     namenPane.style.pointerEvents = 'none'
     map.createPane(HIND_PANE).style.zIndex = '410'
+    // Geladene Quellen: unter den Objekten der Prüfung (overlayPane 400), ohne Mausereignisse (Tooltip über den Treffertest)
+    const qPane = map.createPane(Q_PANE)
+    qPane.style.zIndex = '398'
+    qPane.style.pointerEvents = 'none'
+    quellenRef.current = L.layerGroup().addTo(map)
+    const qTip = L.tooltip({ direction: 'top', offset: [0, -12] })
+    let qRaf = 0
+    map.on('mousemove', (e: L.LeafletMouseEvent) => {
+      if (qRaf) return
+      qRaf = requestAnimationFrame(() => {
+        qRaf = 0
+        const ziel = e.originalEvent.target as Element | null
+        const frei = !ziel?.closest?.('.leaflet-interactive, .leaflet-marker-icon, .leaflet-control')
+        const m = 7 * 40075016 * Math.cos(e.latlng.lat * Math.PI / 180) / (256 * 2 ** map.getZoom())
+        const x = frei && qTrefferRef.current ? qTrefferRef.current(lv95(e.latlng.lat, e.latlng.lng), m) : null
+        if (!x) { map.closeTooltip(qTip); return }
+        qTip.setContent(esc(x)); qTip.setLatLng(e.latlng)
+        if (!map.hasLayer(qTip)) map.openTooltip(qTip)
+      })
+    })
+    map.on('mouseout', () => map.closeTooltip(qTip))
+    map.on('zoomend', () => setQZoom(map.getZoom()))
     map.createPane(TREFFER_PANE).style.zIndex = '420'
     map.createPane(OBEN_PANE).style.zIndex = '430'
     map.createPane(SCHILD_PANE).style.zIndex = '455'
@@ -375,7 +452,7 @@ export default function Karte(props: {
     map.on('zoomend', () => schilderAbgleich())
     kartenRef.current = map
     ebenenRef.current = eb
-    return () => { map.remove(); kartenRef.current = null; ebenenRef.current = null }
+    return () => { map.remove(); kartenRef.current = null; ebenenRef.current = null; quellenRef.current = null }
   }, [mitte, kartenRef])
 
   useEffect(() => {
@@ -578,13 +655,13 @@ export default function Karte(props: {
         keyboard: false, zIndexOffset: 1000, bubblingMouseEvents: true })
       // Grundstückzufahrt: Arme ab dem Knotenpunkt, keine Wahl der Zufahrt
       if (kn.grundstueck) {
-        const tip = `${esc(armText(a))}${istZ ? '' : ' – vortrittsberechtigt'}`
+        const tip = `${esc(armText(a))}${istZ ? '' : ' – vortrittsberechtigt'}${osmTagZeile(a.wid, cb.current.osmTags)}`
         linie.bindTooltip(tip, { sticky: true })
         schild.bindTooltip(zp ? `${tip}<br>Zufahrtspunkt (geklickt${zp.weg !== null ? `, OSM-Weg ${zp.weg}` : ''}), Richtung ` +
           `${zp.gezeichnet ? 'gezeichnet' : zp.weg !== null ? 'entlang des Wegs' : 'senkrecht zum Rand'}` : tip)
       } else {
         const tip = `${esc(armText(a))}${istZ ? ' – Zufahrt' : istV ? (rvRechts !== undefined ?
-          ' – von rechts (Rechtsvortritt)' : ' – vortrittsberechtigt') : ''}<br><i>Klick: als Zufahrt wählen</i>`
+          ' – von rechts (Rechtsvortritt)' : ' – vortrittsberechtigt') : ''}${osmTagZeile(a.wid, cb.current.osmTags)}<br><i>Klick: als Zufahrt wählen</i>`
         const waehlen = (ev: L.LeafletEvent) => { if (werkzeugAktiv()) return; L.DomEvent.stopPropagation(ev); cb.current.onZufahrt(a.key) }
         linie.bindTooltip(tip, { sticky: true }).on('click', waehlen)
         schild.bindTooltip(tip).on('click', waehlen)
@@ -872,6 +949,52 @@ export default function Karte(props: {
     const raf = requestAnimationFrame(() => kartenRef.current?.invalidateSize())
     return () => cancelAnimationFrame(raf)
   }, [stufe, kartenRef])
+  // Geladene Quellen zeichnen: Linien mit dunklem Rand, Flächen, Punkte als Quadrate mit Zeichen; ab BESCHRIFT_ZOOM der Wert
+  useEffect(() => {
+    const g = quellenRef.current
+    if (!g) return
+    g.clearLayers()
+    const daten = props.quellenEbenen ?? {}
+    const aktiv: { o: EbenenObjekt; farbe: string; symbol: string }[] = []
+    for (const def of EBENEN) if (qAn.has(def.id)) for (const o of daten[def.id] ?? []) aktiv.push({ o, farbe: ebenenFarbe(def, o.klasse), symbol: ebenenSymbol(def, o.klasse) })
+    const marke = (p: P, text: string, farbe: string) => L.marker(ll(p), { pane: Q_PANE, interactive: false, keyboard: false,
+      icon: L.divIcon({ className: 'q-wert', iconSize: [0, 0], html: `<span style="border-color:${farbe}">${esc(text)}</span>` }) }).addTo(g)
+    for (const { o, farbe, symbol } of aktiv) {
+      if (o.ringe) L.polygon(o.ringe.map(r => r.map(ll)), { pane: Q_PANE, interactive: false, color: farbe, weight: 1.5, fillColor: farbe, fillOpacity: o.deckkraft ?? 0.3 }).addTo(g)
+      if (o.linien) {
+        const lls = o.linien.map(l => l.map(ll))
+        L.polyline(lls, { pane: Q_PANE, interactive: false, color: '#111827', weight: 7, opacity: 0.75 }).addTo(g)
+        L.polyline(lls, { pane: Q_PANE, interactive: false, color: farbe, weight: 4, opacity: 1, ...(o.gestrichelt ? { dashArray: '6 6' } : {}) }).addTo(g)
+        if (qZoom >= BESCHRIFT_ZOOM && o.wert) { const l = o.linien.reduce((a, b) => (b.length > a.length ? b : a)); marke(l[l.length >> 1], o.wert, farbe) }
+      }
+      if (o.punkt) {
+        L.marker(ll(o.punkt), { pane: Q_PANE, interactive: false, keyboard: false,
+          icon: L.divIcon({ className: 'q-punkt', iconSize: [18, 18], html: `<span style="background:${farbe}">${esc(symbol)}</span>` }) }).addTo(g)
+        if (qZoom >= BESCHRIFT_ZOOM && o.wert) marke(o.punkt, o.wert, farbe)
+      }
+    }
+    const abst = (p: P, l: P[]) => {
+      let d = Infinity
+      for (let i = 1; i < l.length; i++) {
+        const a = l[i - 1], b = l[i], vx = b[0] - a[0], vy = b[1] - a[1], q = vx * vx + vy * vy
+        const t = q ? Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / q)) : 0
+        d = Math.min(d, Math.hypot(p[0] - a[0] - t * vx, p[1] - a[1] - t * vy))
+      }
+      return d
+    }
+    const innen = (p: P, r: P[]) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > p[1]) !== (yj > p[1]) && p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi) c = !c } return c }
+    qTrefferRef.current = aktiv.length ? (p, tol) => {
+      let best: { d: number; t: string } | null = null
+      const nimm = (d: number, t: string) => { if (d <= tol && (!best || d < best.d)) best = { d, t } }
+      for (const { o } of aktiv) if (o.punkt) nimm(Math.hypot(p[0] - o.punkt[0], p[1] - o.punkt[1]) * 0.7, o.text)
+      if (best) return (best as { t: string }).t
+      for (const { o } of aktiv) for (const l of o.linien ?? []) nimm(abst(p, l), o.text)
+      if (best) return (best as { t: string }).t
+      for (const { o } of aktiv) if (o.ringe?.[0] && innen(p, o.ringe[0])) return o.text
+      return null
+    } : null
+  }, [props.quellenEbenen, qAn, qZoom])
+
   return (
     <div className="kartenrahmen" style={{ '--karte-h': `${stufe}dvh` } as CSSProperties}>
       <div ref={elRef} className="karte" />
@@ -880,6 +1003,33 @@ export default function Karte(props: {
               title={`Karte ${stufe === 70 ? 'kleiner' : 'grösser'} (jetzt ${stufe} % der Höhe)`}>
         {stufe === 70 ? '▴' : '▾'}
       </button>
+      <button type="button" className={'q-knopf' + (qOffen ? ' offen' : '')} aria-expanded={qOffen} onClick={() => setQOffen(o => !o)}
+              title="Geladene Quellen auf der Karte zeigen: woraus die Rechnung liest">
+        Geladene Quellen{(() => { const k = ebenenSichtbar(props.quellenEbenen ?? {}).zeigen.filter(e => qAn.has(e.id)).length; return k ? ` (${k})` : '' })()} ▴
+      </button>
+      {qOffen && (() => {
+        const { zeigen, ohne } = ebenenSichtbar(props.quellenEbenen ?? {})
+        return (
+          <div className="q-fenster" role="group" aria-label="Geladene Quellen" ref={qFensterRef}
+               style={qPos ? { left: qPos.x, top: qPos.y, bottom: 'auto', maxHeight: `calc(100% - ${qPos.y + 10}px)` } : undefined}>
+            <div className="q-kopf" onPointerDown={qZiehen} title="An dieser Zeile ziehen, um das Fenster zu verschieben (Doppelklick: zurück an den Ursprung)"
+                 onDoubleClick={() => { setQPos(null); try { localStorage.removeItem('swc.quellenPos') } catch { /* egal */ } }}>
+              <span><span className="griff" aria-hidden="true">⠿</span> Geladene Quellen</span>
+              <button type="button" onClick={() => setQOffen(false)} aria-label="Schliessen">×</button>
+            </div>
+            {zeigen.map(e => (
+              <label key={e.id} className="q-ebene" title={e.quelle}>
+                <input type="checkbox" checked={qAn.has(e.id)} onChange={x => qSchalten(e.id, x.target.checked)} />
+                <span><b>{e.titel}</b> <small className="zahl">{(props.quellenEbenen?.[e.id] ?? []).length} im Ausschnitt</small><small>{e.quelle}</small>
+                  {qAn.has(e.id) && <span className="q-legende">{e.legende.map(([k, farbe, text, symbol]) => <span key={k}>{symbol ? <i className="sym" style={{ background: farbe }}>{symbol}</i> : <i style={{ background: farbe }} />}{text}</span>)}</span>}
+                </span>
+              </label>
+            ))}
+            {ohne.length > 0 && <p className="q-fuss">Ohne Daten im Ausschnitt: {ohne.map(e => e.titel).join(', ')}.</p>}
+            <p className="q-fuss">Gezeigt wird, was beim Laden gelesen wurde; ab Zoomstufe {BESCHRIFT_ZOOM} mit dem Wert. Überfahren zeigt die Angaben.</p>
+          </div>
+        )
+      })()}
       <div className="kartenkopf">
         <Ortssuche onOrt={ortWaehlen} />
         {hinweise.map(h => (

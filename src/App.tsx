@@ -7,7 +7,7 @@ import Karte, { AV_FARBEN, STATUS_FARBE, KNOTEN_FARBE, FREI_FARBE, VERDECKT_FARB
   type KartenHinweis, type Werkzeug, type KnotenWerkzeug } from './Karte'
 import { ladeAvRoh, avParsen, type AvFlaeche, type GeoJson } from './daten/av'
 import { ladeOsmRoh, ladeOsmUmKnoten, ladeKnoten, overpassSperre, strassennamen, namenKarte, type OsmKnoten,
-  type StrassenMitte, KREISEL_TAG } from './daten/osm'
+  type StrassenMitte, KREISEL_TAG, osmParsen } from './daten/osm'
 import { istAbbruch, type Abruf } from './daten/holen'
 import { lv95, wgs, dist, sub, type P } from './geo'
 import { richtungStreetView, richtungStreetViewTitel } from './streetview'
@@ -23,6 +23,7 @@ import { WAHRNEHMBARKEITEN, WAHRNEHMBARKEIT_TEXT, WAHRNEHMBARKEIT_VORGABE, ZUSTA
 import { VELOFUEHRUNGEN, VELOFUEHRUNG_TEXT, TAB3_EBIKE, TAB3_GRENZE, D_VELO_M, RADSTREIFEN_M,
   RADWEG_NAH_M, TROTTOIR_NEIGUNG_AUSLEGUNG, type Velofuehrung } from './rechner/velo'
 import { ladeNeigung } from './daten/hoehen'
+import { ebenenAusDaten, type ProfilAnzeige } from './quellenEbenen'
 import { HOEHEN_QUELLE, PROFIL_MIN_M } from './rechner/neigung'
 import { HALTELINIE_MIN_M, type Massnahme, type Uebernahme } from './rechner/massnahmen'
 import { AV_RADIUS_M, OSM_RADIUS_M, KATASTER_RADIUS_M, avNachladen, REGELUNG_TEXT, TEMPO_ART_TEXT, LSA_TEXT, RV_TEMPO_TEXT } from './rechner/rechnen'
@@ -1729,6 +1730,18 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     return namenKarte(namenAusschnitt, strassennamen(daten.osm, ort, OSM_RADIUS_M), ort, OSM_RADIUS_M)
   }, [daten, namenAusschnitt, gewaehlt])
   const kantone = useMemo(() => [...new Set((av ?? []).map(f => f.kanton).filter(x => x))], [av])
+  // «Geladene Quellen» auf der Karte (quellenEbenen.ts, seit 01.11.2026): die gelesenen Objekte je Quelle, ohne neue Abfrage
+  const osmGeparst = useMemo(() => (daten?.osm ? osmParsen(daten.osm as Parameters<typeof osmParsen>[0]) : null), [daten])
+  const osmTags = useMemo(() => new Map((osmGeparst?.wege ?? []).map(w => [w.id, w.tags])), [osmGeparst])
+  const quellenEbenen = useMemo(() => {
+    const e = rechnung?.ergebnis
+    const profile: ProfilAnzeige[] = e ? [
+      { key: 'links', linie: e.richtungen.find(r => r.richtung === 'links')?.profilLinie ?? [] },
+      { key: 'rechts', linie: e.richtungen.find(r => r.richtung === 'rechts')?.profilLinie ?? [] },
+      { key: 'zufahrt', linie: e.zufahrtProfil }, { key: 'trottoir', linie: e.trottoirProfil }] : []
+    return ebenenAusDaten({ osm: osmGeparst, vsig: vsigKat?.linien ?? null, park: parkKat?.felder ?? null, baeume: baumKat?.baeume ?? null,
+      av, profile, hoehen: hoehenVorgabe })
+  }, [osmGeparst, vsigKat, parkKat, baumKat, av, rechnung, hoehenVorgabe])
 
   const kn = rechnung?.knoten ?? null
   const erg = rechnung?.ergebnis ?? null
@@ -1774,7 +1787,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
 
   return (
     <div className="app" style={{ '--panel-breite': `${panelBreite}px` } as CSSProperties}>
-      <Karte mitte={START} av={av} kantone={kantone} knoten={sichtbar} strassennamen={namen} gewaehlt={gewaehltPunkt?.id ?? null}
+      <Karte quellenEbenen={quellenEbenen} osmTags={osmTags} mitte={START} av={av} kantone={kantone} knoten={sichtbar} strassennamen={namen} gewaehlt={gewaehltPunkt?.id ?? null}
         rechnung={rechnung} zufahrt={zufahrt} hindernisse={fall?.hindernisse ?? []} werkzeug={werkzeug} knotenWerkzeug={knotenWerkzeug}
         zufahrtErster={zufahrtErster} zeichnung={zeichnung} bearbeiten={bearbeiten} onKnoten={knotenWaehlen} onZufahrt={zufahrtAusKarte}
         lsa={lsaIds}
