@@ -2,17 +2,19 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { AvFlaeche } from './daten/av'
-import type { OsmKnoten, Strassenname } from './daten/osm'
-import type { Rechnung, ArmInfo } from './rechner/typen'
+import { KREISEL_TAG, type OsmKnoten, type Strassenname } from './daten/osm'
+import type { Rechnung, ArmInfo, KnotenInfo, KreiselSichtTeil, VerdeckerEintrag } from './rechner/typen'
+import { linieImPolygon } from './rechner/poly'
 import { armText, nrLage, NR_ABSTAND_M } from './rechner/knoten'
+import { profilLinie, profilWert, INNENRING_AB_M } from './rechner/kreisel'
 import { lageNach, lageText, lageWort } from './rechner/lage'
-import { wgs, lv95, add, dist, sub, einheit, type P } from './geo'
+import { wgs, lv95, add, dist, sub, einheit, winkelGrad, type P } from './geo'
 import { querlinie, B_INNERORTS_M } from './rechner/beobachtung'
 import { TUE_BREITE_KURZ, f2 } from './texte'
 import { hindernisRing, artText, quelleText, type Hindernis } from './rechner/hindernisse'
 import Ortssuche from './Ortssuche'
 import { ortZoom, type Ort } from './daten/ortssuche'
-import { autoUmriss, autoScheibe, fbLage, fbVeloLage, faLage, veloLage } from './rechner/fahrzeug'
+import { autoUmriss, autoScheibe, fbLage, fbVeloLage, faLage, veloLage, kreiselFahrzeug } from './rechner/fahrzeug'
 import { kreuzungspunkte } from './berichtbild'
 
 // Unterbau aus fgsCheck (Karte.tsx): Hintergründe, Standort, Strassennamen, Ortssuche, Hinweise. Neu in E0: Knoten statt
@@ -141,11 +143,32 @@ function hindernisEbene(h: Hindernis, stilRoh: L.PathOptions): L.Path {
   if (h.art === 'zaun') return L.polyline(h.linie.map(ll), { ...stil, weight: 3, dashArray: h.dicht ? stil.dashArray : '1 5' })
   return L.polygon(hindernisRing(h).map(ll), h.art === 'baum' ? { ...stil, weight: 3 } : stil)
 }
-const knotenTip = (id: number, lsa?: Set<number>) =>
-  `<b>OSM-Knoten ${id}</b>${lsa?.has(id) ? ' · LSA (Lichtsignalanlage)' : ''}<br><i>Klick: Knoten wählen</i>`
-const markerStil = (g: boolean): L.CircleMarkerOptions => ({
-  radius: g ? 9 : 6, color: g ? '#0f172a' : '#ffffff', weight: g ? 3 : 2, fillColor: KNOTEN_FARBE, fillOpacity: 0.95, pane: OBEN_PANE,
+const knotenTip = (k: OsmKnoten, lsa?: Set<number>) => k.tags[KREISEL_TAG] ? `<b>Kreisel</b> (Ringpunkt ${k.id})<br><i>Klick: Kreisel wählen</i>` :
+  `<b>OSM-Knoten ${k.id}</b>${lsa?.has(k.id) ? ' · LSA (Lichtsignalanlage)' : ''}<br><i>Klick: Knoten wählen</i>`
+/** Knotenpunkt; K1: ein Kreisel als Ring (weiss gefüllt) in der Kreiselmitte */
+const markerStil = (g: boolean, kreisel = false): L.CircleMarkerOptions => ({
+  radius: g ? 9 : 6, color: kreisel ? KNOTEN_FARBE : g ? '#0f172a' : '#ffffff', weight: kreisel ? (g ? 5 : 4) : g ? 3 : 2,
+  fillColor: kreisel ? '#ffffff' : KNOTEN_FARBE, fillOpacity: 0.95, pane: OBEN_PANE,
 })
+/** K1: Farben des Kreisels auf der Karte */
+const KREISEL_RAND_FARBE = '#f8fafc'
+const KREISEL_INSEL_FARBE = '#16a34a'
+const KREISEL_INNENRING_FARBE = '#facc15'
+const KREISEL_FAHRLINIE_FARBE = '#38bdf8'
+const KREISEL_BETA_FARBE = '#f472b6'
+/** Schraffur einer Fläche (LV95): Linien unter 45° im Abstand abstand [m], auf die Fläche zugeschnitten */
+function schraffur(ring: P[], abstand = 0.8): P[][] {
+  if (ring.length < 3) return []
+  const xs = ring.map(p => p[0] + p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs)
+  const ys = ring.map(p => p[1] - p[0]), y0 = Math.min(...ys), y1 = Math.max(...ys)
+  const out: P[][] = []
+  for (let c = x0 + abstand / 2; c < x1; c += abstand * Math.SQRT2) {
+    // Linie x + y = c, von y − x = y0 bis y1
+    const a: P = [(c - y0) / 2, (c + y0) / 2], b: P = [(c - y1) / 2, (c + y1) / 2]
+    out.push(...linieImPolygon([a, b], [ring]))
+  }
+  return out
+}
 /** Nummernschild eines Arms (divIcon, Klasse arm-nr; gewählte Zufahrt gefüllt) */
 export const nrIcon = (a: Pick<ArmInfo, 'nr'>, gewaehlt: boolean): L.DivIcon =>
   L.divIcon({ className: gewaehlt ? 'arm-nr gewaehlt' : 'arm-nr', iconSize: [22, 22], html: `<span>${esc(a.nr)}</span>` })
@@ -392,8 +415,8 @@ export default function Karte(props: {
     for (const k of knoten) {
       const alt = vorher.get(k.id)
       if (alt && alt.k === k) { neu.set(k.id, alt); vorher.delete(k.id); continue }
-      const m = L.circleMarker([k.lat, k.lon], markerStil(k.id === cb.current.gewaehlt))
-        .bindTooltip(knotenTip(k.id, cb.current.lsa))
+      const m = L.circleMarker([k.lat, k.lon], markerStil(k.id === cb.current.gewaehlt, !!k.tags[KREISEL_TAG]))
+        .bindTooltip(knotenTip(k, cb.current.lsa))
         .on('click', e => { if (werkzeugAktiv()) return; L.DomEvent.stopPropagation(e); cb.current.onKnoten(k) })
       neu.set(k.id, { k, m })
     }
@@ -403,19 +426,132 @@ export default function Karte(props: {
   }, [knoten])
   // LSA-Knoten im Tooltip kennzeichnen (Korrektur 31.10.2026, Punkt 13)
   useEffect(() => {
-    for (const [id, { m }] of markerRef.current) m.setTooltipContent(knotenTip(id, props.lsa))
+    for (const { k, m } of markerRef.current.values()) m.setTooltipContent(knotenTip(k, props.lsa))
   }, [props.lsa, knoten])
   useEffect(() => {
     const n = markerRef.current
     for (const id of new Set([gewaehltRef.current, gewaehlt])) {
       const x = id === null ? undefined : n.get(id)
-      if (x) x.m.setStyle(markerStil(id === gewaehlt))
+      if (x) x.m.setStyle(markerStil(id === gewaehlt, !!x.k.tags[KREISEL_TAG]))
     }
     gewaehltRef.current = gewaehlt
     markerAbgleich()
     const x = gewaehlt === null ? undefined : n.get(gewaehlt)
     if (x && ebenenRef.current?.knoten.hasLayer(x.m)) x.m.bringToFront()
   }, [gewaehlt])
+
+  // K1: Kreisel: Aussenrand, Mittelinsel, Innenring-Vorschlag, Arme (Ein- und Ausfahrt) mit Nummernschild ausserhalb des Rings; noch keine
+  // Wahl der Zufahrt
+  const kreiselZeichnen = (kn: KnotenInfo, ebene: L.LayerGroup) => {
+    const k = kn.kreisel!, v = k.vermessung, geschaetzt = v.quelle === 'osm' ? ' (aus OSM geschätzt)' : ' (AV)'
+    const zArm = k.zufahrt?.arm ?? null
+    const nr = (key: string) => k.arme.find(a => a.key === key)?.nr ?? '?'
+    // Arme: Klick wählt die Einfahrt (nur Arme mit Einfahrt); Bypass gestrichelt (E10)
+    for (const a of k.arme) {
+      const istZ = a.key === zArm
+      const tip = `${esc(armText(a))}${a.getrennt ? ' – Einfahrt und Ausfahrt getrennt' : ''}${istZ ? ' – gewählte Einfahrt' : ''}` +
+        (a.ein ? '<br><i>Klick: als Einfahrt wählen</i>' : '<br>nur Ausfahrt')
+      const waehlen = (ev: L.LeafletEvent) => { if (werkzeugAktiv() || !a.ein) return; L.DomEvent.stopPropagation(ev); cb.current.onZufahrt(a.key) }
+      for (const l of a.linien) L.polyline(l.map(ll), { color: istZ ? ZUFAHRT_FARBE : '#94a3b8', weight: istZ ? 7 : 5, opacity: 0.85, pane: OBEN_PANE })
+        .bindTooltip(tip, { sticky: true }).on('click', waehlen).addTo(ebene)
+      for (const bp of a.bypass) L.polyline(bp.linie.map(ll), { color: '#94a3b8', weight: 4, opacity: 0.85, dashArray: '6 6', pane: OBEN_PANE })
+        .bindTooltip(`Bypass von ${esc(armText(a))} (OSM-Weg ${bp.wid}): mündet ${Math.round(bp.abstand)} m vor der Ausfahrt ` +
+          `${esc(bp.vor)}; keine Einfahrt, Einfädeln nicht geprüft`, { sticky: true }).addTo(ebene)
+      for (const vb of a.velobypass) for (const l of vb.linien) L.polyline(l.map(ll), { color: VELO_FARBE, weight: 4, opacity: 0.9,
+        dashArray: '6 6', pane: OBEN_PANE }).bindTooltip(`Velobypass von ${esc(armText(a))} zu Arm ${esc(vb.zu)} (OSM-Weg ` +
+        `${vb.wege.join(', ')}): Querungen und Einmündungen nicht geprüft`, { sticky: true }).addTo(ebene)
+      const lage = (abstand: number) => add(kn.p, a.richtung, profilWert(v.aussen, winkelGrad(a.richtung)) + abstand / 2)
+      const schild = L.marker(ll(lage(schildAbstand())), { icon: nrIcon(a, istZ), pane: SCHILD_PANE, keyboard: false, zIndexOffset: 1000 })
+        .bindTooltip(tip).on('click', waehlen).addTo(ebene)
+      schilderRef.current.push({ m: schild, lage })
+    }
+    // Form (E9): Insel, Innenring je Richtung, Aussenrand, Fahrlinie mit Vortritt (dünn)
+    if (v.inselR > 0) L.polygon(profilLinie(kn.p, v.insel).map(ll), { color: KREISEL_INSEL_FARBE, weight: 1, fillColor: KREISEL_INSEL_FARBE,
+      fillOpacity: 0.3, pane: OBEN_PANE }).bindTooltip(`Mittelinsel${geschaetzt}, Durchmesser ${f1(2 * v.inselR)} m im Mittel` +
+      (v.inselErgaenzt ? `, Rand auf ${v.inselErgaenzt}° ergänzt` : ''), { sticky: true }).addTo(ebene)
+    const stuecke: P[][] = []
+    for (let g = 0; g <= 360; g++) {
+      const r = v.innenring[g % 360]
+      if (r === null) { if (stuecke.length && stuecke[stuecke.length - 1].length) stuecke.push([]); continue }
+      if (!stuecke.length) stuecke.push([])
+      stuecke[stuecke.length - 1].push(add(kn.p, [Math.cos(g * Math.PI / 180), Math.sin(g * Math.PI / 180)], r))
+    }
+    for (const st of stuecke.filter(x => x.length > 1)) L.polyline(st.map(ll), { color: KREISEL_INNENRING_FARBE, weight: 2, dashArray: '6 4',
+      pane: OBEN_PANE }).bindTooltip(`Innenring (Vorschlag), ${f2(INNENRING_AB_M)} m innerhalb des Aussenrands`, { sticky: true }).addTo(ebene)
+    L.polyline(profilLinie(kn.p, v.aussen).map(ll), { color: KREISEL_RAND_FARBE, weight: 3, pane: OBEN_PANE, ...(v.quelle === 'osm' ? { dashArray: '8 5' } : {}) })
+      .bindTooltip(`Aussenrand${geschaetzt}, Durchmesser ${f1(v.durchmesser)} m${v.dMax / v.dMin >= 1.1 ? ` im Mittel (${f1(v.dMin)} bis ` +
+        `${f1(v.dMax)} m)` : ''}`, { sticky: true }).addTo(ebene)
+    L.polyline(profilLinie(kn.p, v.fahrlinie).map(ll), { color: KREISEL_FAHRLINIE_FARBE, weight: 1.5, opacity: 0.7, dashArray: '2 5',
+      interactive: false, pane: OBEN_PANE }).addTo(ebene)
+    // K3: Konstruktion je aktiver Fahrbeziehung (Hilfslinie gepunktet, Tangenten, β am Schnitt), die massgebende kräftig
+    for (const x of k.beta.beziehungen.filter(y => y.aktiv && y.gueltig)) {
+      const mass = x.key === k.beta.massgebend, farbe = mass ? KREISEL_BETA_FARBE : '#e2e8f0'
+      for (const h of [x.hilfEin, x.hilfAus]) if (h) L.polyline(h.map(ll), { color: farbe, weight: 1.5, dashArray: '1 4', interactive: false, pane: OBEN_PANE }).addTo(ebene)
+      const text = `β ${nr(x.von)} → ${nr(x.nach)}: ${f1(x.betaGon!)} gon (${f1(x.betaGrad!)}°), Fall ${x.fall}${mass ? ', massgebend' : ''}` +
+        `${x.re2Ein ? `; R<sub>e2</sub> Einfahrt ${f1(x.re2Ein)} m` : '; Einfahrt ohne Ausrundung'}${x.re2Aus ? `, Ausfahrt ${f1(x.re2Aus)} m` : ''}`
+      L.polyline([ll(x.startEin!), ll(add(x.tangEin!, sub(x.tangEin!, x.startEin!), 0.3))], { color: farbe, weight: mass ? 3 : 1.5, pane: OBEN_PANE })
+        .bindTooltip(text, { sticky: true }).addTo(ebene)
+      L.polyline([ll(add(x.tangAus!, sub(x.tangAus!, x.startAus!), 0.3)), ll(x.startAus!)], { color: farbe, weight: mass ? 3 : 1.5, pane: OBEN_PANE })
+        .bindTooltip(text, { sticky: true }).addTo(ebene)
+      if (mass) L.marker(ll(x.tangEin!), { icon: L.divIcon({ className: 'lsa-marke', iconSize: [0, 0], html: `<span>β ${f1(x.betaGon!)} gon</span>` }),
+        pane: OBEN_PANE, keyboard: false, interactive: false }).addTo(ebene)
+    }
+    // K2: gewählte Einfahrt: Fahrlinie der Einfahrt bis K, Fahrlinie mit Vortritt von links, Wartelinie, K, D
+    const z = k.zufahrt
+    if (!z) return
+    L.polyline(z.vortrittLinie.map(ll), { color: KREISEL_FAHRLINIE_FARBE, weight: 4, opacity: 0.9, pane: OBEN_PANE })
+      .bindTooltip('Fahrlinie mit Vortritt (Verkehr von links, in der Mitte der Kreiselfahrbahn)', { sticky: true }).addTo(ebene)
+    L.polyline(z.achse.map(ll), { color: ACHSE_FARBE, weight: 2, dashArray: '6 4', pane: OBEN_PANE })
+      .bindTooltip(`Fahrlinie der Einfahrt (${esc(z.lageQuelle)})`, { sticky: true }).addTo(ebene)
+    const t = einheit(sub(z.K, z.rand)), q: P = [-t[1], t[0]]
+    L.polyline([ll(add(z.rand, q, -2)), ll(add(z.rand, q, 2))], { color: '#ffffff', weight: 3, pane: OBEN_PANE })
+      .bindTooltip('Rand der Kreiselfahrbahn (Wartelinie)').addTo(ebene)
+    L.circleMarker(ll(z.K), { radius: 5, color: D_RAND_FARBE, weight: 2, fillColor: KREISEL_FAHRLINIE_FARBE, fillOpacity: 1, pane: D_PANE })
+      .bindTooltip('K: Schnitt der Fahrlinie der Einfahrt mit der Fahrlinie mit Vortritt').addTo(ebene)
+    L.circleMarker(ll(z.D), { radius: 6, color: D_RAND_FARBE, weight: 2, fillColor: D_FARBE, fillOpacity: 1, pane: D_PANE })
+      .bindTooltip(`D: ${f2(z.B)} m hinter der Wartelinie, am Fahrersitz`).addTo(ebene)
+    // K4: Sichtberme schraffiert (freihalten), Rest der Insel «Durchsicht verhindern», Sichtdreiecke Ak (bzw. Velo, wenn länger) und Az
+    const s = k.sicht
+    if (!s) return
+    for (const r of s.durchsicht) L.polygon(r.map(ll), { color: '#14532d', weight: 1, fillColor: '#14532d', fillOpacity: 0.45, pane: OBEN_PANE })
+      .bindTooltip('Durchsicht verhindern (VSS 40 263 Ziffer 13.3): ausserhalb des Sichtfelds; ein Hindernis hier ist erwünscht', { sticky: true }).addTo(ebene)
+    for (const r of s.berme.flaechen) {
+      L.polygon(r.map(ll), { color: '#b45309', weight: 1.5, fillOpacity: 0, pane: OBEN_PANE })
+        .bindTooltip(`Sichtberme: freihalten zwischen 0,60 und 3,00 m Höhe${s.berme.ganz ? ' (ganze Insel)' : `, bis ${f1(s.berme.tiefe)} m ab dem Inselrand`}` +
+          (s.berme.hindernisse.length ? `<br>darin: ${esc(s.berme.hindernisse.join(', '))} – nicht erfüllt` : ''), { sticky: true }).addTo(ebene)
+      for (const l of schraffur(r)) L.polyline(l.map(ll), { color: '#b45309', weight: 1, opacity: 0.8, interactive: false, pane: OBEN_PANE }).addTo(ebene)
+    }
+    const fan = (t: KreiselSichtTeil, name: string, farbe: string) => {
+      if (t.dreieckFrei.length > 2) L.polygon(t.dreieckFrei.map(ll), { color: farbe, weight: 1, fillColor: farbe, fillOpacity: 0.15, pane: OBEN_PANE })
+        .bindTooltip(`${name}: frei bis ${f1(Math.min(t.vorhanden, t.oben))} m (nötig ${f1(t.A)} m)`, { sticky: true }).addTo(ebene)
+      if (t.dreieckVerdeckt.length > 2) L.polygon(t.dreieckVerdeckt.map(ll), { color: VERDECKT_FARBE, weight: 1, fillColor: VERDECKT_FARBE,
+        fillOpacity: 0.2, pane: OBEN_PANE }).bindTooltip(`${name}: verdeckt ab ${f1(t.vorhanden)} m${t.verdecker ? ` durch ${esc(t.verdecker.name)}` : ''}`,
+          { sticky: true }).addTo(ebene)
+    }
+    fan(s.auto, 'Ak (Motorfahrzeuge)', STATUS_FARBE[s.auto.status])
+    // Fahrzeuge wie am Knoten: wartendes Auto F_B bei D, Auto F_A mit Vortritt am Ende von Ak, Velo am Ende seiner Linie, Auto in der
+    // Nachbarzufahrt am Ende von Az (alle auf K bzw. den Ring zu)
+    const fb = fbLage(z.Dachse, z.rand)
+    autoZeichnen(ebene, fb[0], fb[1], FB_FARBE, '#ffffff', 'F<sub>B</sub>: wartendes Fahrzeug in der Einfahrt, Lenker bei D')
+    const fa = kreiselFahrzeug(s.auto.achse, s.auto.A, faLage)
+    if (fa) autoZeichnen(ebene, fa[0], fa[1], FA_FARBE, '#111827', `F<sub>A</sub> auf der Kreiselfahrbahn: Front am Ende von Ak, ${f1(s.auto.A)} m`)
+    const fv = kreiselFahrzeug(s.velo.achse, s.velo.A, veloLage)
+    if (fv) veloZeichnen(ebene, fv[0], fv[1], VELO_FARBE, '#ffffff', `Velo auf der Kreiselfahrbahn: Vorderrad am Ende der nötigen Sicht, ${s.velo.A} m`)
+    if (s.az) {
+      const fz = kreiselFahrzeug(s.az.achse, s.az.A, faLage)
+      if (fz) autoZeichnen(ebene, fz[0], fz[1], FA_FARBE, '#111827', `Fahrzeug in der Zufahrt links (${esc(s.azLinks ?? '')}): Front am Ende von Az, ` +
+        `${s.az.A} m (Vergleichswert)`)
+    }
+    if (s.velo.A > s.auto.oben || s.velo.status !== 'erfuellt') fan(s.velo, 'Velo', VELO_FARBE)
+    if (s.az) {
+      L.polyline(s.az.achse.map(ll), { color: STATUS_FARBE[s.az.status], weight: 2, dashArray: '8 5', pane: OBEN_PANE })
+        .bindTooltip(`Az zur Zufahrt links (${esc(s.azLinks ?? '')}), Vergleichswert: vorhanden ${f1(s.az.vorhanden)} m, Regelfall ${s.az.A} m, ` +
+          `Minimal ${s.az.minimal} m`, { sticky: true }).addTo(ebene)
+      if (s.az.dreieckVerdeckt.length > 2) L.polygon(s.az.dreieckVerdeckt.map(ll), { color: VERDECKT_FARBE, weight: 1, fillColor: VERDECKT_FARBE,
+        fillOpacity: 0.15, pane: OBEN_PANE }).addTo(ebene)
+    }
+  }
+
 
   // Arme des gewählten Knotens (Klick: Zufahrt wählen), Ergebnis: Sichtdreiecke, Achsen, D, K, verdeckende Gebäude
   useEffect(() => {
@@ -425,6 +561,7 @@ export default function Karte(props: {
     schilderRef.current = []
     const kn = rechnung?.knoten
     if (!kn) { namenAbgleich(); return }
+    if (kn.kreisel) { kreiselZeichnen(kn, eb.arme); namenAbgleich(); return }
     const z = rechnung?.ergebnis?.zufahrt ?? zufahrt
     const vortritt = rechnung?.ergebnis?.vortritt ?? kn.vortritt
     // Rechtsvortritt (E3c): Vortritt vor der Zufahrt hat nur der Arm rechts davon
@@ -632,12 +769,16 @@ export default function Karte(props: {
     const eb = ebenenRef.current
     if (!eb) return
     eb.hind.clearLayers()
-    const stand = rechnung?.ergebnis?.hindernis
-    // Tooltip-Zusatz: verdeckt in welcher Richtung ab wo
+    const ks = rechnung?.knoten?.kreisel?.sicht ?? null
+    const stand = rechnung?.ergebnis?.hindernis ?? ks?.hindernis
+    // Tooltip-Zusatz: verdeckt in welcher Richtung ab wo (am Kreisel je Teil: Ak, Velo, Az)
     const verdeckt = new Map<string, string[]>()
-    for (const r of rechnung?.ergebnis?.richtungen ?? []) for (const t of r.verdeckerListe)
-      verdeckt.set(t.id, [...(verdeckt.get(t.id) ?? []), `${t.wirkung === 'hinweis' ? 'im Sichtfeld' : 'verdeckt'} für ${lageText(r)} ab ${f1(t.sErst)} m` +
-        (t.wirkung === 'palisade' ? ' (Palisade)' : t.wirkung === 'hinweis' ? ' (nur Hinweis)' : '')])
+    const eintragen = (liste: VerdeckerEintrag[], wofuer: string) => { for (const t of liste)
+      verdeckt.set(t.id, [...(verdeckt.get(t.id) ?? []), `${t.wirkung === 'hinweis' ? 'im Sichtfeld' : 'verdeckt'} für ${wofuer} ab ${f1(t.sErst)} m` +
+        (t.wirkung === 'palisade' ? ' (Palisade)' : t.wirkung === 'hinweis' ? ' (nur Hinweis)' : '')]) }
+    for (const r of rechnung?.ergebnis?.richtungen ?? []) eintragen(r.verdeckerListe, lageText(r))
+    if (ks) { eintragen(ks.auto.verdeckerListe, 'Ak'); if (ks.az) eintragen(ks.az.verdeckerListe, 'Az') }
+    for (const id of ks?.berme.ids ?? []) verdeckt.set(id, [...(verdeckt.get(id) ?? []), 'liegt in der Sichtberme: nicht erfüllt'])
     const zusatz = (id: string) => (verdeckt.get(id) ?? []).map(t => `<br>${esc(t)}`).join('')
     const klick = (id: string) => (e: L.LeafletMouseEvent) => { if (werkzeugAktiv()) return; L.DomEvent.stopPropagation(e); cb.current.onHindernis(id) }
     for (const h of hindernisse) {

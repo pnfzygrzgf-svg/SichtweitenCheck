@@ -7,7 +7,7 @@ import Karte, { AV_FARBEN, STATUS_FARBE, KNOTEN_FARBE, FREI_FARBE, VERDECKT_FARB
   type KartenHinweis, type Werkzeug, type KnotenWerkzeug } from './Karte'
 import { ladeAvRoh, avParsen, type AvFlaeche, type GeoJson } from './daten/av'
 import { ladeOsmRoh, ladeOsmUmKnoten, ladeKnoten, overpassSperre, strassennamen, namenKarte, type OsmKnoten,
-  type StrassenMitte } from './daten/osm'
+  type StrassenMitte, KREISEL_TAG } from './daten/osm'
 import { istAbbruch, type Abruf } from './daten/holen'
 import { lv95, wgs, dist, sub, type P } from './geo'
 import { richtungStreetView, richtungStreetViewTitel } from './streetview'
@@ -40,10 +40,12 @@ import { f1, f2, fi, STATUS_TEXT, rvStatusText, RV_STATUS_TEXT, STATUS_TEXT_TEIL
 import Bericht from './Bericht'
 import Info from './Info'
 import Trenner from './Trenner'
+import KreiselBlock, { KreiselErgebnis } from './KreiselBlock'
+import KreiselBericht from './KreiselBericht'
 import { ladeBreite } from './panelbreite'
 import type { QuellenStand } from './berichtbild'
 import { type Fall, leererFall, fallMerken, fallErinnern, fallErinnernZufahrt, fallLesen, fallSchreiben, eingabenZahl, eingabenGesetzt,
-  ergebnisAuszug, BEGRUENDUNG_MAX } from './fall'
+  ergebnisAuszug, kreiselAuszug, BEGRUENDUNG_MAX } from './fall'
 import { parkQuelleFuer, istParkId, type ParkQuelle, type KatasterFeld } from './daten/parkkataster'
 import { baumQuelleFuer, type BaumQuelle, type KatasterBaum } from './daten/baumkataster'
 import { ladeVsigBern, bernZustaendig, vsigRechnung, VSIG_QUELLENANGABE } from './daten/vsig'
@@ -1200,11 +1202,14 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     const alt = fallRef.current?.eingaben
     const knotenweit = alt?.regelung === 'rechtsvortritt' ? { regelung: alt.regelung, wahrnehmbarkeit: alt.wahrnehmbarkeit ?? null,
       alleArme: !!alt.alleArme, markierungRv: !!alt.markierungRv } : null
-    const n = alt ? eingabenGesetzt({ ...alt, ...(knotenweit ? { regelung: null, wahrnehmbarkeit: null, alleArme: false, markierungRv: false } : {}) }) : 0
+    // Kreisel (K1 bis K3): Typ und Fahrbeziehungen gelten für den ganzen Kreisel und bleiben beim Wechsel der Einfahrt
+    const kreiselweit = { kreiselTyp: alt?.kreiselTyp ?? null, kreiselBeziehungen: alt?.kreiselBeziehungen ?? null }
+    const n = alt ? eingabenGesetzt({ ...alt, kreiselTyp: null, kreiselBeziehungen: null,
+      ...(knotenweit ? { regelung: null, wahrnehmbarkeit: null, alleArme: false, markierungRv: false } : {}) }) : 0
     if (neu && n > 0 && !window.confirm(`Andere Zufahrt wählen? Die ${n} Eingaben zur bisherigen Zufahrt (Strassentyp, Neigung, ` +
       'Vortrittsregelung, Halte- oder Wartelinie, D, Trottoir, Tempo) werden zurückgesetzt; Hindernisse bleiben.')) return
     zAktuell.current = z
-    aendern(f => { if (neu) { f.eingaben = { ...structuredClone(KEINE_ALLE_EINGABEN), ...knotenweit }; delete f.spiegel } f.ort.zufahrt = z; return f })
+    aendern(f => { if (neu) { f.eingaben = { ...structuredClone(KEINE_ALLE_EINGABEN), ...knotenweit, ...kreiselweit }; delete f.spiegel } f.ort.zufahrt = z; return f })
   }, [aendern])
 
   // ---------------------------------------------------------------- Knotensuche (automatisch, wie die Übergangssuche im fgsCheck)
@@ -1423,7 +1428,9 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     const e = !rechnet ? rechnung?.ergebnis ?? null : null
     // vorgeschlagene Zufahrt fest eintragen: die Eingaben gelten für sie, auch wenn sich der Vorschlag mit OSM ändert
     const f = e && !fall.ort.zufahrtspunkt && fall.ort.zufahrt === null ? { ...fall, ort: { ...fall.ort, zufahrt: e.zufahrt } } : fall
-    const blob = new Blob([fallSchreiben(f, e ? ergebnisAuszug(e, REGELUNG_TEXT[e.regelung]) : null)], { type: 'application/json' })
+    const kr = !rechnet ? rechnung?.knoten?.kreisel : null
+    const blob = new Blob([fallSchreiben(f, e ? ergebnisAuszug(e, REGELUNG_TEXT[e.regelung]) : kr?.sicht ? kreiselAuszug(kr) : null)],
+      { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     const name = fall.ort.zufahrtspunkt ? `zufahrt_${zufahrtspunktKey(fall.ort.zufahrtspunkt.p).replace(',', '_')}` : String(fall.ort.knoten ?? 'ort')
@@ -1699,10 +1706,17 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     if (kk.some(n => !ausgeblendet.has(n))) setAusgeblendet(a => new Set([...a, ...kk]))
     if (ll.some(n => !lsaIds.has(n))) setLsaIds(a => new Set([...a, ...ll]))
   }, [rechnung])   // eslint-disable-line react-hooks/exhaustive-deps
+  // K1: an einem Kreisel steht der gewählte Punkt in der Kreiselmitte (Kennung: kleinster Ringpunkt), auch wenn ein anderer Ringpunkt
+  // geladen wurde (Adresse, Fall-Datei)
+  const kreiselMitte = useMemo<OsmKnoten | null>(() => {
+    const k = rechnung?.knoten
+    return k?.kreisel ? { id: k.id, lat: k.ll[0], lon: k.ll[1], tags: { [KREISEL_TAG]: 'ja' } } : null
+  }, [rechnung])
+  const gewaehltPunkt = kreiselMitte ?? gewaehlt
   const sichtbar = useMemo(() => {
-    const k = knoten.filter(x => !ausgeblendet.has(x.id) || x.id === gewaehlt?.id)
-    return gewaehlt && !k.some(x => x.id === gewaehlt.id) ? [...k, gewaehlt] : k
-  }, [knoten, gewaehlt, ausgeblendet])
+    const k = knoten.filter(x => (!ausgeblendet.has(x.id) || x.id === gewaehltPunkt?.id) && !(kreiselMitte && x.id === gewaehlt?.id))
+    return gewaehltPunkt && !k.some(x => x.id === gewaehltPunkt.id) ? [...k, gewaehltPunkt] : k
+  }, [knoten, gewaehlt, gewaehltPunkt, kreiselMitte, ausgeblendet])
   // Klick auf einen Arm in der Karte: gesperrte Arme (Punkte 11, 15) wie die Knöpfe nicht wählbar
   const zufahrtAusKarte = (key: string | null) => {
     const a = kn?.arme.find(x => x.key === key)
@@ -1760,7 +1774,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
 
   return (
     <div className="app" style={{ '--panel-breite': `${panelBreite}px` } as CSSProperties}>
-      <Karte mitte={START} av={av} kantone={kantone} knoten={sichtbar} strassennamen={namen} gewaehlt={gewaehlt?.id ?? null}
+      <Karte mitte={START} av={av} kantone={kantone} knoten={sichtbar} strassennamen={namen} gewaehlt={gewaehltPunkt?.id ?? null}
         rechnung={rechnung} zufahrt={zufahrt} hindernisse={fall?.hindernisse ?? []} werkzeug={werkzeug} knotenWerkzeug={knotenWerkzeug}
         zufahrtErster={zufahrtErster} zeichnung={zeichnung} bearbeiten={bearbeiten} onKnoten={knotenWaehlen} onZufahrt={zufahrtAusKarte}
         lsa={lsaIds}
@@ -1785,8 +1799,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
             title="Zufahrt zu einem Grundstück bzw. OSM-Weg service an einer Strasse prüfen: wird wie ein Arm gerechnet">Grundstückzufahrt prüfen</button>
           {fall && <button onClick={speichern} title={'Fall als Datei (JSON) speichern: Ort, Knoten bzw. Zufahrtspunkt, alle Eingaben, ' +
             'Hindernisse, Quellenstand und ein Auszug des Ergebnisses'}>Fall speichern</button>}
-          {fall && <button onClick={() => setBerichtOffen(true)} disabled={!erg || rechnet}
-            title={erg && !rechnet ? 'Druckansicht mit Kartenbild, Ergebnis, Verdeckern, Massnahmen, Eingaben und Quellen; als PDF über den Druckdialog' :
+          {fall && <button onClick={() => setBerichtOffen(true)} disabled={!(erg || kn?.kreisel?.sicht) || rechnet}
+            title={(erg || kn?.kreisel?.sicht) && !rechnet ? 'Druckansicht mit Kartenbild, Ergebnis, Verdeckern, Massnahmen, Eingaben und Quellen; als PDF über den Druckdialog' :
               'Erst nach der Rechnung'}>Bericht drucken / als PDF</button>}
         </div>
         {fallHinweis && fall && <p className="klein hinweisbox">{fallHinweis}{' '}
@@ -1821,6 +1835,13 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
             </div>
             {zufahrtHilfe}
           </section>
+        ) : kn?.kreisel ? (
+          <KreiselBlock kn={kn} setTyp={t => setEingaben(e => ({ ...e, kreiselTyp: t }))} zufahrt={zGewaehlt} zufahrtWaehlen={zufahrtWaehlen}
+            setBeziehung={(key, an) => setEingaben(e => {
+              const x = { ...(e.kreiselBeziehungen ?? {}) }
+              if (an === null) delete x[key]; else x[key] = an
+              return { ...e, kreiselBeziehungen: Object.keys(x).length ? x : null }
+            })} />
         ) : kn && !kn.grundstueck && (
           <section>
             <h2>1 Knoten: {kn.name}{kn.lsa ? ' (Lichtsignalanlage)' : ''}</h2>
@@ -1838,7 +1859,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
         )}
 
         {/* 2 Vortritt und Zufahrt: Regelung, dann die Armwahl (Grundstückzufahrt: nur die Regelung) */}
-        {fall && (zp || (kn && !kn.grundstueck)) && (
+        {fall && (zp || (kn && !kn.grundstueck && !kn.kreisel)) && (
           <section>
             <h2>2 Vortritt und Zufahrt</h2>
             <RegelungAbschnitt e={erg} eingaben={eingaben} setEingaben={setEingaben} />
@@ -1872,8 +1893,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
           </section>
         )}
 
-        {/* 3 Eingaben: vier eingeklappte Blöcke */}
-        {fall && daten && (
+        {/* 3 Eingaben: vier eingeklappte Blöcke (am Kreisel nur die Hindernisse, K4) */}
+        {fall && daten && (!kn?.kreisel || kn.kreisel.zufahrt) && (
           <section>
             <h2>3 Eingaben</h2>
             {erg && kurz && <>
@@ -1891,7 +1912,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
             </>}
             <Block titel={`Hindernisse (${eigeneZahl + amtlichZahl})`} stand={hindStand} offen={offen.hindernisse}
               setOffen={o => setOffen('hindernisse', o)}>
-              <HindernisAbschnitt fall={fall} aendern={aendern} stand={erg?.hindernis ?? null} werkzeug={werkzeug}
+              <HindernisAbschnitt fall={fall} aendern={aendern} stand={erg?.hindernis ?? kn?.kreisel?.sicht?.hindernis ?? null} werkzeug={werkzeug}
                 werkzeugWaehlen={werkzeugWaehlen} zeichnung={zeichnung} fertig={fertig} abbrechen={() => { setZeichnung([]); zeichnungRef.current = []; setWerkzeug(null) }}
                 bearbeiten={bearbeiten} setBearbeiten={setBearbeiten} klasse={klasse} setKlasse={setKlasse} breite={breite} setBreite={setBreite}
                 sichtbehindernd={sichtbehindernd} setSichtbehindernd={setSichtbehindernd} dicht={dicht} setDicht={setDicht} parkKat={parkKat}
@@ -1901,7 +1922,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
           </section>
         )}
 
-        {/* 4 Ergebnis: nur lesen */}
+        {/* 4 Ergebnis: nur lesen; am Kreisel K4 */}
+        {kn?.kreisel?.sicht && <KreiselErgebnis kn={kn} />}
         {erg && (
           <section>
             <h2>4 Ergebnis</h2>
@@ -2080,6 +2102,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
       </aside>
       {berichtOffen && fall && rechnung?.ergebnis && av && <Bericht fall={fall} rechnung={rechnung} av={av} kantone={kantone} quellen={quellen}
         aendern={aendern} schliessen={berichtSchliessen} />}
+      {berichtOffen && fall && rechnung?.knoten?.kreisel?.sicht && <KreiselBericht fall={fall} kn={rechnung.knoten} kantone={kantone}
+        quellen={quellen} aendern={aendern} schliessen={berichtSchliessen} />}
     </div>
   )
 }

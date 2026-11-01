@@ -25,16 +25,21 @@
 // (Schwerverkehrsanteil in %, 0 bis 100, bzw. null) und eingaben.ueberholen («Überholen im Knotenbereich erlaubt» von Hand: true,
 // false bzw. null = Vorgabe aus OSM); im Auszug des Ergebnisses der Überholfall je Richtung und beim Rechtsvortritt das Sichtfeld der
 // schmalen Zufahrt (bfu BM.021 Abb. 4) statt der Paarmatrix. Der Feldname «haltelinie» bleibt (Halte- oder Wartelinie).
+// K1 (01.11.2026, gleiche Version 7, Feld optional, ältere Leser übergehen es): eingaben.kreiselTyp (Kreisel: «klein» bzw. «mini» von
+// Hand, null bzw. fehlt = nach dem Aussendurchmesser); K3: eingaben.kreiselBeziehungen (Fahrbeziehungen für β von Hand an bzw. ab,
+// Schlüssel «von>nach» der Kreiselarme); ort.zufahrt am Kreisel = Schlüssel des Kreiselarms der Einfahrt.
+// Version 8 (K4, 01.11.2026): am Kreisel im Auszug des Ergebnisses ergebnis.kreisel (Typ, Masse, β, Tempo, Ak, Velo, Sichtberme, Az);
+// richtungen ist dort leer. Eingaben wie Version 7; Version 1 bis 7 werden weiter gelesen.
 
 import type { P } from './geo'
 import type { Hindernis, ParkKlasse } from './rechner/hindernisse'
 import { KEINE_ALLE_EINGABEN, REGELUNGEN, TEMPO_ARTEN, TEMPO_MIN, TEMPO_MAX, TUE_BREITE_MIN, TUE_BREITE_MAX, type Eingaben, type Regelung, type Richtung,
-  type TempoArt, type TempoEingabe, type ZufahrtspunktEingabe, type Ergebnis } from './rechner/typen'
+  type TempoArt, type TempoEingabe, type ZufahrtspunktEingabe, type Ergebnis, type KreiselTyp, type KreiselInfo } from './rechner/typen'
 import { zufahrtspunktKey } from './rechner/grundstueck'
 import { VELOFUEHRUNGEN, type Velofuehrung } from './rechner/velo'
 import { WAHRNEHMBARKEITEN, type Wahrnehmbarkeit } from './rechner/rechtsvortritt'
 
-export const FALL_VERSION = 7
+export const FALL_VERSION = 8
 /** Bezeichnung des Falls (Bericht): höchstens so lang */
 export const BEZEICHNUNG_MAX = 200
 
@@ -61,6 +66,12 @@ export interface FallErgebnis {
     sichtfeld?: { sichtbar: number; gesamt: number; erste: { s: number; sRechts: number } | null } | null }[] } | null
   // K0
   trottoirueberfahrt?: { breite: number; breiteQuelle: string; laenge: number; phaseTrottoir: string; phaseFahrbahn: string } | null
+  // K4 (Version 8): Kreisel
+  kreisel?: { typ: string; durchmesser: number; dMin: number; dMax: number; inselR: number; breite: number; quelle: string
+    betaGon: number | null; tempo: number; tempoGrund: string; gesamt: string
+    auto: { A: number; oben: number; vorhanden: number; status: string }; velo: { A: number; vorhanden: number; status: string }
+    berme: { tiefe: number; ganz: boolean; hindernisse: string[]; status: string }
+    az: { regelfall: number; minimal: number; vorhanden: number; status: string; links: string } | null; azGrund: string | null }
 }
 
 export interface Fall {
@@ -82,6 +93,21 @@ export function leererFall(lat: number, lon: number, knoten: number | null, zufa
   return { app: 'SichtweitenCheck', version: FALL_VERSION,
     ort: { lat, lon, knoten: zufahrtspunkt ? null : knoten, zufahrt: null, ...(zufahrtspunkt ? { zufahrtspunkt } : {}) }, quellen: {},
     eingaben: structuredClone(KEINE_ALLE_EINGABEN), hindernisse: [], vorschlaege: {}, baumkataster: false }
+}
+
+/** Auszug des Ergebnisses am Kreisel (K4) für die Fall-Datei */
+export function kreiselAuszug(k: KreiselInfo): FallErgebnis {
+  const s = k.sicht!, v = k.vermessung, z = k.zufahrt!, r = (x: number) => Math.round(x * 10) / 10
+  const arm = k.arme.find(a => a.key === s.arm)
+  return { zufahrt: arm ? `${arm.nr} ${arm.name || arm.hw}` : s.arm, regelung: 'Kreisel: Vortritt hat der Verkehr auf der Kreiselfahrbahn', B: z.B,
+    nullpunkt: 'Rand der Kreiselfahrbahn (Wartelinie)', D: s.D, Dhand: false, richtungen: [],
+    kreisel: { typ: k.typ, durchmesser: r(v.durchmesser), dMin: r(v.dMin), dMax: r(v.dMax), inselR: r(v.inselR), breite: r(v.breite), quelle: v.quelle,
+      betaGon: k.beta.betaGon === null ? null : r(k.beta.betaGon), tempo: s.tempo, tempoGrund: k.beta.tempoGrund, gesamt: s.gesamt,
+      auto: { A: s.auto.A, oben: s.auto.oben, vorhanden: r(s.auto.vorhanden), status: s.auto.status },
+      velo: { A: s.velo.A, vorhanden: r(s.velo.vorhanden), status: s.velo.status },
+      berme: { tiefe: r(s.berme.tiefe), ganz: s.berme.ganz, hindernisse: s.berme.hindernisse, status: s.berme.status },
+      az: s.az ? { regelfall: s.az.A, minimal: s.az.minimal ?? 0, vorhanden: r(s.az.vorhanden), status: s.az.status, links: s.azLinks ?? '' } : null,
+      azGrund: s.azGrund } }
 }
 
 /** Auszug des Ergebnisses für die Fall-Datei */
@@ -185,6 +211,11 @@ export function eingabenPruefen(x: unknown, hinweise: string[], version = FALL_V
   feld('markierungRv', bool, v => { if (v) e.markierungRv = true })
   // Block 5: Überholen im Knotenbereich erlaubt (von Hand; null = Vorgabe aus OSM)
   feld('ueberholen', oderNull(bool), v => { if (v !== null) e.ueberholen = v })
+  // K1: Kreiseltyp von Hand (null = nach dem Aussendurchmesser)
+  feld('kreiselTyp', oderNull((v): v is KreiselTyp => v === 'klein' || v === 'mini'), v => { if (v !== null) e.kreiselTyp = v })
+  // K3: Fahrbeziehungen für den Ablenkungswinkel von Hand (Schlüssel «von>nach», Wert an/ab)
+  feld('kreiselBeziehungen', oderNull((v): v is Record<string, boolean> => istObjekt(v) && Object.entries(v).every(([k, x]) =>
+    /^-?\d+:\d+:-?1>-?\d+:\d+:-?1$/.test(k) && typeof x === 'boolean')), v => { if (v && Object.keys(v).length) e.kreiselBeziehungen = v })
   // K0 (Version 7): Trottoirüberfahrt; ungültige Breite -> ohne Breite (Modus bleibt), gemeldet
   if (x.trottoirueberfahrt !== undefined && x.trottoirueberfahrt !== null) {
     const t = x.trottoirueberfahrt
@@ -324,7 +355,8 @@ export function eingabenGesetzt(e: Eingaben): number {
     e.neigung.links !== null, e.neigung.rechts !== null, e.regelung !== null, e.haltelinie !== null, e.D !== null, e.trottoirFrei,
     e.tempo.links !== null, e.tempo.rechts !== null, (e.velo?.links ?? null) !== null, (e.velo?.rechts ?? null) !== null,
     !!e.ebikeVerboten, (e.wahrnehmbarkeit ?? null) !== null, !!e.alleArme, !!e.markierungRv, !!e.trottoirueberfahrt, (e.Dtrottoir ?? null) !== null,
-    (e.trottoirueberfahrt?.breite ?? null) !== null].filter(x => x).length
+    (e.trottoirueberfahrt?.breite ?? null) !== null, (e.kreiselTyp ?? null) !== null,
+    Object.keys(e.kreiselBeziehungen ?? {}).length > 0].filter(x => x).length
 }
 
 /** Anzahl Eingaben (E1/E2b, Hindernisse, verworfene Vorschläge bzw. Parkfelder, Baumkataster zugeschaltet, Parkfelder abgeschaltet) */

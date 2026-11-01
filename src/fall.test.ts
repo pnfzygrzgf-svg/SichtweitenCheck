@@ -283,7 +283,7 @@ describe('Fall-Datei K0: Trottoirüberfahrt und Quelle V_sig (Version 7)', () =>
       x.quellen = { vsig: 'Geodaten Stadt Bern, Signalisierte Höchstgeschwindigkeit' }
     })
     const text = fallSchreiben(f)
-    expect(JSON.parse(text).version).toBe(7)
+    expect(JSON.parse(text).version).toBe(FALL_VERSION)
     const [g, h] = fallLesen(text)
     expect(h).toEqual([])
     expect(g.eingaben.trottoirueberfahrt).toEqual({ breite: 2.5 })
@@ -303,7 +303,7 @@ describe('Fall-Datei K0: Trottoirüberfahrt und Quelle V_sig (Version 7)', () =>
     const [k, hk] = fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, trottoirueberfahrt: 'ja' } }))
     expect([k.eingaben.trottoirueberfahrt, hk]).toEqual([undefined, ['Eingabe «trottoirueberfahrt» ungültig, Vorgabe']])
     // Version 8 (Zukunft) nicht lesbar
-    expect(() => fallLesen(JSON.stringify({ ...roh, version: 8 }))).toThrow('Version 8')
+    expect(() => fallLesen(JSON.stringify({ ...roh, version: FALL_VERSION + 1 }))).toThrow(`Version ${FALL_VERSION + 1}`)
   })
 })
 
@@ -311,7 +311,7 @@ describe('Fall-Datei K0: D\' von Hand (Dtrottoir, Version 7)', () => {
   it('hin und zurück; fehlt in älteren Dateien (= null); ungültig -> Vorgabe, gemeldet', () => {
     const f = fallMit(x => { x.eingaben.trottoirueberfahrt = { breite: null }; x.eingaben.Dtrottoir = [2600010.5, 1200020.25] })
     const text = fallSchreiben(f)
-    expect(JSON.parse(text).version).toBe(7)
+    expect(JSON.parse(text).version).toBe(FALL_VERSION)
     const [g, h] = fallLesen(text)
     expect([g.eingaben.Dtrottoir, h, eingabenZahl(g)]).toEqual([[2600010.5, 1200020.25], [], 2])
     const roh = JSON.parse(text)
@@ -326,7 +326,7 @@ describe('Fall-Datei Block 5: Schwerverkehrsanteil und Überholen (Version 7, op
   it('hin und zurück; fehlen in älteren Dateien (= Vorgabe); ungültig -> Vorgabe, gemeldet', () => {
     const f = fallMit(x => { x.eingaben.schwerverkehrAnteil = 12.5; x.eingaben.ueberholen = false })
     const text = fallSchreiben(f)
-    expect(JSON.parse(text).version).toBe(7)
+    expect(JSON.parse(text).version).toBe(FALL_VERSION)
     const [g, h] = fallLesen(text)
     expect([g.eingaben.schwerverkehrAnteil, g.eingaben.ueberholen, h, eingabenZahl(g)]).toEqual([12.5, false, [], 2])
     const roh = JSON.parse(text)
@@ -336,5 +336,32 @@ describe('Fall-Datei Block 5: Schwerverkehrsanteil und Überholen (Version 7, op
     const [u, hu] = fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, schwerverkehrAnteil: 150, ueberholen: 'ja' } }))
     expect([u.eingaben.schwerverkehrAnteil ?? null, u.eingaben.ueberholen ?? null, hu]).toEqual([null, null,
       ['Eingabe «schwerverkehrAnteil» ungültig, Vorgabe', 'Eingabe «ueberholen» ungültig, Vorgabe']])
+  })
+})
+
+describe('Fall-Datei K1: Kreiseltyp von Hand (Version 7, optional)', () => {
+  it('hin und zurück; fehlt in älteren Dateien (= nach dem Durchmesser); ungültig -> Vorgabe, gemeldet', () => {
+    const text = fallSchreiben(fallMit(x => { x.eingaben.kreiselTyp = 'mini' }))
+    const [g, h] = fallLesen(text)
+    expect([g.eingaben.kreiselTyp, h, eingabenZahl(g)]).toEqual(['mini', [], 1])
+    const roh = JSON.parse(text)
+    const { kreiselTyp: _k, ...ohne } = roh.eingaben
+    expect(fallLesen(JSON.stringify({ ...roh, eingaben: ohne }))[0].eingaben.kreiselTyp ?? null).toBeNull()
+    const [u, hu] = fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, kreiselTyp: 'gross' } }))
+    expect([u.eingaben.kreiselTyp ?? null, hu]).toEqual([null, ['Eingabe «kreiselTyp» ungültig, Vorgabe']])
+  })
+})
+
+describe('Fall-Datei K3: Fahrbeziehungen für β von Hand (Version 7, optional)', () => {
+  it('hin und zurück; leer bzw. fehlend = Vorgabe; ungültiger Schlüssel bzw. Wert -> Vorgabe, gemeldet', () => {
+    const text = fallSchreiben(fallMit(x => { x.eingaben.kreiselBeziehungen = { '4:0:1>2:0:1': false, '3:1:-1>5:0:1': true } }))
+    const [g, h] = fallLesen(text)
+    expect([g.eingaben.kreiselBeziehungen, h, eingabenZahl(g)]).toEqual([{ '4:0:1>2:0:1': false, '3:1:-1>5:0:1': true }, [], 1])
+    const roh = JSON.parse(text)
+    expect(fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, kreiselBeziehungen: {} } }))[0].eingaben.kreiselBeziehungen ?? null).toBeNull()
+    for (const falsch of [{ 'a>b': true }, { '4:0:1>2:0:1': 'ja' }, ['x']]) {
+      const [u, hu] = fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, kreiselBeziehungen: falsch } }))
+      expect([u.eingaben.kreiselBeziehungen ?? null, hu]).toEqual([null, ['Eingabe «kreiselBeziehungen» ungültig, Vorgabe']])
+    }
   })
 })

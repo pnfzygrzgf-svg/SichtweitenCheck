@@ -39,6 +39,10 @@
 //      der Gehlinie 0,50 m vor dem hinteren Rand der Überfahrt, Tab. 2), Phase Fahrbahn = ergebnis.richtungen (Auto Tab. 1, Velo
 //      Tab. 3, B ab der Bordkante).
 //
+// K1 bis K3 (01.11.2026): an einem Kreisel (Ringpunkt) statt der Rechnung der Kreisel als ein Knoten mit Armen, Vermessung, gewählter
+// Einfahrt (fall.zufahrt = Schlüssel des Kreiselarms: Achse, K, D) und Ablenkungswinkel (kreisel.ts, kreiselfahrt.ts, KnotenInfo.kreisel)
+// und die Meldung, dass die Sichtprüfung später folgt; Typ und Fahrbeziehungen von Hand über eingaben.kreiselTyp, kreiselBeziehungen.
+//
 // Block 5 (31.10.2026): Abb. 2 der VSS 40 090b nach der Ablesung des Auftraggebers (anhaltesicht.ts); ungünstige Verhältnisse mit
 // den Massen des Kantons Solothurn (strasseBestimmen, Annahme); beim Rechtsvortritt an schmalen Zufahrten das Sichtfeld nach bfu
 // BM.021 Abb. 4 statt der Paarmatrix (rechtsvortritt.ts); ausserorts der Überholfall (VSS 40 273 Ziffer 6, Abb. 1) als eigener Teil
@@ -69,6 +73,8 @@ import { ANHALTESICHT_I_MIN } from './anhaltesicht'
 import { knotenInfo, vortrittPaar, vortrittsSignale, signalAnArm, armText, nachNr, knotenArt, keineKnoten, istLsaKnoten, ampelPunkte,
   knotenFinden, fahrbahnteilungText, GABELUNG_TEXT, KREISEL_TEXT, ZUSAMMENFUEHRUNG_TEXT } from './knoten'
 import { grundstueckGeometrie, type GrundstueckGeo } from './grundstueck'
+import { kreiselKnoten, KREISEL_EINFAHRT_TEXT } from './kreisel'
+import { kreiselSicht, kreiselDreiecke } from './kreiselsicht'
 import { parkStreifen, sondenRechts, parkStreifenText, KEIN_PARKSTREIFEN, PARK_SONDE_RADIUS_M, PARK_EIN_FELD_TREFFER,
   type ParkStreifen } from './hauptachsen'
 import { armMittellinieMitEnde, muendungGeglaettet, querschnitt, fahrstreifenAchse, versetzt, versetztVariabel, mitVerlaengerung, schnittBei, lot,
@@ -191,7 +197,7 @@ export function kontextBauen(osm: OsmDaten, av: AvFlaeche[]): Kontext {
 
 const leer = (meldung: string, t0: number, knoten: Rechnung['knoten'] = null, netz: OsmNetz | null = null,
   ampeln: P[] = []): Rechnung => ({ knoten, ergebnis: null, meldungen: [meldung], ms: performance.now() - t0, ...(netz ? umkreis(netz, ampeln) : {}) })
-/** Korrektur 31.10.2026 (Punkte 12, 13, 16, 17): Gabelungen, Kreisel und Fahrbahnteilungen bzw. LSA-Knoten im geladenen Umkreis
+/** Korrektur 31.10.2026 (Punkte 12, 13, 16, 17): Gabelungen und Fahrbahnteilungen bzw. LSA-Knoten im geladenen Umkreis
  *  (Knotensuche, Karte) */
 const umkreis = (netz: OsmNetz, ampeln: P[]) => ({ keinKnoten: keineKnoten(netz),
   lsaKnoten: ampeln.length ? knotenFinden(netz).filter(n => istLsaKnoten(netz, n, ampeln)) : [] })
@@ -202,7 +208,8 @@ export function knotenEingabenAus(e: Partial<KnotenEingaben> | undefined): Requi
     tempo: { links: e?.tempo?.links ?? null, rechts: e?.tempo?.rechts ?? null }, velo: { links: e?.velo?.links ?? null,
       rechts: e?.velo?.rechts ?? null }, ebikeVerboten: e?.ebikeVerboten ?? false, wahrnehmbarkeit: e?.wahrnehmbarkeit ?? null,
     alleArme: e?.alleArme ?? false, markierungRv: e?.markierungRv ?? false, trottoirueberfahrt: e?.trottoirueberfahrt ?? null, Dtrottoir: e?.Dtrottoir ?? null,
-    ueberholen: e?.ueberholen ?? null }
+    ueberholen: e?.ueberholen ?? null, kreiselTyp: e?.kreiselTyp ?? null,
+    kreiselBeziehungen: e?.kreiselBeziehungen ?? null }
 }
 
 /** Rechnung für den gewählten Knoten und die Zufahrt (ohne Zufahrt: Vorschlag, sonst nur Knoten und Arme) bzw. für eine
@@ -237,9 +244,24 @@ export function rechneKnoten(osm: OsmDaten, av: AvFlaeche[], fall: KnotenFall, k
   if (fall.knoten === null) return leer('Knoten bzw. Zufahrtspunkt wählen.', t0)
   if (!netz.P.has(fall.knoten)) return leer(`OSM-Knoten ${fall.knoten} nicht in den OSM-Daten.`, t0)
   const kp = netz.p(fall.knoten)
-  // Korrektur 31.10.2026 (Punkte 12, 16, 17): Gabelung, Kreisel und Fahrbahnteilung ohne Rechnung (auch aus der Adresse bzw. der Fall-Datei)
+  // Korrektur 31.10.2026 (Punkte 12, 16, 17): Gabelung und Fahrbahnteilung ohne Rechnung (auch aus der Adresse bzw. der Fall-Datei)
   const art = knotenArt(netz, fall.knoten)
-  if (art === 'kreisel') return leer(`${KREISEL_TEXT}.`, t0, null, netz, ampeln)
+  // K1 bis K4: Kreisel als ein Knoten, vermessen, mit Fahrlinien und β; mit gewählter Einfahrt die Sicht (kreiselsicht.ts) mit denselben
+  // Hindernissen wie am Knoten
+  if (art === 'kreisel') {
+    const kn = kreiselKnoten(netz, k.fahrbahn, fall.knoten, ke.kreiselTyp, fall.zufahrt, ke.kreiselBeziehungen, osm.querungen ?? [])
+    const kr = kn?.kreisel
+    if (!kn || !kr) return leer(`OSM-Knoten ${fall.knoten}: kein Kreisel.`, t0, null, netz, ampeln)
+    if (!kr.zufahrt) return leer(kr.zufahrtFehler ?? KREISEL_EINFAHRT_TEXT, t0, kn, netz, ampeln)
+    if (!av.some(f => f.art === 'Strasse_Weg')) return leer(keineAv, t0, kn, netz, ampeln)
+    const zaehlend = zaehlendeHindernisse(hg)
+    const s = kreiselSicht(kr, [...k.gebaeude, ...hindernisVerdeckend(zaehlend)])
+    if (s) {
+      const weit = Math.max(0, ...[s.auto, s.velo, ...(s.az ? [s.az] : [])].flatMap(t => t.achse.map(p => dist(kn.p, p))))
+      kr.sicht = { ...s, hindernis: hindernisStand(k, hg, kn.p, weit + REICHWEITE_RESERVE_M, kreiselDreiecke(s), s.D, []) }
+    }
+    return { knoten: kn, ergebnis: null, meldungen: [], ms: performance.now() - t0, ...umkreis(netz, ampeln) }
+  }
   if (art === 'gabelung') return leer(`${GABELUNG_TEXT}.`, t0, null, netz, ampeln)
   if (art === 'fahrbahnteilung') return leer(`${fahrbahnteilungText(netz, fall.knoten)}.`, t0, null, netz, ampeln)
   if (art === 'zusammenfuehrung') return leer(`${ZUSAMMENFUEHRUNG_TEXT}.`, t0, null, netz, ampeln)
@@ -1241,7 +1263,8 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
   const weitAv = Math.max(0, ...achsen2.flatMap(a => a.map(p => dist(avZentrum, p))))
   const avBedarf = Math.ceil(weitAv + AV_RESERVE_M)
   const hindernis: HindernisStand = nurRv ? { vorschlaege: [], amtlich: [], amtlichVerworfen: [], osmUeberdeckt: 0, inD, reichweite: 0 } :
-    hindernisStand(k, hg, kp, weit + REICHWEITE_RESERVE_M, richtungen, D, inD)
+    hindernisStand(k, hg, kp, weit + REICHWEITE_RESERVE_M, richtungen.filter(r => r.achse.length >= 2).map(r => sichtdreieck(D, r.achse, 0, r.sMax)),
+      D, inD)
   const bisD = Math.max(sNull - beob.sRand + B, ke.D ? sNull - beob.sRand + Dlage.laengs : 0)
   // Längsneigung der Zufahrt (E3a): Profil ab der Kante PROFIL_MIN_M vom Knoten weg; noch ohne Wirkung (Tab. 2 folgt in E3b)
   const zufahrtProfil = abschneiden(abBogen(zAchse, beob.sRand), PROFIL_MIN_M)
@@ -1433,12 +1456,11 @@ function sichtTeil(D: P, achse: P[], sMax: number, flaechenAlle: Verdeckend[], A
  * ohne die von amtlichen Feldern abgedeckte; Bäume aus dem Baumkataster und amtliche Felder bis reichweite vom Knoten. Ohne
  * verworfene (amtliche: getrennt aufgeführt) und ohne bestätigte (Id schon unter den Hindernissen).
  */
-function hindernisStand(k: Kontext, hg: HindernisEingaben, kp: P, reichweite: number, richtungen: RichtungErgebnis[], D: P,
+function hindernisStand(k: Kontext, hg: HindernisEingaben, kp: P, reichweite: number, dreiecke: P[][], _D: P,
   inD: string[]): HindernisStand {
   const weg = new Set(hg.verworfen), da = new Set(hg.hindernisse.map(h => h.id))
   const offen = (id: string) => !weg.has(id) && !da.has(id)
   const felder = hg.park?.felder ?? []
-  const dreiecke = richtungen.filter(r => r.achse.length >= 2).map(r => sichtdreieck(D, r.achse, 0, r.sMax))
   const osmAlle = parkVorschlaege(k.netz, k.fahrbahn, kp).filter(v => offen(v.id))
   // nur Auto-Felder beschreiben dieselbe Parkierung wie ein OSM-Streifen (Zweirad-Felder sind nur Hinweis)
   const ueberdeckt = osmUeberdeckt(osmAlle, felder.filter(f => f.klasse === 'auto').map(f => f.ring))

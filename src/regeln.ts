@@ -187,9 +187,10 @@ const EINTRAEGE: readonly RegelEintrag[] = [
   // ── VSS 40 273, Ziffer für Ziffer ──
   { id: 'V273-1a', werk: '40273', ordnung: 1, fundstelle: 'Ziffer 1, S. 4', titel: 'Kreisel: keine Prüfung', wirkung: 'rechnet mit',
     thema: 'knoten', gilt: () => false,
-    prueft: 'Für Kreisel gilt die Norm nicht, darum rechnet die App dort nicht. Sie bietet solche Punkte nicht als Knoten an und meldet es, ' +
-      'wenn einer geladen wird.',
-    daten: 'OpenStreetMap (Kreisel; junction=roundabout bzw. circular)' },
+    prueft: 'Für Kreisel gilt die Norm nicht (für sie gilt VSS 40 263). Die App zeigt einen Kreisel als einen Punkt in der Mitte und ' +
+      'bestimmt Typ, Form, Arme, Fahrlinien und Ablenkungswinkel und prüft die Sicht aus der gewählten Einfahrt nach VSS 40 263 Ziffer 13 ' +
+      '(S. 8–9) mit den Werten der VSS 40 273.',
+    daten: 'OpenStreetMap (Kreisel; junction=roundabout bzw. circular), AV (Fahrbahn)' },
   { id: 'V273-1b', werk: '40273', ordnung: 1.1, fundstelle: 'Ziffer 1, S. 4', titel: 'Zufahrt auf der durchgehenden Strasse',
     wirkung: 'nur Hinweis', thema: 'knoten', gilt: e => hinweis(e, 'durchgehenden Strasse'),
     prueft: 'Liegt die gewählte Zufahrt auf der durchgehenden Strasse, braucht es die Sicht zum Gegenverkehr nur fürs Linksabbiegen. Die ' +

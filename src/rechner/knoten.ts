@@ -31,15 +31,15 @@ export function strassenArme(netz: OsmNetz, n: number): Arm[] {
   return netz.arme(n).filter(a => { const w = netz.w(a[0]); return w.strasse && MFZ_HW.has(w.hw) })
 }
 
-/** Art eines Punkts mit Strassenarmen (Korrektur 31.10.2026, Punkte 12, 16 und 17): «kein» unter drei Strassenarmen; «kreisel», wenn ein
- *  Weg mit junction=roundabout bzw. circular am Punkt hängt (nicht Gegenstand der App, VSS 40 273 Ziffer 1); «gabelung», wenn höchstens
+/** Art eines Punkts mit Strassenarmen (Korrektur 31.10.2026, Punkte 12, 16 und 17): «kreisel», wenn ein Weg mit junction=roundabout bzw.
+ *  circular am Punkt hängt (K1: der Kreisel als ein Knoten, kreisel.ts; auch Ringpunkte ohne Arm); «kein» unter drei Strassenarmen; «gabelung», wenn höchstens
  *  ein Arm zum Punkt führt (Motorfahrzeuge bzw. Velos gegen die Einbahn): kein wartepflichtiger Verkehr; «fahrbahnteilung», wenn sich
  *  die Fahrbahn in zwei Einbahnen teilt, ohne dass sich die Fahrströme kreuzen (fahrbahnteilung); sonst «knoten» */
 export type KnotenArt = 'knoten' | 'gabelung' | 'kreisel' | 'fahrbahnteilung' | 'zusammenfuehrung' | 'kein'
 export function knotenArt(netz: OsmNetz, n: number): KnotenArt {
+  if (netz.arme(n).some(a => netz.w(a[0]).ring)) return 'kreisel'
   const arme = strassenArme(netz, n)
   if (arme.length < 3) return 'kein'
-  if (netz.arme(n).some(a => netz.w(a[0]).ring)) return 'kreisel'
   if (arme.filter(a => netz.zufluss(a) || netz.veloZufluss(a)[0]).length <= 1) return 'gabelung'
   if (fahrbahnteilung(netz, n)) return 'fahrbahnteilung'
   if (zusammenfuehrung(netz, n)) return 'zusammenfuehrung'
@@ -47,6 +47,7 @@ export function knotenArt(netz: OsmNetz, n: number): KnotenArt {
 }
 /** Meldungen statt einer Rechnung (Korrektur 31.10.2026, Punkte 12, 16 und 17) */
 export const GABELUNG_TEXT = 'Gabelung: höchstens ein Arm führt zum Knoten, kein Vortrittsfall'
+/** Grundstückzufahrt am Ring eines Kreisels (seit K1 nur noch dort; Kreisel selbst: kreisel.ts) */
 export const KREISEL_TEXT = 'Kreisverkehr: nicht Gegenstand der App (VSS 40 273 Ziffer 1, S. 4; siehe VSS 40 263)'
 export const FAHRBAHNTEILUNG_TEXT = 'Fahrbahnteilung: Hier teilt sich die Fahrbahn in zwei Einbahnen, die Fahrströme kreuzen sich nicht; ' +
   'kein Vortrittsfall'
@@ -170,14 +171,16 @@ export function fahrbahnteilungText(netz: OsmNetz, n: number): string {
 
 export const istKnoten = (netz: OsmNetz, n: number): boolean => knotenArt(netz, n) === 'knoten'
 
-/** alle Knoten im Netz (für Tests und die Anzeige nach dem Klick); ohne Gabelungen, Kreisel und Fahrbahnteilungen */
+/** alle Knoten im Netz (für Tests und die Anzeige nach dem Klick); ohne Gabelungen, Kreisel (eigener Punkt in der Mitte, K1) und
+ *  Fahrbahnteilungen */
 export function knotenFinden(netz: OsmNetz): number[] {
   return [...netz.an.keys()].filter(n => istKnoten(netz, n)).sort((a, b) => a - b)
 }
-/** Punkte mit drei und mehr Strassenarmen, die keine Knoten der App sind (Gabelungen, Kreisel, Fahrbahnteilungen): die Knotensuche
- *  blendet sie aus */
+/** Punkte mit drei und mehr Strassenarmen, die keine Knoten der App sind (Gabelungen, Fahrbahnteilungen, Zusammenführungen): die
+ *  Knotensuche blendet sie aus. Seit K1 ohne Kreisel: deren Ringpunkte fehlen schon in der Abfrage, der Kreisel erscheint als Punkt in
+ *  der Mitte mit dem kleinsten Ringpunkt als Kennung (der sonst hier ausgeblendet würde) */
 export function keineKnoten(netz: OsmNetz): number[] {
-  return [...netz.an.keys()].filter(n => { const k = knotenArt(netz, n); return k === 'gabelung' || k === 'kreisel' || k === 'fahrbahnteilung' || k === 'zusammenfuehrung' })
+  return [...netz.an.keys()].filter(n => { const k = knotenArt(netz, n); return k === 'gabelung' || k === 'fahrbahnteilung' || k === 'zusammenfuehrung' })
     .sort((a, b) => a - b)
 }
 
@@ -206,7 +209,7 @@ export const NR_GRUNDSTUECK = 'Z'
 /** Azimut [°] im Uhrzeigersinn ab Norden; bis 1° westlich von Nord zählt als Nord (Sehne knapp neben der Nordrichtung) */
 const azimut = (v: P): number => { const a = (450 - winkelGrad(v)) % 360; return a > 359 ? a - 360 : a }
 /** Arme nummerieren: im Uhrzeigersinn ab Norden 1, 2, 3 …, fest je Knoten (unabhängig von der Zufahrt) */
-export function nummerieren(arme: ArmInfo[]): ArmInfo[] {
+export function nummerieren<T extends ArmInfo>(arme: T[]): T[] {
   const folge = [...arme].sort((a, b) => azimut(a.richtung) - azimut(b.richtung) || (a.key < b.key ? -1 : 1))
   return arme.map(a => ({ ...a, nr: String(folge.indexOf(a) + 1) }))
 }

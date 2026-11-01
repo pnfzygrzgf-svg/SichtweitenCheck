@@ -277,6 +277,102 @@ Gehlinie in `rechner/trottoirueberfahrt.ts`, Zuordnung des Tempos in `rechner/te
 `rechner/trottoirueberfahrt.test.ts` und `rechner/tempoamtlich.test.ts`. Grenzen: Velos auf dem Trottoir (Ziffer 15.4.2) nur als Hinweis,
 Trottoir nicht in den Massnahmen; Vortrittsvorgabe und «ausserorts» weiter nach OSM.
 
+### Kreisel: erkennen, vermessen, Fahrlinien, Ablenkungswinkel, Sicht (Etappen K1 bis K4)
+
+Ein Kreisel (OSM `junction=roundabout` bzw. `circular`) ist ein Knoten (`rechner/kreisel.ts`): alle Ringwege, die über gemeinsame
+Punkte zusammenhängen, bilden den Ring; Kennung ist der kleinste Ringpunkt. Die Knotensuche holt die Ringwege mit Geometrie und zeigt
+einen Punkt in der Mitte des Ausgleichskreises (`daten/osm.ts` `kreiselMitten`); jeder Ringpunkt (Adresse, Fall-Datei) lädt denselben
+Kreisel. Arme: Strassenwege an den Ringpunkten (ohne `service`, ohne Ringwege); getrennte Wege derselben Strasse (Einfahrt und Ausfahrt um
+eine Leitinsel, zusätzliche Einfahrt) bilden einen Arm, wenn ihre Punkte 20 m vom Ring (entlang der OSM-Linie) von der Mitte aus
+höchstens 45° auseinander liegen (ohne Namen: nur eine Einbahn zum Ring mit einer vom Ring weg; alle Wege eines Arms paarweise; Annahme
+`KREISEL_ARM_GRAD`, `KREISEL_ARM_M`). Wege, die ganz am Ring vorbeiführen, und Tram sind keine Arme; Nummern im Uhrzeigersinn ab Norden
+(Richtung ohne Bypass). Bypass (E10): eine zweite Einfahrt eines Arms, die höchstens 20 m (entlang des Rings in Fahrtrichtung) vor der
+Ausfahrt des nächsten Arms mündet (Annahme `BYPASS_M`); gestrichelt, keine Einfahrt, Hinweis «Einfädeln nicht geprüft». Velobypass
+(Nutzerbefund 01.11.2026, `velobypaesse`): `highway=cycleway` bzw. `path`/`footway` mit `bicycle=designated|yes` (ohne Querungen), über
+gemeinsame Punkte zu Ketten verbunden, ganz innerhalb von 60 m um die Mitte, ohne Ringpunkt und ausserhalb des Aussenrands, mindestens
+20 m lang, die Enden mindestens 5 m ausserhalb des Aussenrands und je höchstens 25 m von der OSM-Linie (80 m) zweier verschiedener Arme
+(Annahmen `VELOBYPASS_UMKREIS_M`, `VELOBYPASS_MIN_LAENGE_M`, `VELOBYPASS_ENDE_AUSSEN_M`, `VELOBYPASS_ARM_M`, Toleranz für lückenhafte
+Kartierung; ein kurzer Radweg, der an einem Arm unmittelbar am Ring endet, ist eine Zufahrt für Velos, Befund Dalmazibrücke); kein Arm, keine Einfahrt, gestrichelt in Velofarbe, im Panel «Velobypass zu Arm n», Hinweis «Querungen und
+Einmündungen des Bypasses nicht geprüft»; Velos auf dem Ring wie bisher. Die Umkreis-Abfrage holt dafür auch Fuss- und Radwege mit
+`bicycle=yes` (die Veloachse am Knoten nimmt weiter nur `designated`). Die Fahrbahnteilung vor dem Kreisel bleibt Meldung am
+Teilungspunkt.
+
+Vermessung (E9, Form statt Kreis): 360 Strahlen aus dem Schwerpunkt; je Strahl zählt das Fahrbahnstück der AV (`Strasse_Weg`), auf dem
+die OSM-Linie des Rings liegt (bzw. das nächste bis 2 m): Inselrand = sein Anfang, Aussenrand = sein Ende (über 35 m: Arm). Randpunkte:
+Abstand Aussenrand − OSM-Linie bis 1,5 m vom unteren Quartil (die Armtrichter liegen alle weiter aussen), dann bis 1,0 und 0,6 m von der
+angepassten Form (Fourier-Reihe bis zur zweiten Harmonischen, wenn die Randpunkte rundum liegen); dazwischen neu zentriert auf den
+Schwerpunkt des Aussenrands. Aussenrand je Richtung = gemessener Randpunkt bzw. in den Armen OSM-Linie plus angepasster Abstand, geglättet
+über ±4°. Mittelinsel je Richtung (die Fläche ohne Fahrbahn um die Mitte, gleich welche AV-Art); Strahlen mit weniger als halb so viel
+wie der Median gelten als Lücke (z. B. Tramtrassee) und werden aus den Nachbarn ergänzt; ab der Mitte auf mehr als der Hälfte der
+Strahlen Fahrbahn: keine Insel, Hinweis. Brauchbar, wenn mindestens 60 Strahlen den Aussenrand treffen, keine Lücke über 160° bleibt, die
+OSM-Linie auf mindestens der Hälfte der Strahlen auf der Fahrbahn liegt, der mittlere Aussenradius 4 bis 30 m misst, die Fahrbahn im
+Mittel mindestens 3 m breit ist und die Mitte höchstens 4 m vom Schwerpunkt der OSM-Linie liegt. Sonst Schätzung aus OSM (Annahme): Form
+der OSM-Linie, die in der Mitte einer 5,50 m breiten Kreiselfahrbahn liegt (`KREISEL_BREITE_OHNE_AV_M`). Kennzahlen: mittlerer,
+kleinster und grösster Aussendurchmesser (durch die Mitte); «nicht kreisrund» ab Verhältnis 1,1 (Annahme `NICHT_RUND_AB`). Typ nach dem
+mittleren Aussendurchmesser auf ganze Meter gerundet (Annahme für die Lücke): bis 25 m Minikreisel, ab 26 m Kleinkreisel (VSS 40 263
+Ziffern 3 und 4, S. 4); unter 14 m bzw. über 40 m Hinweis; von Hand umschaltbar (`eingaben.kreiselTyp`, Entscheid E1). Innenring nur als
+Vorschlag (Ziffer 16, S. 12): je Richtung 5,50 m innerhalb des Aussenrands, wo die Kreiselfahrbahn breiter ist (`INNENRING_AB_M`); nie
+aus der AV gelesen. Tramtrassee durch die Insel: Hinweis «Durchsicht über das Tramtrassee» (Ziffer 13.3, S. 9); Tramgleis über die
+Kreiselfahrbahn: Hinweis.
+
+Einfahrt, K und D (K2, `rechner/kreiselfahrt.ts`): Einfahrt im Panel bzw. per Klick auf den Arm (`ort.zufahrt` = Schlüssel des
+Kreiselarms). Fahrstreifen einer Ein- bzw. Ausfahrt: OSM-Linie seitlich verschoben nach dem AV-Querschnitt 5 m ausserhalb des Kreisels
+(quert ein anderer OSM-Weg den Querschnitt, etwa die Ausfahrt hinter dem Ende der Leitinsel, gilt die Fahrbahn nur bis zur Hälfte des
+Abstands, ein OSM-Rad- bzw. Fussweg auf derselben AV-Fläche begrenzt sie 1 m davor; liegt die OSM-Linie auf einer Mittelinsel, gilt das
+Fahrbahnstück rechts davon bis 4 m; ist das Stück breiter als 7 m für eine Richtung bzw. 14 m für beide oder fehlt es, gelten nacheinander
+3, 7, 9 und 11 m ausserhalb; Einbahn: Mitte der Fahrbahn, mit Gegenverkehr: Mitte der rechten Hälfte; ohne Querschnitt 3,50 m breite
+Fahrstreifen, Annahmen
+`QUERSCHNITT_AUSSEN_M`, `FAHRSTREIFEN_ANNAHME_M`). Fahrlinie mit Vortritt je Richtung in der Mitte zwischen Aussenrand und Innenring bzw.
+Insel (Entscheid E2), gezeigt als halber Ring im Gegenuhrzeigersinn bis K; K = Schnitt mit der Fahrlinie der Einfahrt; Wartelinie =
+Schnitt mit dem Aussenrand; D = B (3,00 m innerorts, 5,00 m ausserorts, Ziffer 12) davor auf der Achse, am Fahrersitz 0,50 m links. Nur
+Verkehr von links, kein Rechtsvortritt.
+
+Ablenkungswinkel (K3): je Fahrbeziehung die Tangente an den Inselrand (Fall 1) bzw. Innenring (Fall 2), Insel links, und an die
+Hilfslinie 3,50 m innerhalb der Ausrundung R<sub>e2</sub> am rechten Rand der Einfahrt (Kreis mit Radius R<sub>e2</sub> + 3,50 m, Tangente
+mit dem Kreis rechts); die Ausfahrt spiegelbildlich; β zwischen den beiden Tangenten (VSS 40 263 Ziffer 17, S. 12, Abb. 6).
+R<sub>e2</sub> (Annahme): Ausgleichskreis durch den rechten AV-Rand, quer zur Achse auf 20 m vor der Wartelinie gemessen: die
+zusammenhängenden Punkte an der Mündung, die mehr als 0,30 m weiter aussen liegen als der gerade Rand und zur Mündung hin um mindestens
+0,50 m aufweiten, mittlere Abweichung vom Kreis höchstens 0,25 m; Mitte rechts der Achse, Radius 2 bis 60 m (sonst zerklüfteter Rand, etwa
+Inseln oder ein Radweg daneben: keine Ausrundung). Startpunkte nur auf dem gemessenen Bogen ±3 m und nicht innerhalb der Fahrlinie mit
+Vortritt (sonst entartet die Tangente auf der Gegenseite eines grossen Hilfskreises bzw. an der Insel). Ohne Ausrundung (eckige Mündung, keine AV):
+gerade Hilfslinie 3,50 m innerhalb des rechten Rands, Startpunkt an der Wartelinie (Annahme). Fahrbeziehungen: zu jeder Einfahrt der Arm
+mit dem grössten Winkel; bei drei Armen nur über 180 gon (Ziffer 17); von Hand an- und abwählbar (`eingaben.kreiselBeziehungen`,
+Schlüssel «von>nach»). Tempo auf der Kreiselfahrbahn nach dem kleinsten β der aktiven, gültigen Fahrbeziehungen (Ziffer 13.2,
+S. 8–9): unter 20 gon 40 km/h, 20 bis 45 gon 35 km/h, darüber 30 km/h; ohne gültige Konstruktion 40 km/h, Minikreisel fest 30 km/h
+ohne β (Annahmen, Entscheid E1); Hinweis unter 45 gon (Ziffer 17, S. 13). Startpunkte von Hand (K5) sind in `kreiselBeta` (Parameter
+`start`) vorbereitet, noch ohne Eingabe in der Oberfläche.
+
+Sicht (K4, `rechner/kreiselsicht.ts`): mit gewählter Einfahrt. Ak (VSS 40 263 Ziffer 13.2, S. 8–9): A nach VSS 40 273 Tab. 1 mit dem
+Tempo aus K3; bei 35 km/h zwischen den Werten für 30 und 40 km/h linear (Annahme, Entscheid E7); Strassentyp der Kreiselfahrbahn:
+Hauptverkehrsstrasse, sobald ein Arm eine ist (Zwischenwert wie am Knoten), sonst unterer Wert; der Ring gilt als eben (Entscheid E3).
+Zielpunkte ab K entlang der Fahrlinie mit Vortritt gegen die Fahrtrichtung, bis 1,5 × grösster nötiger Wert, höchstens eine ganze
+Runde; wäre die nötige Länge grösser, gilt die Rundenlänge (Annahme, Nutzerentscheid 01.11.2026); Panel und Bericht zeigen dann «länger
+als eine Runde: begrenzt auf n m» mit dem ungekürzten Wert. Gilt für Ak und Velo, nicht für Az. Sicht von D; Status wie am Knoten. Fahrzeuge auf Karte und Skizze wie am Knoten (`fahrzeug.ts`
+`kreiselFahrzeug`): F<sub>B</sub> bei D, F<sub>A</sub> und Velo mit der Front am Ende von Ak bzw. der Velo-Linie, ein Fahrzeug in der
+Zufahrt links am Ende von Az. Velo (Entscheid E6): dieselbe Linie, A nach Tab. 3 (eben). Hindernisse wie am Knoten (Gebäude der AV,
+von Hand, bestätigte Vorschläge, amtliche Parkfelder, Bäume als Palisade); der Hindernis-Block im Panel gilt auch am Kreisel. Sichtberme
+(Entscheid E4): Schnitt des Sichtfelds (Dreiecke D – Zielpunkte bis zum grösseren nötigen Wert von Auto und Velo) mit Insel und
+Innenring, Tiefe ab dem Inselrand; ein Hindernis darin → nicht erfüllt; der Rest der Insel «Durchsicht verhindern» (Ziffer 13.3, S. 9;
+bfu BM.024-2024), ob sie verhindert ist, prüft die App nicht. Az (K4b, Entscheid E8, Vergleichswert, kein Normwert): ab K auf der
+Fahrlinie mit Vortritt gegen die Fahrtrichtung bis zum K der Zufahrt links, dann auf deren Fahrlinie (Mitte des Einfahrtsfahrstreifens wie
+in K2) hinaus, wie die fette Fahrlinie in bfu 2.446.01 Abb. 3, LU Abb. 8 und ZH Abb. 10 (die Linie am Ringrand ist dort die Masslinie);
+das Fahrzeug steht am Ende im Einfahrtsfahrstreifen, zum Ring hin; keine Begrenzung an der vorherigen Einfahrt; Werte nach Kanton Luzern vif 731.501 Tab. 2 (`AZ_LU`: 40 km/h 40/35 m, 35 km/h 30/25 m, 30 km/h 25/20 m, Regelfall/Minimal),
+Quelle bfu-Fachdokumentation 2.446.01 (2024) Kap. 2.5, Abb. 3, Kreiselrichtlinien ZH 2022 Abb. 10 und LU 731.501 Tab. 2; liegt links nur
+eine Ausfahrt, entfällt Az. Gesamtstatus: schlechtester von Ak, Velo und Sichtberme (Az zählt nicht). Noch nicht: Anhaltesichtweite auf
+der Kreiselfahrbahn und in die Ausfahrt (Entscheid E5, Hinweis); Sicht auf Fussgängerstreifen prüft fgsCheck. Bericht am Kreisel
+(`KreiselBericht.tsx`): Druckansicht mit Skizze (SVG, ohne Luftbild), Ergebnis, Masse, β, Eingaben, Annahmen, Hinweise, Quellen.
+Fall-Datei Version 8: im Auszug des Ergebnisses `kreisel` (Typ, Masse, β, Tempo, Ak, Velo, Sichtberme, Az).
+
+Anzeige: im Panel der Block «Kreisel» (`KreiselBlock.tsx`: Typ, Durchmesser mit kleinstem und grösstem, Fahrbahnbreite, Insel,
+Innenring-Vorschlag, Einfahrt, Fahrlinie und D, Tabelle der Fahrbeziehungen mit β in gon und Grad, Tempo, Hinweise und Annahmen), auf der
+Karte Aussenrand (gestrichelt, wenn aus OSM geschätzt), Insel, Innenring, Fahrlinie mit Vortritt, Arme mit Bypass, gewählte Einfahrt mit
+Wartelinie, K und D, Konstruktion des Ablenkungswinkels (massgebende kräftig), Sichtdreiecke, Az, Sichtberme schraffiert und «Durchsicht
+verhindern»; Schritt 4 mit Ak, Velo, Sichtberme und Az. Eingaben am Kreisel (Typ, Fahrbeziehungen) als optionale Felder. Tests `rechner/kreisel.test.ts` (synthetisch: vier und drei Arme, getrennte Ein- und Ausfahrt, Bypass mit und
+ohne Wirkung, Tram, mehrere Ringwege, Oval, Tramtrassee durch die Insel, Mini- und Kleinkreisel, ohne Insel, ohne AV, grosser Kreisel,
+Knotensuche, Achse/K/D und β mit Handlösungen mit und ohne Ausrundung, drei Arme T- und Y-förmig, Velobypass mit Negativfällen, K4 mit
+Tab.-1-Werten, Hindernis in und ausserhalb der Sichtberme, Az mit und ohne Zufahrt links, Fall-Auszug; echt:
+Kreisel Sandrainstrasse, Eigerplatz und Dalmazibrücke Bern mit Daten in `rechner/testdaten/`).
+
 ### Versionen
 
 - 0.7.0 (31.10.2026): Block 4 und 5 der Regelprüfung und Korrekturrunde nach dem Browsertest; Einzelheiten in den
@@ -374,7 +470,10 @@ erfüllt. Prüfrunden je Etappe (Sonnet, Code-Lektüre, eigene Fälle): Abb. 2 n
   fest 3,00 m hinter der Hinterkante; Trottoir nicht in den Massnahmen.
 - Rechtsvortritt: Wahrnehmbarkeit nur als Eingabe, Abb. 6 ohne Längsneigung, Abb. 5 nach der Konstruktion der bfu (BM.021 Abb. 4), bei
   mehreren Armen rechts nur der nächste, Linksabbieger gegen den Gegenverkehr nicht geprüft, Tabelle «alle Arme» ohne Velo und Trottoir.
-- Keine Kreisel, keine Lichtsignalanlagen (nur als Massnahme vermerkt), Kurven nur als Hinweis; Radstreifen- und Radwegbreite
+- Kreisel: Velobypässe nur, wenn sie in OSM kartiert sind und zwei Arme verbinden; einen nicht kartierten Bypass erkennt die App nicht
+  (eine Eingabe von Hand gibt es noch nicht).
+- Kreisel: Sicht aus der Einfahrt nach links (Ak, Velo, Sichtberme, Az als Vergleichswert); noch ohne Anhaltesichtweite auf dem Ring
+  und in die Ausfahrt, ohne Griffe zum Verschieben der β-Konstruktion, Bericht ohne Luftbild; keine Lichtsignalanlagen (nur als Massnahme vermerkt), Kurven nur als Hinweis; Radstreifen- und Radwegbreite
   angenommen. Velo gegen die Einbahn nur aus OSM-Tags; auf der Zufahrt ohne Wahl der Veloführung.
 - Massnahmen ohne Kombinationen; beim Entfernen eines Parkfelds bleibt die Achse. Grundstückzufahrt einspurig in der Mitte.
 - Amtliche Parkfelder nur Stadt Bern und nur öffentliche Felder; Parkstreifen nur aus Parkfeldern.
