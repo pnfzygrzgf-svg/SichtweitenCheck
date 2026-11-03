@@ -1,4 +1,4 @@
-// ── Sprünge im Panel (Korrektur 31.10.2026, Muster fgsCheck Verweise.tsx hilfeZeigen): übergeordnete Aufklapper öffnen, zeigen und kurz
+// ── Sprünge im Panel (Muster fgsCheck Verweise.tsx hilfeZeigen): übergeordnete Aufklapper öffnen, zeigen und kurz
 // hervorheben; Sprung aus der Quellentabelle in die Regelübersicht als Ereignis «swc-regel» ──
 
 import type { WerkId } from './regeln'

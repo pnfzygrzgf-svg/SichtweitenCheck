@@ -1,4 +1,4 @@
-// ── Panel-Abschnitt «Regeln» (Korrektur 31.10.2026, Punkt 9c; Muster fgsCheck RegelUebersicht.tsx): alle Regeln des Katalogs (regeln.ts),
+// ── Panel-Abschnitt «Regeln» (Muster fgsCheck RegelUebersicht.tsx): alle Regeln des Katalogs (regeln.ts),
 // umschaltbar nach Quelle (Normreihenfolge, nach Herkunft gegliedert) bzw. nach Thema. Je Regel Herkunft und Wirkung («fliesst in die
 // Rechnung ein» bzw. «nur Hinweis»); Wert und Daten nur, wo es sie gibt. Sprung aus der Quellentabelle: Ereignis «swc-regel» mit dem Werk ──
 

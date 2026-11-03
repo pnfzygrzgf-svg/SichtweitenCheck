@@ -13,7 +13,7 @@
 // gemessen und als glatte Funktion des Winkels angepasst wird (Ausreisser verworfen, Start beim unteren Quartil); gemessene Randpunkte
 // gelten, in den Armen die angepasste Form, danach geglättet. So bleibt ein Oval ein Oval. Inselrand je Richtung, Lücken (z. B. ein
 // Tramtrassee quer durch die Insel) aus den Nachbarn ergänzt. Ohne brauchbare AV: Form der OSM-Linie, Breite angenommen.
-// Typ nach dem mittleren Aussendurchmesser (VSS 40 263 Ziffern 3 und 4, S. 4), von Hand umschaltbar (Entscheid E1, 01.11.2026).
+// Typ nach dem mittleren Aussendurchmesser (VSS 40 263 Ziffern 3 und 4, S. 4), von Hand umschaltbar.
 // Innenring nur als Vorschlag (Ziffer 16, S. 12): je Richtung 5,50 m innerhalb des Aussenrands, wo die Kreiselfahrbahn breiter ist;
 // nie aus der AV gelesen. Fahrlinie mit Vortritt (E2) je Richtung in der Mitte zwischen Aussenrand und Innenring bzw. Insel.
 // Einfahrt, K, D (K2) und Ablenkungswinkel (K3) in kreiselfahrt.ts.

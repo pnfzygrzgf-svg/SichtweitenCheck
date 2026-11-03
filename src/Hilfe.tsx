@@ -1,3 +1,4 @@
+import { E6_DIENSTE } from './daten/anbieter/gemeinsam/e6'
 // ── Einstiegshilfe, Datenschutz und Fusszeile (E4a, Vorlage fgsCheck Hilfe.tsx) ──
 
 import { Fragment } from 'react'
@@ -24,7 +25,7 @@ export function Anleitung() {
       <summary>So funktioniert's</summary>
       <p><b>Ort suchen:</b> oben in der Karte Ort, Adresse oder Strasse eingeben oder den Standort-Knopf nutzen; heranzoomen, bis
         die Knoten als blaue Punkte erscheinen. Dann das Panel von oben nach unten:</p>
-      {/* Korrektur 31.10.2026, Punkt 20 (Text vom Nutzer freigegeben): nur Bedienschritte; Rechenregeln stehen unter Begriffe und Regeln */}
+      {/* nur Bedienschritte; Rechenregeln stehen unter Begriffe und Regeln */}
       <ol>
         <li><b>Knoten:</b> blauen Punkt anklicken. Für eine Grundstückzufahrt oben «Grundstückzufahrt prüfen», auf den Fahrbahnrand
           klicken; ein zweiter Klick im Grundstück gibt die Richtung.</li>
@@ -50,41 +51,51 @@ export function WerkVerweis({ w, children }: { w: WerkId; children?: React.React
     onClick={e => { if (hilfeZeigen(werkAnker(w))) e.preventDefault() }}>{children ?? WERKE[w].name}</a>
 }
 
-/** «Rechnung und Sichtweiten» (Korrektur 31.10.2026, Punkt 9a): kurz in Alltagssprache, Werke als Verweise */
+/** «Rechnung und Sichtweiten»: kurz in Alltagssprache, Werke als Verweise */
 export function RechnungGrundlagen() {
   return <>
-    {/* erster Satz vom Nutzer freigegeben (31.10.2026, Korrektur Punkt 18) */}
+    {/* erster Satz: festgelegter Wortlaut */}
     <p className="klein">Die App prüft an Knoten und Grundstückzufahrten, ob wer warten muss, den Verkehr mit Vortritt früh genug sieht,
       beim Einbiegen wie beim Überqueren. Wartend ist ein Auto oder ein Velo in der gewählten Zufahrt; beim Rechtsvortritt wartet jede
       Zufahrt auf den Verkehr von rechts. An einer Lichtsignalanlage gilt die Prüfung für die ausgeschaltete Anlage. Sie setzt das Auge
       der wartenden Person (D) hinter den Rand der Strasse mit Vortritt bzw. hinter die Halte- oder Wartelinie, sucht den Punkt K, an dem
       sich die Fahrlinien kreuzen, und zieht von D aus Sichtlinien zu Punkten auf der Fahrlinie mit Vortritt. Wie weit die Sicht reichen
       muss, hängt vom Tempo, vom Strassentyp und von der Längsneigung ab (<WerkVerweis w="40273" />, Anhaltesichtweite nach{' '}
-      <WerkVerweis w="40090" />, Strassentypen nach <WerkVerweis w="40040" />). Geprüft werden auch Velos und Fussgänger auf dem Trottoir,
+      <WerkVerweis w="40090" />, Strassentypen nach <WerkVerweis w="40040" />). Geprüft werden auch Velos und Zufussgehende auf dem Trottoir,
       beim Rechtsvortritt die Sicht nach rechts (enge Kreuzungen nach <WerkVerweis w="BFU" />) und bei einer Trottoirüberfahrt beide
       Schritte nach <WerkVerweis w="40242" />. Für ungünstige Verhältnisse nimmt die App die Masse des Kantons Solothurn
       (<WerkVerweis w="SO" />), für Stop und Kein Vortritt die <WerkVerweis w="SSV" /> und die kantonale Praxis.</p>
     <p className="klein">Die App rechnet im Grundriss und prüft die Höhe von Hindernissen nicht. Die Fahrzeuge auf Karte und Bild dienen nur der
-      Darstellung (Personenwagen {f1(PW_LAENGE_M)} × {f1(PW_BREITE_M)} m, Lenker {f1(LENKER_VOR_FRONT_M)} m hinter der Front; Velo{' '}
+      Darstellung (Personenwagen {f1(PW_LAENGE_M)} × {f1(PW_BREITE_M)} m, Fahrer*innenauge {f1(LENKER_VOR_FRONT_M)} m hinter der Front; Velo{' '}
       {f1(VELO_LAENGE_M)} × {f1(VELO_BREITE_M)} m). Wo ein Werk kein Mass nennt, gilt eine <WerkVerweis w="ANNAHME">Annahme der App</WerkVerweis>{' '}
       bzw. ein <WerkVerweis w="ENTSCHEID">Projektentscheid</WerkVerweis>; alle Regeln stehen im Abschnitt «Regeln».</p>
   </>
 }
 
-/** «Daten» (Korrektur 31.10.2026, Punkt 9a): je Dienst mit Quellenangabe aus den Daten-Modulen */
+/** «Daten»: je Dienst mit Quellenangabe aus den Daten-Modulen */
 export function DatenQuellen() {
   return <ul className="klein">
     <li>Amtliche Vermessung (Fahrbahn, Trottoir, Gebäude): Amtliche Vermessung der Kantone, geodienste.ch (WFS).</li>
     <li>Strassennetz, Tempo, Signale, Veloführung: © OpenStreetMap-Mitwirkende, ODbL (Overpass).</li>
     <li>Längsneigung: Höhenmodell {HOEHEN_QUELLE} (Profildienst api3.geo.admin.ch).</li>
+    <li>Höhenkurven: © swisstopo, swissALTI3D; 1-m-Höhenkurven aus dem 2-m-Raster, neueste passende Ausgabe über STAC v1 (data.geo.admin.ch). Zuschaltbarer Kartenkontext ab Zoom 18; verändert keine Sichtrechnung. Ausgabe, Bereitstellung und Abruf getrennt, örtliches Aufnahmejahr nicht automatisch bekannt.</li>
     <li>Luftbild: {LUFTBILD_QUELLE} (Kartenkacheln und Bild des Berichts).</li>
+    <li>Haltestellen des öffentlichen Verkehrs: © BAV, freie Nutzung mit Quellenangabe, über api3.geo.admin.ch. Aktive Bus-/Tramhaltestellen,
+      nur Kartenanzeige; keine Haltekanten, keine Wirkung auf die Rechnung; Datenstand der Ebene je Ausschnitt; Vollständigkeit unbekannt.</li>
+    <li>Gebietsbestimmung: Gemeindegrenzen swissBOUNDARIES3D © swisstopo, aktueller Jahresstand, Ladepunkt und Ausschnitt getrennt;
+      freie Nutzung mit Quellenangabe. Benötigt keine AV.</li>
     {PARKKATASTER.map(q => <li key={q.id}>{q.name}: {q.quellenangabe} (WFS map.bern.ch).</li>)}
     {BAUMKATASTER.map(q => <li key={q.id}>{q.name}: {q.quellenangabe} (WFS map.bern.ch, zuschaltbar).</li>)}
+    <li>Amtliche Streifen-, Ampel- und Signalinventare stehen als getrennte Kartenebenen bereit. Bei «Amtliche Signale zuordnen» werden Treffer im Umkreis angeboten: erst die Bestätigung verbindet ein Signal mit Knoten und Zufahrt. Eigene Regelung geht vor. Ein leeres Inventar belegt keine fehlende Anlage.</li>
+    <li>Regionale Tempodienste: Kanton Zürich, Basel-Stadt, Genève, Uri, Solothurn, Schwyz, Fribourg und Jura; Verkehrsberuhigungszonen der Städte Luzern, St. Gallen und Lausanne. Nur passende amtliche Linien mit Strassenname werden automatisch übernommen. Sonstige räumliche Treffer und Zonen in den Kartenebenen prüfen und Eingabe bestätigen. Datenstand ist vom Abrufdatum getrennt.</li>
+    <li>Tempo und Verkehrszonen Stadt Zürich: heutiger Zustand (IST), Dienstabteilung Verkehr, CC0. Nur bei passender Strasse, Richtung, Lage und widerspruchsfreier Zone vor OSM; Fahrverbot ist kein Tempo 0.</li>
+    {E6_DIENSTE.map(d => <li key={d.id}>{d.name}: {d.anbieter}; {d.lizenz}. {d.hinweis} Nur Kartenkontext;
+      keine automatische Normantwort oder Hindernisprüfung{d.art === 'beleuchtung' ? '; kein Beleuchtungsnachweis' : ''}.</li>)}
     <li>Tempo Stadt Bern: {VSIG_QUELLENANGABE} (Geoportal Stadt Bern, map.bern.ch; vor OSM).</li>
   </ul>
 }
 
-/** «Quellen der Prüfungen» (Korrektur 31.10.2026, Punkt 9a): Werk | Ausgabe | Herkunft | Beschreibung | Regeln (Zahl mit Sprung) */
+/** «Quellen der Prüfungen»: Werk | Ausgabe | Herkunft | Beschreibung | Regeln (Zahl mit Sprung) */
 export function QuellenTabelle() {
   const n = regelnJeWerk()
   return <div id="quellen-pruefungen">
@@ -103,7 +114,7 @@ export function QuellenTabelle() {
   </div>
 }
 
-/** «Begriffe» (Korrektur 31.10.2026, Punkt 9b): alphabetisch, je eine eigene Erklärung */
+/** «Begriffe»: alphabetisch, je eine eigene Erklärung */
 export function BegriffeListe() {
   return <dl className="begriffe-liste">{begriffeAlphabetisch().map(b => <Fragment key={b.id}><dt id={`begriff-${b.id}`}>{b.name}</dt>
     <dd>{b.text}</dd></Fragment>)}</dl>
@@ -122,6 +133,9 @@ export function Datenschutz() {
   return (
     <details className="hilfe">
       <summary>Datenschutz</summary>
+      <p className="klein">Für die Anzeige des Datenstands werden zusätzlich öffentliche Produktmetadaten von map.bern.ch und
+        die kantonalen AV-Publikationsstände von www.geodienste.ch abgefragt. Diese Metadatenabrufe enthalten nur Produktnamen,
+        keine Eingaben oder Ergebnisse. Die Anbieter sehen dabei wie bei den Datenabrufen die IP-Adresse und Browserangaben.</p>
       <ul>
         <li>Keine Anmeldung, kein eigener Server: gerechnet wird im Browser (Web Worker). Nicht gesendet werden Eingaben,
           Bezeichnung, Zahlen und Status; die Dienste erhalten nur Koordinaten bzw. Ausschnitte (siehe unten).</li>
@@ -133,14 +147,21 @@ export function Datenschutz() {
           löschst du über die Website-Daten dieser Seite in den Browser-Einstellungen.</li>
         <li>Der Browser holt die Daten direkt bei diesen Diensten; sie sehen dabei technisch die IP-Adresse und Browserangaben:
           <ul>
-            <li>swisstopo (geo.admin.ch): Kartenkacheln (Luftbild bzw. Landeskarte) des sichtbaren Ausschnitts (wmts.geo.admin.ch);
+            <li>swisstopo (geo.admin.ch): Kartenkacheln (Luftbild bzw. Landeskarte) des sichtbaren Ausschnitts (wmts.geo.admin.ch); bei eingeschalteten Höhenkurven ab Zoom 18 den sichtbaren Ausschnitt zur Kachelsuche und begrenzte Höhenraster-Teilabrufe (data.geo.admin.ch);
               das Kartenbild des Berichts (wms.geo.admin.ch); bei der Ortssuche der eingegebene Suchbegriff, das Flugjahr des
               Luftbilds (Bericht) und für die Längsneigung bis vier Linien je Fall (Fahrstreifenachsen, Zufahrt, Trottoir) an den
               Höhendienst (api3.geo.admin.ch).</li>
+            <li>swissTLM3D (Tram und Strassenklassen), ARE-Bauzonen und ASTRA-Unfälle über api3.geo.admin.ch: Rechteck ±200 m, bei dichten Beständen in Teilrechtecken; aktuelle öffentliche Ebenenmetadaten. Nur bestätigte Zuordnungen wirken auf Strassentyp und Innerortslage; Unfälle bleiben Kartenkontext.</li>
+            <li>BAV-Haltestellen und Gemeindegrenzen über api3.geo.admin.ch: Rechteck ±200 m bzw. Ladepunkt für Haltestellen
+              und unabhängige Gebietsbestimmung, auch ohne verfügbare AV. Haltestellen nur zur Kartenanzeige; beim Wiederöffnen werden wie bei den übrigen Quellen neue Daten geladen.
+              Datenstand und Vollständigkeit werden angezeigt, bestätigte Eingaben bleiben erhalten.</li>
             <li>geodienste.ch (Amtliche Vermessung): Rechteck ±{AV_RADIUS_M} m um den Knoten bzw. Zufahrtspunkt, bei weit reichenden
               Zielpunkten bis ±{AV_MAX_M} m.</li>
             <li>Overpass (OpenStreetMap): Kartenausschnitt (Knoten und Strassennamen) mit Rand bzw. Umkreis {OSM_RADIUS_M} m um den
               Knoten; Server {erster} (Swiss OpenStreetMap Association), bei Störung ersatzweise {weitere.join(', ')}.</li>
+            <li>Regionale Geoportale: im jeweiligen Gebiet Rechteck ±200 m für Tempoabschnitte bzw. Verkehrszonen, Trefferzahl und öffentliche Metadaten: maps.zh.ch, data.bs.ch, vector.sitg.ge.ch, geo.ur.ch, geo.so.ch, map.geo.sz.ch, maps.fr.ch, geo.jura.ch, public.geo.lu.ch, map.stadtluzern.ch, daten.stadt.sg.ch, services.geo.zg.ch und map.lausanne.ch.</li>
+            <li>ogd.stadt-zuerich.ch und data.stadt-zuerich.ch: in und nahe der Stadt Zürich Rechteck ±200 m für heutigen Tempo-/Zonenbestand und Trefferzahl; öffentliche Katalogmetadaten. Datenstand und Abrufzeit getrennt.</li>
+            <li>Kartenkontext: im jeweiligen Gebiet Rechteck ±200 m für Beleuchtungsstandorte (Stadt/Kanton Zürich, Stadt St. Gallen), VBZ-Rillenpunkte und das Zürcher Fuss-/Velowegnetz; Trefferzahlen und aktuelle Dienst-/Katalogmetadaten über www.ogd.stadt-zuerich.ch, data.stadt-zuerich.ch, maps.zh.ch und daten.stadt.sg.ch. Nur Kartenkontext, keine automatische Normantwort oder Hindernisprüfung.</li>
             <li>map.bern.ch (Geodaten Stadt Bern), nur in der Stadt Bern: Rechteck ±{KATASTER_RADIUS_M} m für die öffentlichen Parkfelder,
               die signalisierte Höchstgeschwindigkeit und, wenn zugeschaltet, das Baumkataster.</li>
           </ul>

@@ -5,13 +5,14 @@
 // gespiegelt). Hier ohne React, damit Ausschnitt und Umrechnung testbar sind.
 
 import type { P } from './geo'
+import type { QuellenQualitaet } from './daten/anbieter/gemeinsam/qualitaet'
 import type { Ergebnis, KnotenInfo, ArmInfo } from './rechner/typen'
 import { nrLage } from './rechner/knoten'
 import { autoUmriss, fbLage, fbVeloLage, faLage, veloTeile, veloLage } from './rechner/fahrzeug'
 import { add } from './geo'
 
 /** Stand einer geladenen Quelle (Panel «Geladene Quellen»; zeit: Abruf, für die Quellen im Bericht) */
-export interface QuellenStand { name: string; objekte?: string; ms?: number; bytes?: number; server?: string; fehler?: string; zeit?: string }
+export interface QuellenStand extends QuellenQualitaet { kantone?: string[]; name: string; objekte?: string; ms?: number; bytes?: number; server?: string; fehler?: string; zeit?: string }
 
 /** Ausschnitt [E0, N0, E1, N1] in LV95 */
 export type Box = [number, number, number, number]
@@ -120,7 +121,7 @@ export function imAusschnitt(ring: P[], box: Box): boolean {
   return e1 >= box[0] && e0 <= box[2] && n1 >= box[1] && n0 <= box[3]
 }
 
-/** Kreuzungspunkte K für Karte und Kartenbild (Korrektur 31.10.2026, Punkt 10): je geprüfte Richtung mit Motorfahrzeugen ein Punkt mit
+/** Kreuzungspunkte K für Karte und Kartenbild: je geprüfte Richtung mit Motorfahrzeugen ein Punkt mit
  *  Beschriftung «K» und Tooltip */
 export function kreuzungspunkte(e: Pick<Ergebnis, 'richtungen'>): { richtung: string; p: P; text: 'K'; tooltip: string }[] {
   return e.richtungen.filter(r => r.status !== 'keine_zufahrt').map(r => ({ richtung: r.richtung, p: r.K, text: 'K' as const,

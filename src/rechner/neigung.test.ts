@@ -154,7 +154,7 @@ describe('E3a: Neigung in der Rechnung', () => {
     // HVS (tertiary): Zwischenwert 60 m bleibt über 57 m; Hinweis zur Vorgabe «grosse Längsneigung»
     const h = rechne({})
     expect(h.richtungen.map(r => [r.massgebend, r.typStufe, r.anhalteAngewendet])).toEqual([[60, 'zwischen', true], [60, 'zwischen', true]])
-    expect(h.hinweise.join(' | ')).toContain('Längsneigung unbekannt: die Vorgabe «grosse Längsneigung» (ungünstige Verhältnisse) bleibt aus')
+    expect(h.hinweise.join(' | ')).toContain('Längsneigung unbekannt: die automatische Einstufung «grosse Längsneigung» (ungünstige Verhältnisse) bleibt aus')
   })
   it('Neigung von Hand geht vor, auch wenn das Profil fehlt; Höhenmodell lädt: unverändert 0 %', () => {
     const e = rechne({}, { typ: 'es', neigung: { links: 1, rechts: null } })

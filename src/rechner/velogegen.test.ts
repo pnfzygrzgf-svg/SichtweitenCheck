@@ -157,15 +157,15 @@ describe('E4: Zufahrt mit Einbahn vom Knoten weg und Velo gegen die Einbahn', ()
     nahe(e.D, 2.0, -6)
     nahe(e.Dachse, 2.0, -6)
     expect(e.Dlage.seitlich).toBe(0)
-    // Wortlaut des Auftraggebers (Korrektur 31.10.2026, Punkt 2)
+    // festgelegter Wortlaut
     expect(e.hinweise).toContain('Die Zufahrt ist eine Einbahn vom Knoten weg. Vortrittsbelastet sind nur die Velos im Gegenverkehr ' +
       '(OSM oneway:bicycle=no).')
     expect(e.hinweise.join(' | ')).not.toContain('Gerechnet wird trotzdem')
-    // Velo gegen die Einbahn in den Annahmen nur einmal, im Thema «Wartendes Velo» (Korrektur 31.10.2026, Punkt 7)
+    // Velo gegen die Einbahn in den Annahmen nur einmal, im Thema «Wartendes Velo»
     const t = e.annahmen.join(' | ')
     expect(t).toContain('Wartendes Velo: ')
     expect(t).toContain('Auf dieser Zufahrt dürfen Velos gegen die Einbahn zum Knoten fahren (OSM oneway:bicycle=no). Die App prüft darum ' +
-      'die Sicht aus der Lage eines solchen Velos: 0,50 m vom für das Velo rechten Fahrbahnrand, das Auge des Velofahrers über dieser Linie.')
+      'die Sicht aus der Lage eines solchen Velos: 0,50 m vom für das Velo rechten Fahrbahnrand, das Auge der velofahrenden Person über dieser Linie.')
     expect(t.match(/gegen die Einbahn/g)).toHaveLength(1)
     expect(t.match(/oneway:bicycle/g)).toHaveLength(1)
     expect(e.annahmenThemen!.filter(x => /Velo/.test(x.text) && /Einbahn/.test(x.text)).map(x => x.thema)).toEqual(['wartend'])
@@ -182,7 +182,7 @@ describe('E4: Zufahrt mit Einbahn vom Knoten weg und Velo gegen die Einbahn', ()
     nahe(e.D, 1.75, -6)
     expect(e.zufahrtVelo!.lageText).toContain('Mitte des Gegenverkehrsstreifens')
   })
-  it('Einbahn ohne Velotags: unverändert («Gerechnet wird trotzdem»), D am Fahrersitz der Einbahn-Mitte', () => {
+  it('Einbahn ohne Velotags: unverändert («Gerechnet wird trotzdem»), D am Fahrer*innensitz der Einbahn-Mitte', () => {
     const e = rechne(osm({}, { oneway: 'yes' }), { zufahrt: ZUFAHRT_NEBEN })
     expect(e.zufahrtVelo).toBeNull()
     expect(e.hinweise.join(' | ')).toContain('Gerechnet wird trotzdem')

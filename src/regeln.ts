@@ -1,4 +1,4 @@
-// ── Regeln des SichtweitenCheck (Korrektur 31.10.2026, Punkt 9c; Muster fgsCheck bedarf/regeluebersicht.ts und bedarf/quellen.ts) ──
+// ── Regeln des SichtweitenCheck (Muster fgsCheck bedarf/regeluebersicht.ts und bedarf/quellen.ts) ──
 //
 // Katalog aller Regeln, die die App anwendet: was geprüft wird (eigene Worte, Alltagssprache für Planerinnen und Planer ohne
 // Code-Kenntnis), Werk, Fundstelle (Ziffer UND gedruckte Seite), Wert (falls es einen gibt), Datenquelle in Worten (falls nötig),
@@ -71,7 +71,7 @@ export interface Werk {
 export const WERKE: Record<WerkId, Werk> = {
   '40273': { name: 'VSS 40 273', titel: 'Knoten; Sichtverhältnisse in Knoten', ausgabe: 'VSS 40 273:2024', herkunft: 'Norm',
     link: null, bezug: 'kostenpflichtig', beschreibung: 'Schweizer Norm für die Sicht an Knoten und Grundstückzufahrten: wo der wartende ' +
-      'Lenker sitzt, wie weit er sehen muss und was bei zu wenig Sicht hilft. Grundlage fast aller Prüfungen der App.' },
+      'Fahrer*innenauge liegt, wie weit die wartende Person sehen muss und was bei zu wenig Sicht hilft. Grundlage fast aller Prüfungen der App.' },
   '40090': { name: 'VSS 40 090b', titel: 'Projektierung, Grundlagen; Sichtweiten', ausgabe: 'VSS 40 090b:2019-03', herkunft: 'Norm',
     link: null, bezug: 'kostenpflichtig', beschreibung: 'Norm zu den Sichtweiten im Strassenentwurf. Die App nutzt daraus die ' +
       'Anhaltesichtweite bei Gefälle und Steigung.' },
@@ -179,7 +179,7 @@ const mitAuto = (e: Ergebnis) => e.richtungen.some(r => r.status !== 'keine_zufa
 const hinweis = (e: Ergebnis, t: string) => e.hinweise.some(h => h.includes(t)) ||
   e.richtungen.some(r => [...r.hinweise, ...(r.velo?.hinweise ?? [])].some(h => h.includes(t)))
 
-/** Kein Vortritt statt Stop: Prüfsatz der kantonalen Praxis (Muster vom Nutzer freigegeben, 31.10.2026) */
+/** Kein Vortritt statt Stop: Prüfsatz der kantonalen Praxis (festgelegtes Muster) */
 const STATT_STOP = 'Reicht die Sicht in alle Richtungen, meldet die App, dass «Kein Vortritt» genügt und ein Stop nicht nötig ist.'
 const stattStop = (e: Ergebnis) => hinweis(e, 'Kein Vortritt statt Stop')
 
@@ -264,7 +264,7 @@ const EINTRAEGE: readonly RegelEintrag[] = [
     daten: 'Deine Angabe beim Zaun (nicht «dicht»)' },
   { id: 'V273-12a', werk: '40273', ordnung: 12, fundstelle: 'Ziffer 12, S. 7–8', titel: 'Beobachtungsdistanz B', wirkung: 'rechnet mit',
     thema: 'wartend', gilt: nichtRv,
-    prueft: 'B ist der Abstand vom Rand der Strasse mit Vortritt bis zum Auge des wartenden Lenkers. Ob der Knoten inner- oder ' +
+    prueft: 'B ist der Abstand vom Rand der Strasse mit Vortritt bis zum Auge der wartenden Person. Ob der Knoten inner- oder ' +
       'ausserorts liegt, leitet die App aus dem Tempo ab.',
     werte: `innerorts ${m(B_INNERORTS_M)} m; ausserorts ${m(B_AUSSERORTS_M)} m, mit Stop ${m(B_INNERORTS_M)} m`,
     daten: 'OpenStreetMap (Tempo bzw. Ortslage)' },
@@ -305,7 +305,7 @@ const EINTRAEGE: readonly RegelEintrag[] = [
     daten: 'amtliche Vermessung (Trottoir), dein Häkchen «Trottoir ohne Hindernisse»' },
   { id: 'V273-13.2', werk: '40273', ordnung: 13.2, fundstelle: 'Ziffer 13.2 und Tab. 2, S. 8', titel: 'Sicht aufs Trottoir',
     wirkung: 'rechnet mit', thema: 'trottoir', gilt: mitTrottoir,
-    prueft: 'Liegt ein Trottoir an der Zufahrt, prüft die App, ob die wartende Person Fussgänger beidseits früh genug sieht. Wie weit die ' +
+    prueft: 'Liegt ein Trottoir an der Zufahrt, prüft die App, ob die wartende Person Zufussgehende beidseits früh genug sieht. Wie weit die ' +
       'Sicht reichen muss, hängt von der Neigung des Trottoirs ab.',
     werte: `Auge D' ${m(B_INNERORTS_M)} m hinter der Trottoirhinterkante bzw. dem hinteren Rand der Überfahrt`,
     daten: 'amtliche Vermessung (Trottoir), Höhenmodell swissALTI3D' },
@@ -351,7 +351,7 @@ const EINTRAEGE: readonly RegelEintrag[] = [
       'den Daten nicht beurteilen. Sie weist darauf hin, das vor Ort zu prüfen.' },
   { id: 'V273-16a', werk: '40273', ordnung: 16, fundstelle: 'Ziffer 16 und Abb. 4, S. 10', titel: 'Rechtsvortritt: Beobachtungsdistanz',
     wirkung: 'rechnet mit', thema: 'rechtsvortritt', gilt: rv,
-    prueft: 'Beim Rechtsvortritt liegt das Auge des wartenden Lenkers weiter hinten als sonst innerorts, gemessen ab dem Rand des Arms ' +
+    prueft: 'Beim Rechtsvortritt liegt das Auge der wartenden Person weiter hinten als sonst innerorts, gemessen ab dem Rand des Arms ' +
       'rechts.',
     werte: `B ${m(RV_B_M)} m`,
     daten: 'amtliche Vermessung (Fahrbahn des rechten Arms)' },
@@ -435,7 +435,7 @@ const EINTRAEGE: readonly RegelEintrag[] = [
     daten: 'amtliche Vermessung (Fahrbahn, Trottoir)' },
   { id: 'V242-14.4b', werk: '40242', ordnung: 14.41, fundstelle: 'Ziffer 14.4, S. 13', titel: 'Gehlinie', wirkung: 'rechnet mit',
     thema: 'trottoir', gilt: tue,
-    prueft: 'Fussgänger werden auf einer Linie kurz vor dem hinteren Rand der Überfahrt erwartet; dorthin prüft die App die Sicht.',
+    prueft: 'Zufussgehende werden auf einer Linie kurz vor dem hinteren Rand der Überfahrt erwartet; dorthin prüft die App die Sicht.',
     werte: `${m(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt`,
     daten: 'amtliche Vermessung (Fahrbahnrand)' },
   { id: 'V242-15.4.2', werk: '40242', ordnung: 15.42, fundstelle: 'Ziffer 15.4.2, S. 18', titel: 'Velos auf dem Trottoir', wirkung: 'nur Hinweis',
@@ -593,9 +593,9 @@ const EINTRAEGE: readonly RegelEintrag[] = [
     prueft: 'Eine Grundstückzufahrt rechnet die App wie einen Arm: einspurig, das Fahrzeug in ihrer Mitte, ohne Rechtsvortritt. Sie ' +
       'verläuft senkrecht zum Fahrbahnrand oder so, wie du sie zeichnest.',
     daten: 'Dein Klick auf der Karte, OpenStreetMap (Zufahrtsweg)' },
-  { id: 'A-Fahrersitz', werk: 'ANNAHME', ordnung: 4, fundstelle: 'Annahme', titel: 'Auge am Fahrersitz', wirkung: 'rechnet mit',
+  { id: 'A-Fahrersitz', werk: 'ANNAHME', ordnung: 4, fundstelle: 'Annahme', titel: 'Auge am Fahrer*innensitz', wirkung: 'rechnet mit',
     thema: 'wartend',
-    prueft: 'Das Auge des wartenden Lenkers sitzt links der Wagenmitte. Bei einem Velo liegt es über dessen Fahrlinie.',
+    prueft: 'Das Auge der wartenden Person sitzt links der Wagenmitte. Bei einem Velo liegt es über dessen Fahrlinie.',
     werte: `${m(FAHRERSITZ_M)} m links der Fahrlinie der Zufahrt` },
   { id: 'A-Zufahrtsachse', werk: 'ANNAHME', ordnung: 5, fundstelle: 'Annahme', titel: 'Fahrlinie der Zufahrt', wirkung: 'rechnet mit',
     thema: 'wartend',
@@ -658,7 +658,7 @@ const EINTRAEGE: readonly RegelEintrag[] = [
   { id: 'A-Darstellung', werk: 'ANNAHME', ordnung: 15, fundstelle: 'Annahme', titel: 'Fahrzeuge auf der Karte', wirkung: 'nur Hinweis',
     thema: 'darstellung',
     prueft: 'Die Fahrzeuge auf Karte und Bild dienen nur der Anschauung. Gerechnet wird mit den Punkten D und K und den Fahrlinien.',
-    werte: `Personenwagen ${m(PW_LAENGE_M, 1)} × ${m(PW_BREITE_M, 1)} m, Lenker ${m(LENKER_VOR_FRONT_M, 1)} m hinter der Front; Velo ` +
+    werte: `Personenwagen ${m(PW_LAENGE_M, 1)} × ${m(PW_BREITE_M, 1)} m, Fahrer*innenauge ${m(LENKER_VOR_FRONT_M, 1)} m hinter der Front; Velo ` +
       `${m(VELO_LAENGE_M, 1)} × ${m(VELO_BREITE_M, 1)} m` },
   // ── Projektentscheide ──
   { id: 'E-1510a', werk: 'ENTSCHEID', ordnung: 1, fundstelle: 'Entscheid 15.10.2026', titel: 'Zwischenwert für Hauptverkehrsstrassen',

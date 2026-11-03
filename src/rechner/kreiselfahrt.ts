@@ -5,7 +5,7 @@
 // Hälfte des Abstands, ein OSM-Rad- bzw. Fussweg auf derselben AV-Fläche begrenzt ihn ebenfalls; liegt die OSM-Linie auf einer
 // Mittelinsel, gilt das Fahrbahnstück rechts davon. Einbahn (getrennte Ein- und Ausfahrt) in der Mitte der Fahrbahn, Weg mit Gegenverkehr in der Mitte der rechten Hälfte; ohne
 // Querschnitt FAHRSTREIFEN_ANNAHME_M breite Streifen (Annahme).
-// K2 (Entscheide E2, 31.10.2026): Fahrlinie mit Vortritt in der Mitte zwischen Aussenrand und Innenring bzw. Insel (Form aus E9), im
+// K2: Fahrlinie mit Vortritt in der Mitte zwischen Aussenrand und Innenring bzw. Insel (Form aus E9), im
 // Gegenuhrzeigersinn von links auf die gewählte Einfahrt; Fahrlinie der Einfahrt in der Mitte des Einfahrtsfahrstreifens; K = Schnitt;
 // D = B hinter dem Rand der Kreiselfahrbahn (Wartelinie) auf dieser Achse, am Fahrersitz (wie am Knoten). Nur Verkehr von links.
 // K3 (VSS 40 263 Ziffer 17, S. 12): je Fahrbeziehung Hilfslinie HILFSLINIE_M innerhalb des rechten Rands der Einfahrt (AV-Rand quer zur
@@ -13,7 +13,7 @@
 // (Fall 2), Insel links; Ausfahrt spiegelbildlich; β zwischen den beiden Tangenten. Startpunkt (Annahme; K5: von Hand): dort, wo die
 // Tangente die Hilfslinie berührt, also die geringste Ablenkung (schnellste Fahrt); ohne AV-Rand an der Wartelinie. Fahrbeziehungen: gegenüberliegende Arme, bei drei Armen nur über 180 gon,
 // von Hand an- und abwählbar. Kleinstes β → Tempo auf der Kreiselfahrbahn (Ziffer 13.2, S. 8–9); Minikreisel fest 30 km/h ohne β
-// (Annahme, Entscheid E1); ohne gültige Konstruktion 40 km/h (Annahme).
+// (Annahme); ohne gültige Konstruktion 40 km/h (Annahme).
 
 import { type P, add, einheit, sub, links, rechts, neg, drehung, wdiff, imPolygon, dist, dot, median, kreisAnpassen, segSchnitt } from '../geo'
 import { type OsmNetz, type Arm, verlaengern, streckeLaenge, abschneiden } from './netz'

@@ -13,6 +13,7 @@
 // Velobypass am Kreisel (01.11.2026): dazu Fuss- und Radwege mit bicycle=yes (Veloachse weiter nur mit designated, velo.ts istRadweg).
 
 import { holeText, istAbbruch, AbrufFehler, type Abruf } from './holen'
+import { osmDatenstand } from './anbieter/gemeinsam/qualitaet'
 import { lv95, wgs, dist, kreisAnpassen, type P } from '../geo'
 
 export interface OsmWeg { id: number; tags: Record<string, string>; knoten: number[]; geom: [number, number][] }
@@ -307,7 +308,7 @@ async function overpassFetch(query: string, signal?: AbortSignal): Promise<Abruf
             break
           }
           if (overpassAbgebrochen(data)) { versuche.push({ host, fehler: `abgebrochen (${kurz(String(data.remark))})` }); break }
-          return { daten: data, ms: performance.now() - t0, bytes: text.length, quelle: host }
+          return { daten: data, ms: performance.now() - t0, bytes: text.length, quelle: host, datenstand: osmDatenstand(data) }
         }
         versuche.push({ host, fehler: `HTTP ${res.status}${seite ? ` (${kurz(seite)})` : ''}` })
         if (res.status === 429 || res.status >= 500) {
@@ -348,7 +349,7 @@ export function zebraTag(t: Record<string, string>): string {
 }
 
 /**
- * Einordnung eines OSM-Übergangs für Anzeige und Ergebnis (Nutzerentscheid 10.10.2026, Variante B: alle Übergänge bleiben
+ * Einordnung eines OSM-Übergangs für Anzeige und Ergebnis (Variante B: alle Übergänge bleiben
  * wählbar; crossing=no wird schon in istUebergang ausgeschlossen und nicht angeboten):
  *   lsa        – gesignalisierte Querung (crossing=traffic_signals bzw. crossing:signals=yes); wie bisher mit LSA-Hinweis
  *   markiert   – Zebra-Merkmal nach zebraTag (crossing:markings=zebra*, crossing=zebra, crossing_ref=zebra, crossing=marked,
@@ -358,8 +359,7 @@ export function zebraTag(t: Record<string, string>): string {
  *   unmarkiert – ausdrücklich ohne Markierung (crossing=unmarked, crossing:markings=no) oder andere Markierung als Zebra
  *                (z. B. crossing:markings=dots, surface)
  *   unbelegt   – keine Angabe zur Art (z. B. nur highway=crossing, crossing=yes/informal)
- * unmarkiert und unbelegt gelten als «kein Fussgängerstreifen»: Prüfung sinngemäss nach den FGS-Regeln, ohne Normbezug.
- */
+ * unmarkiert und unbelegt gelten als «kein Fussgängerstreifen»: Prüfung sinngemäss nach den FGS-Regeln, ohne Normbezug. */
 export type Markierung = 'lsa' | 'markiert' | 'vermutlich' | 'unmarkiert' | 'unbelegt'
 export const MARKIERUNGEN: Markierung[] = ['lsa', 'markiert', 'vermutlich', 'unmarkiert', 'unbelegt']
 export function markierung(t: Record<string, string>): Markierung {
@@ -400,7 +400,7 @@ export const HW_KNOTEN = ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'p
  */
 export function knotenAbfrage(s: number, w: number, n: number, e: number): string {
   const b = [s, w, n, e].map(v => v.toFixed(6)).join(',')
-  // Korrektur 31.10.2026 (Punkt 16): Punkte an Kreiseln (junction=roundabout bzw. circular) gehören nicht dazu (Differenz der Mengen).
+  // Punkte an Kreiseln (junction=roundabout bzw. circular) gehören nicht dazu (Differenz der Mengen).
   // K1: die Ringwege (mit den angrenzenden Ringwegen ausserhalb des Ausschnitts) kommen mit Punkten und Geometrie dazu: daraus der
   // Kreisel als ein Punkt in der Mitte (kreiselMitten)
   return `[out:json][timeout:20];way(${b})["highway"~"^(${HW_KNOTEN.join('|')})$"]["access"!~"^(no|private)$"]` +

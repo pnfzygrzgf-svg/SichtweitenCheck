@@ -1,3 +1,7 @@
+import { bundBelegLesen } from './daten/anbieter/gemeinsam/bundBelege'
+import { signalEntscheideLesen, type SignalEntscheid } from './daten/anbieter/gemeinsam/regionalSignale'
+import { regionalSnapshotLesen, regionalSnapshotSchreiben, type RegionalSnapshot } from './daten/anbieter/gemeinsam/regional'
+import { zuerichSnapshotLesen, type ZuerichSnapshot } from './daten/anbieter/gemeinsam/zuerich'
 // ── Fall-Datei: alle Eingaben eines Knotens bzw. einer Grundstückzufahrt (E2a Hindernisse, E2b Eingaben und Datei) ──
 //
 // Vorlage: fall.ts des fgsCheck. JSON mit App, Version, Ort (WGS84; Knoten bzw. Zufahrtspunkt in LV95), Quellenstand, Eingaben
@@ -32,6 +36,7 @@
 // richtungen ist dort leer. Eingaben wie Version 7; Version 1 bis 7 werden weiter gelesen.
 
 import type { P } from './geo'
+import { amtlicheQuellenLesen } from './daten/anbieter/gemeinsam/speicher'
 import type { Hindernis, ParkKlasse } from './rechner/hindernisse'
 import { KEINE_ALLE_EINGABEN, REGELUNGEN, TEMPO_ARTEN, TEMPO_MIN, TEMPO_MAX, TUE_BREITE_MIN, TUE_BREITE_MAX, type Eingaben, type Regelung, type Richtung,
   type TempoArt, type TempoEingabe, type ZufahrtspunktEingabe, type Ergebnis, type KreiselTyp, type KreiselInfo } from './rechner/typen'
@@ -39,7 +44,8 @@ import { zufahrtspunktKey } from './rechner/grundstueck'
 import { VELOFUEHRUNGEN, type Velofuehrung } from './rechner/velo'
 import { WAHRNEHMBARKEITEN, type Wahrnehmbarkeit } from './rechner/rechtsvortritt'
 
-export const FALL_VERSION = 8
+// Version 9 (E2-Pilot Stadt Zürich, 02.11.2026): gespeicherte heutige Tempo-/Zonenausschnitte samt Herkunft und Stand.
+export const FALL_VERSION = 12
 /** Bezeichnung des Falls (Bericht): höchstens so lang */
 export const BEZEICHNUNG_MAX = 200
 
@@ -75,10 +81,14 @@ export interface FallErgebnis {
 }
 
 export interface Fall {
+  zuerich?: ZuerichSnapshot
+  regional?: RegionalSnapshot
+  signalEntscheide?: SignalEntscheid[]
+  amtlicheQuellen?: import('./daten/anbieter/gemeinsam/typen').AmtlicheQuellen
   app: 'SichtweitenCheck'
   version: number
   ort: { lat: number; lon: number; knoten: number | null; zufahrt: string | null; zufahrtspunkt?: ZufahrtspunktEingabe; bezeichnung?: string }
-  quellen: { osm?: string; av?: string; parkkataster?: string; baumkataster?: string; hoehen?: string; vsig?: string; geladen?: string }
+  quellen: { osm?: string; av?: string; parkkataster?: string; baumkataster?: string; hoehen?: string; vsig?: string; geladen?: string; bav?: string; gebiet?: string; zhTempo?: string; zhZonen?: string; regional?: string }
   eingaben: Eingaben                               // E1 und E2b, gelten für die Zufahrt (ort.zufahrt bzw. die vorgeschlagene)
   hindernisse: Hindernis[]
   vorschlaege: Record<string, 'verworfen'>         // verworfene Vorschläge (OSM, Baumkataster) und amtliche Parkfelder
@@ -161,6 +171,7 @@ export function eingabenPruefen(x: unknown, hinweise: string[], version = FALL_V
   const oderNull = <T>(f: (v: unknown) => v is T) => (v: unknown): v is T | null => v === null || f(v)
   const bool = (v: unknown): v is boolean => typeof v === 'boolean'
   feld('typ', oderNull((v): v is 'es' | 'hvs' => v === 'es' || v === 'hvs'), v => { e.typ = v })
+  feld('innerorts', oderNull(bool), v => { if (v !== null) e.innerorts = v })
   feld('fahrstreifen', oderNull(bool), v => { e.fahrstreifen = v })
   feld('neigungGross', oderNull(bool), v => { e.neigungGross = v })
   feld('schwerverkehr', bool, v => { e.schwerverkehr = v })
@@ -227,6 +238,13 @@ export function eingabenPruefen(x: unknown, hinweise: string[], version = FALL_V
       e.trottoirueberfahrt = { breite: ok && zahl(b) ? b : null }
     }
   }
+  if (x.bundesbelege !== undefined) {
+    if (!istObjekt(x.bundesbelege)) falsch('bundesbelege')
+    else for (const k of ['typ','innerorts'] as const) if (x.bundesbelege[k] !== undefined) {
+      const b = bundBelegLesen(x.bundesbelege[k], k, e[k])
+      if (b) e.bundesbelege = { ...e.bundesbelege, [k]: b }; else falsch(`bundesbelege.${k}`)
+    }
+  }
   return e
 }
 
@@ -242,10 +260,13 @@ export function tempoPruefen(v: unknown): TempoEingabe | null {
 export function zufahrtspunktPruefen(v: unknown): ZufahrtspunktEingabe | null {
   if (!istObjekt(v) || !istLv95(v.p)) return null
   const r = v.richtung
-  if (r === null || r === undefined) return { p: v.p, richtung: null }
+  let herkunft = ['gezeichnet', 'winkel', 'senkrecht', 'osm'].includes(String(v.herkunft)) ? v.herkunft as NonNullable<ZufahrtspunktEingabe['herkunft']> : undefined
+  // Herkunft ist Zusatzinformation; alte Richtungsvektoren bleiben unverändert massgebend.
+  if ((r == null && (herkunft === 'winkel' || herkunft === 'gezeichnet')) || (r != null && (herkunft === 'osm' || herkunft === 'senkrecht'))) herkunft = undefined
+  if (r === null || r === undefined) return { p: v.p, richtung: null, ...(herkunft ? { herkunft } : {}) }
   if (!istP(r) || Math.hypot(r[0], r[1]) < 1e-6) return null
   const l = Math.hypot(r[0], r[1])
-  return { p: v.p, richtung: [r[0] / l, r[1] / l] }
+  return { p: v.p, richtung: [r[0] / l, r[1] / l], ...(herkunft ? { herkunft } : {}) }
 }
 
 /** Hindernis prüfen (fgsCheck hindernisPruefen, dazu Zaun; ohne Insel) -> Hindernis oder null */
@@ -282,7 +303,7 @@ export const GEBIET = { latMin: 45.7, latMax: 47.9, lonMin: 5.8, lonMax: 10.6 }
 export const imGebiet = (lat: number, lon: number): boolean =>
   lat >= GEBIET.latMin && lat <= GEBIET.latMax && lon >= GEBIET.lonMin && lon <= GEBIET.lonMax
 
-const QUELLEN_SCHLUESSEL = ['osm', 'av', 'parkkataster', 'baumkataster', 'hoehen', 'vsig', 'geladen'] as const
+const QUELLEN_SCHLUESSEL = ['osm', 'av', 'parkkataster', 'baumkataster', 'hoehen', 'vsig', 'geladen', 'bav', 'gebiet', 'zhTempo', 'zhZonen', 'regional'] as const
 
 /** Fall aus JSON lesen und prüfen -> [Fall, Hinweise]. Ausnahme nur bei fremder Datei, Version oder ungültigem Ort; ungültige
  * Listen bzw. Objekte und einzelne ungültige Einträge werden übergangen und gemeldet. Auch für den Browser-Speicher. */
@@ -298,6 +319,10 @@ export function fallLesen(text: string): [Fall, string[]] {
   const zp = o.zufahrtspunkt === undefined ? null : zufahrtspunktPruefen(o.zufahrtspunkt)
   if (o.zufahrtspunkt !== undefined && !zp) hinweise.push('Zufahrtspunkt ungültig, übergangen')
   const fall = leererFall(o.lat, o.lon, Number.isInteger(o.knoten) && (o.knoten as number) > 0 ? o.knoten as number : null, zp)
+  if (roh.signalEntscheide !== undefined) { const xs = signalEntscheideLesen(roh.signalEntscheide); if (xs.length) fall.signalEntscheide = xs; if (!Array.isArray(roh.signalEntscheide) || xs.length !== roh.signalEntscheide.length) hinweise.push('Ungültige amtliche Signalzuordnungen übergangen') }
+  if (roh.regional !== undefined) { const r = regionalSnapshotLesen(roh.regional, hinweise); if (r) fall.regional = r; else hinweise.push('Gespeicherte regionale Quellen ungültig, übergangen') }
+  if (roh.zuerich !== undefined) { const z = zuerichSnapshotLesen(roh.zuerich); if (z) fall.zuerich = z; else hinweise.push('Gespeicherte Zürcher Quellen ungültig, übergangen') }
+  fall.amtlicheQuellen = amtlicheQuellenLesen(roh.amtlicheQuellen, hinweise)
   if (typeof o.zufahrt === 'string' && !zp) fall.ort.zufahrt = o.zufahrt
   if (o.knoten !== undefined && o.knoten !== null && !(Number.isInteger(o.knoten) && (o.knoten as number) > 0)) hinweise.push('Knoten ungültig, übergangen')
   if (o.zufahrt !== undefined && o.zufahrt !== null && typeof o.zufahrt !== 'string') hinweise.push('Zufahrt ungültig, übergangen')
@@ -344,13 +369,13 @@ export function fallLesen(text: string): [Fall, string[]] {
 /** Fall als JSON (mit Zeitpunkt; ergebnis: Auszug, nur in der Datei) */
 export function fallSchreiben(fall: Fall, ergebnis: FallErgebnis | null = null): string {
   const { ergebnis: _alt, ...rest } = fall
-  return JSON.stringify({ ...rest, gespeichert: new Date().toISOString(), ...(ergebnis ? { ergebnis } : {}) }, null, 1)
+  return JSON.stringify({ ...rest, ...(fall.regional ? { regional: regionalSnapshotSchreiben(fall.regional) } : {}), version: fall.ort.zufahrtspunkt?.herkunft ? 12 : (fall.eingaben.innerorts ?? null) !== null || fall.eingaben.bundesbelege ? Math.max(11, rest.version) : rest.version, gespeichert: new Date().toISOString(), ...(ergebnis ? { ergebnis } : {}) }, null, 1)
 }
 
 /** Anzahl gesetzter Eingaben E1/E2b (abweichend von der Vorgabe) */
 export function eingabenGesetzt(e: Eingaben): number {
   const v = KEINE_ALLE_EINGABEN
-  return [e.typ !== v.typ, e.fahrstreifen !== v.fahrstreifen, e.neigungGross !== v.neigungGross, e.schwerverkehr !== v.schwerverkehr,
+  return [(e.innerorts ?? null) !== null, e.typ !== v.typ, e.fahrstreifen !== v.fahrstreifen, e.neigungGross !== v.neigungGross, e.schwerverkehr !== v.schwerverkehr,
     (e.schwerverkehrAnteil ?? null) !== null, (e.ueberholen ?? null) !== null,
     e.neigung.links !== null, e.neigung.rechts !== null, e.regelung !== null, e.haltelinie !== null, e.D !== null, e.trottoirFrei,
     e.tempo.links !== null, e.tempo.rechts !== null, (e.velo?.links ?? null) !== null, (e.velo?.rechts ?? null) !== null,
@@ -362,12 +387,20 @@ export function eingabenGesetzt(e: Eingaben): number {
 /** Anzahl Eingaben (E1/E2b, Hindernisse, verworfene Vorschläge bzw. Parkfelder, Baumkataster zugeschaltet, Parkfelder abgeschaltet) */
 export function eingabenZahl(f: Fall): number {
   return eingabenGesetzt(f.eingaben) + f.hindernisse.length + Object.keys(f.vorschlaege).length + (f.baumkataster ? 1 : 0) +
-    (f.parkkataster === false ? 1 : 0) + (f.spiegel?.length ?? 0)
+    (f.parkkataster === false ? 1 : 0) + (f.spiegel?.length ?? 0) + (f.signalEntscheide?.length ?? 0)
 }
 /** etwas zu merken: Eingaben, gewählte Zufahrt, gezeichnete Richtung einer Grundstückzufahrt oder Bezeichnung (ein Zufahrtspunkt
  *  allein nicht: ihn hält die Adresse) */
 export const hatEingaben = (f: Fall): boolean => eingabenZahl(f) > 0 || f.ort.zufahrt !== null || !!f.ort.zufahrtspunkt?.richtung ||
   !!f.ort.bezeichnung?.trim()
+
+/** Browser-Erinnerung enthält ausschliesslich Eingaben, Entscheide und Quellenwahl. */
+function browserFall(f: Fall): Fall {
+  return { app: f.app, version: f.version, ort: f.ort, quellen: {}, eingaben: f.eingaben,
+    hindernisse: f.hindernisse, vorschlaege: f.vorschlaege, baumkataster: f.baumkataster,
+    parkkataster: f.parkkataster, spiegel: f.spiegel, signalEntscheide: f.signalEntscheide,
+    gespeichert: f.gespeichert }
+}
 
 // ---------------------------------------------------------------- localStorage (nur Bequemlichkeit, darf fehlen)
 const SPEICHER = 'SichtweitenCheck.fall.'
@@ -375,20 +408,23 @@ const SPEICHER = 'SichtweitenCheck.fall.'
 export const speicherKey = (f: Fall): string | null =>
   f.ort.zufahrtspunkt ? `${SPEICHER}z${zufahrtspunktKey(f.ort.zufahrtspunkt.p)}` : f.ort.knoten !== null ? SPEICHER + f.ort.knoten : null
 /** Fall im Browser merken; ohne Eingaben wird ein vorhandener Eintrag entfernt */
-export function fallMerken(fall: Fall): void {
+export function fallMerken(fall: Fall): string | null {
   const key = speicherKey(fall)
-  if (key === null) return
+  if (key === null) return null
   try {
-    if (hatEingaben(fall)) localStorage.setItem(key, fallSchreiben(fall))
+    if (hatEingaben(fall)) localStorage.setItem(key, fallSchreiben(browserFall(fall)))
     else localStorage.removeItem(key)
-  } catch { /* ohne Speicher */ }
+    return null
+  } catch (e) {
+    return `${(e as Error)?.name === 'QuotaExceededError' ? 'Der Browserspeicher ist voll.' : 'Die Browser-Erinnerung konnte nicht aktualisiert werden.'} Eingaben bleiben hier erhalten. Mit «Fall speichern» als Datei sichern; eine automatische Wiederherstellung ist derzeit nicht gewährleistet.`
+  }
 }
 /** gemerkten Fall des Knotens lesen (null: keiner, ungültig oder kein Speicher) */
 export function fallErinnern(knoten: number): Fall | null {
   try {
     const t = localStorage.getItem(SPEICHER + knoten)
     if (!t) return null
-    const f = fallLesen(t)[0]
+    const f = browserFall(fallLesen(t)[0])
     return f.ort.knoten === knoten && !f.ort.zufahrtspunkt ? f : null
   } catch { return null }
 }
@@ -397,7 +433,7 @@ export function fallErinnernZufahrt(p: P): Fall | null {
   try {
     const t = localStorage.getItem(`${SPEICHER}z${zufahrtspunktKey(p)}`)
     if (!t) return null
-    const f = fallLesen(t)[0]
+    const f = browserFall(fallLesen(t)[0])
     return f.ort.zufahrtspunkt && zufahrtspunktKey(f.ort.zufahrtspunkt.p) === zufahrtspunktKey(p) ? f : null
   } catch { return null }
 }

@@ -1,3 +1,4 @@
+import type { BundBeleg } from '../daten/anbieter/gemeinsam/bundBelege'
 // ── Ein- und Ausgabe der Rechnung (E0 bis E3c): Knoten bzw. Grundstückzufahrt, Zufahrt, Eingaben zur erforderlichen
 //    Sichtweite, Eingaben zum Knoten (Vortrittsregelung, Haltelinie, D, Trottoir, Tempo, Veloführung, Wahrnehmbarkeit), Hindernisse,
 //    Längsneigung aus dem Höhenmodell (E3a), Ergebnis je Richtung mit Velo (E3b), Trottoir (E3b), Massnahmen nach Ziffer 14 (E3a),
@@ -18,6 +19,8 @@ import type { Wahrnehmbarkeit, Zustand, SichtfeldEng } from './rechtsvortritt'
 
 /** Eingaben zur erforderlichen Sichtweite (E1, von Hand im Panel); null = Vorgabe aus OSM bzw. aus der Neigung */
 export interface SichtEingaben {
+  innerorts?: boolean | null
+  bundesbelege?: Partial<Record<'typ' | 'innerorts', BundBeleg>>
   typ: Strassentyp | null
   fahrstreifen: boolean | null      // mehr als ein Fahrstreifen je Richtung (Vorgabe: OSM lanes, lanes:forward/backward)
   neigungGross: boolean | null      // grosse Längsneigung (Vorgabe: |i| > 5 % in einer Richtung)
@@ -71,7 +74,7 @@ export interface KnotenEingaben {
   // Block 5, fehlt in älteren Fällen (= Vorgabe)
   ueberholen?: boolean | null       // Überholen im Knotenbereich erlaubt (VSS 40 273 Ziffer 6; Vorgabe aus OSM overtaking*), nur ausserorts
   // K1, fehlt in älteren Fällen (= Vorgabe nach dem Aussendurchmesser)
-  kreiselTyp?: KreiselTyp | null    // Kreisel: Klein- bzw. Minikreisel von Hand (Entscheid E1, 01.11.2026)
+  kreiselTyp?: KreiselTyp | null    // Kreisel: Klein- bzw. Minikreisel von Hand
   kreiselBeziehungen?: Record<string, boolean> | null   // K3: Fahrbeziehungen für β von Hand an (true) bzw. ab (false), Schlüssel «von>nach»
 }
 /** Trottoirüberfahrt über die Einmündung der Zufahrt (K0): gesetzt = Modus an. breite: Breite der Überfahrt von Hand [m]; geht der
@@ -89,7 +92,8 @@ export const KEINE_ALLE_EINGABEN: Eingaben = { ...KEINE_EINGABEN, ...KEINE_KNOTE
 
 /** Grundstückzufahrt (E2b): geklickter Punkt am Fahrbahnrand der Vortrittsstrasse (bzw. auf einem OSM-Weg service nahe der
  *  Einmündung), Richtung der Zufahrt vom Rand weg in das Grundstück (null = senkrecht zum Rand) */
-export interface ZufahrtspunktEingabe { p: P; richtung: P | null }
+export type ZufahrtHerkunft = 'gezeichnet' | 'winkel' | 'senkrecht' | 'osm'
+export interface ZufahrtspunktEingabe { p: P; richtung: P | null; herkunft?: ZufahrtHerkunft }
 
 /** Hindernisse für die Rechnung (E2a): Eingaben von Hand bzw. bestätigte Vorschläge, verworfene Vorschläge und amtliche
  *  Parkfelder (Ids), geladene amtliche Parkfelder und Bäume aus dem Baumkataster (null = nicht geladen bzw. abgeschaltet) */
@@ -115,7 +119,7 @@ export interface KnotenFall {
 export interface TempoAmtlichLinie { id: string; strasse: string; vSig: number | null; teile: P[][] }
 /** Amtliches Tempo für die Rechnung (K0): Linien, abgedeckter Bereich (Quadrat ±radiusM um mitte; ausserhalb gilt OSM) und
  *  Herkunft für die Texte (z. B. «Geoportal Stadt Bern»). Die Zuständigkeit (Gemeinde) prüft der Aufrufer. */
-export interface TempoAmtlichDaten { linien: TempoAmtlichLinie[]; bereich: { mitte: P; radiusM: number } | null; quelle: string }
+export interface TempoAmtlichDaten { linien: TempoAmtlichLinie[]; bereich: { mitte: P; radiusM: number } | null; quelle: string; signalEntscheide?: import('../daten/anbieter/gemeinsam/regionalSignale').SignalEntscheid[]; regional?: import('../daten/anbieter/gemeinsam/regional').RegionalSnapshot; zuerich?: import('../daten/anbieter/gemeinsam/zuerich').ZuerichSnapshot; zhStrassen?: import('../daten/anbieter/gemeinsam/zuerichZuordnung').ZhStrasse[] }
 
 /** Strassentyp und ungünstige Verhältnisse der vortrittsberechtigten Strasse, wie gerechnet, mit den Vorgaben */
 export interface StrasseErgebnis {
@@ -146,7 +150,7 @@ export interface ArmInfo {
   veloZuflussQuelle: string   // das Tag des Velos gegen die Einbahn, z. B. «cycleway=opposite_lane» ('' ohne Einbahn vom Knoten weg)
 }
 
-export interface VortrittsHinweis { id: number; art: 'stop' | 'give_way'; p: P }
+export interface VortrittsHinweis { quelle?: string; armKey?: string; id: number; art: 'stop' | 'give_way'; p: P }
 
 export interface KnotenInfo {
   id: number
@@ -157,11 +161,11 @@ export interface KnotenInfo {
   vortritt: [string, string] | null   // Arme der vortrittsberechtigten Strasse (ohne Rücksicht auf die Zufahrt)
   vortrittGrund: string
   vorschlag: string | null    // Zufahrt, wenn eindeutig (einziger Arm ausserhalb der Vortrittsstrasse)
-  signale: VortrittsHinweis[] // OSM highway=stop/give_way in der Nähe; ohne Signale auf Einbahnen vom Knoten weg (Punkt 17, knotenSignale)
+  signale: VortrittsHinweis[] // OSM highway=stop/give_way in der Nähe; ohne Signale auf Einbahnen vom Knoten weg (knotenSignale)
   grundstueck?: boolean       // Grundstückzufahrt (E2b): Knotenpunkt auf der Vortrittsstrasse, Arme ab dort, keine Wahl der Zufahrt
-  vortrittSicher?: string     // Korrektur 31.10.2026 (Punkt 15): Vortrittsstrasse sicher bekannt (Signal an einem Arm, priority_road): Grund
+  vortrittSicher?: string     // Vortrittsstrasse sicher bekannt (Signal an einem Arm, priority_road): Grund
   mitVortritt?: string[]      // Arme dieser Vortrittsstrasse: als Zufahrt nur über den Schalter «auch Arme mit Vortritt wählen»
-  lsa?: boolean               // Korrektur 31.10.2026 (Punkt 13): Lichtsignal (OSM traffic_signals) am Knoten bzw. auf einem Arm bis 30 m
+  lsa?: boolean               // Lichtsignal (OSM traffic_signals) am Knoten bzw. auf einem Arm bis 30 m
   kreisel?: KreiselInfo       // K1: Kreisel als ein Knoten (id = kleinster OSM-Punkt des Rings, p = vermessene Mitte, arme leer)
 }
 
@@ -341,7 +345,7 @@ export interface VeloErgebnis extends SichtTeil {
   tempo: number               // zulässige Höchstgeschwindigkeit (Zeile der Tab. 3)
   tempoQuelle: string
   neigung: number
-  neigungUnbekannt: boolean   // Neigung unbekannt: Spalte ≤ −4 (strengster Wert, Entscheid 31.10.2026)
+  neigungUnbekannt: boolean   // Neigung unbekannt: Spalte ≤ −4 (strengster Wert)
   text: string                // z. B. «Tab. 3, bis 30 km/h, Spalte 0 %»
   ebike: boolean              // Wert «schnelle E-Bikes verboten» angewendet
 }
@@ -357,7 +361,7 @@ export interface TrottoirRichtung extends SichtTeil {
   richtung: Richtung
   lage: Lage                  // wie die Richtung der Vortrittsstrasse auf derselben Seite
   neigung: number             // Längsneigung des Trottoirs in Gehrichtung auf die Zufahrt zu [%]
-  neigungUnbekannt: boolean   // kein Profil des Trottoirs nach dem Laden: Spalte ≤ −6 (strengster Wert, Entscheid 31.10.2026)
+  neigungUnbekannt: boolean   // kein Profil des Trottoirs nach dem Laden: Spalte ≤ −6 (strengster Wert)
   neigungQuelle: string
   text: string                // z. B. «Tab. 2, Spalte ≥ 0 %»
 }
@@ -421,7 +425,7 @@ export interface RichtungErgebnis {
   neigung: number             // Längsneigung in Fahrtrichtung [%], wie gerechnet
   neigungVorgabe: number      // Vorgabe: aus dem Höhenmodell (E3a), sonst 0 % (unbekannt bzw. lädt)
   neigungHand: boolean        // Längsneigung von Hand (sonst Vorgabe)
-  neigungUnbekannt: boolean   // weder von Hand noch gemessen, Höhenmodell geladen: strengster Wert (Entscheid 31.10.2026)
+  neigungUnbekannt: boolean   // weder von Hand noch gemessen, Höhenmodell geladen: strengster Wert
   neigungVorgabeUnbekannt: boolean  // Vorgabe unbekannt (auch bei Eingabe von Hand)
   neigungQuelle: string       // «von Hand», «swissALTI3D (swisstopo), Profil …» bzw. warum unbekannt bzw. vorerst 0 %
   neigungVorgabeQuelle: string  // Quelle der Vorgabe (auch bei Eingabe von Hand): Profil, Fehler, lädt bzw. ohne Profil
@@ -455,7 +459,7 @@ export interface RichtungErgebnis {
   veloGewaehlt: boolean
   velo: VeloErgebnis | null   // null: kein Veloverkehr bzw. kein Verkehr von dieser Seite
   ueberholfall?: UeberholTeil | null   // Block 5: Überholfall (Ziffer 6), nur ausserorts mit erlaubtem Überholen (sonst fehlt bzw. null)
-  gesamt: RichtungStatus      // schlechtester von Auto, Velo, Überholfall und Trottoir dieser Seite (Entscheid 1)
+  gesamt: RichtungStatus      // schlechtester von Auto, Velo, Überholfall und Trottoir dieser Seite
   gesamtFehlt: string[]       // Teile, die nicht erfüllt sind: «Auto», «Velo», «Überholfall», «Trottoir»
   keinGrund?: string          // status keine_zufahrt: warum (Vorgabe «kein Verkehr von dieser Seite»; E3c: Rechtsvortritt, von links)
   rv?: boolean                // E3c: Auto nach Teil E (Rechtsvortritt, Abb. 6) statt Tab. 1
@@ -503,6 +507,9 @@ export interface HaltelinieErgebnis { p: P; quer: [P, P]; abstand: number; vorve
 export interface TrottoirErgebnis { breite: number; hinterkante: P; frei: boolean }
 /** Grundstückzufahrt (E2b): geklickter Punkt (Schlüssel), Richtung, OSM-Weg service (falls über ihn gesetzt), Strasse */
 export interface ZufahrtspunktErgebnis {
+  herkunft?: ZufahrtHerkunft
+  winkel?: number             // aus derselben Achse abgeleitet, keine zweite Eingabe
+
   eingabe: P                  // geklickter Punkt (Schlüssel des Falls, ?zufahrt=E,N)
   richtung: P                 // Richtung der Zufahrt vom Rand weg in das Grundstück
   gezeichnet: boolean         // Richtung mit zweitem Klick gezeichnet (sonst senkrecht zum Rand bzw. entlang des OSM-Wegs)
@@ -538,6 +545,8 @@ export interface Ergebnis {
   rand: P                     // Schnitt der Zufahrtsachse mit der zugewandten Kante des Fahrstreifens mit Vortritt
   nullpunkt: P                // Punkt auf der Zufahrtsachse, ab dem B gemessen wird (Kante, Haltelinie bzw. Trottoirhinterkante)
   nullpunktText: string
+  /** Nur Darstellung: tatsächlich verwendete, durch die Einmündung verlängerte Fahrstreifenkante um den B-Nullpunkt. */
+  bBezug?: { linie: P[]; quelle: string }
   regelung: Regelung          // in der Rechnung verwendete Vortrittsregelung (E2b)
   regelungVorgabe: Regelung
   regelungQuelle: string      // z. B. «OSM highway=stop an der Zufahrt»
@@ -555,9 +564,9 @@ export interface Ergebnis {
   strasse: StrasseErgebnis    // Strassentyp und ungünstige Verhältnisse (E1)
   avRadius: number            // Halbseite des geladenen AV-Ausschnitts um den Knoten [m]
   avBedarf: number            // nötiger AV-Ausschnitt: weitester Zielpunkt ab Knoten plus Reserve [m]
-  annahmen: string[]          // in der Seite als Annahme ausgewiesen: je Thema ein Punkt «Titel: Text» (Korrektur 31.10.2026)
+  annahmen: string[]          // in der Seite als Annahme ausgewiesen: je Thema ein Punkt «Titel: Text»
   hinweise: string[]
-  annahmenThemen?: AnnahmeThema[]   // dieselben Annahmen nach Thema, in der Reihenfolge der Rechnung (Korrektur 31.10.2026)
+  annahmenThemen?: AnnahmeThema[]   // dieselben Annahmen nach Thema, in der Reihenfolge der Rechnung
   herleitung?: string[]       // technische Herleitung (Achsen, Querschnitte, Prüfpunkte): Panel ausklappbar, Bericht im Anhang
   hindernis: HindernisStand
   zufahrtProfil: P[]          // Achse der Zufahrt ab dem Nullpunkt 20 m vom Knoten weg: Linie des Höhenprofils (E3a)
@@ -571,9 +580,9 @@ export interface Ergebnis {
   zufahrtVelo: ZufahrtVelo | null   // E4: Zufahrt mit Einbahn vom Knoten weg und Velo gegen die Einbahn: F_B ist ein Velo, D auf seiner Achse
   trottoirueberfahrt?: TueErgebnis  // K0: nur im Modus Trottoirüberfahrt (sonst fehlt das Feld)
   ueberholen?: UeberholStand | null // Block 5: Überholfall (Ziffer 6); null beim Rechtsvortritt
-  lsa?: boolean               // Korrektur 31.10.2026 (Punkt 13): LSA-Knoten, gerechnet ist die Rückfallebene bei ausgeschalteter Anlage
+  lsa?: boolean               // LSA-Knoten, gerechnet ist die Rückfallebene bei ausgeschalteter Anlage
 }
-/** Themen der Annahmen (Korrektur 31.10.2026): je Thema ein Punkt in Alltagssprache, in der Reihenfolge der Rechnung; «eng» nur bei
+/** Themen der Annahmen: je Thema ein Punkt in Alltagssprache, in der Reihenfolge der Rechnung; «eng» nur bei
  *  einer engen Kreuzung (Rechtsvortritt, eine Fahrbahn höchstens 3,50 m), «wahrnehmbarkeit» nur beim Rechtsvortritt */
 export type AnnahmeThemaId = 'vortritt' | 'wartend' | 'verkehr' | 'hindernisse' | 'wahrnehmbarkeit' | 'eng'
 export interface AnnahmeThema { thema: AnnahmeThemaId; titel: string; text: string }
@@ -595,7 +604,7 @@ export interface Rechnung {
   ergebnis: Ergebnis | null
   meldungen: string[]
   ms: number
-  /** Korrektur 31.10.2026 (Punkte 12, 13, 16, 17): im geladenen OSM-Umkreis Punkte mit drei und mehr Strassenarmen, die keine Knoten der
+  /** im geladenen OSM-Umkreis Punkte mit drei und mehr Strassenarmen, die keine Knoten der
    *  App sind (Gabelungen, Kreisel, Fahrbahnteilungen; die Knotensuche blendet sie aus), und LSA-Knoten (Kennzeichnung auf der Karte) */
   keinKnoten?: number[]
   lsaKnoten?: number[]

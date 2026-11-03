@@ -369,7 +369,7 @@ describe('K2 und K3: Einfahrt, K, D, Ablenkungswinkel', () => {
   const R = 12.5, w = 3.5, aussen = 17, insel = 8, grenze = aussen - INNENRING_AB_M   // Innenring 11,50 m
   const o = daten([ring(R), arm(2, R, 90, 'Nordstrasse'), arm(3, R, 0, 'Oststrasse'), arm(4, R, 270, 'Südstrasse'), arm(5, R, 180, 'Weststrasse')])
   const SUED = '4:0:1'
-  it('K2: Achse 1,75 m rechts der OSM-Linie (Mitte der rechten Hälfte), Wartelinie, K auf der Fahrlinie, D 3,00 m dahinter am Fahrersitz', () => {
+  it('K2: Achse 1,75 m rechts der OSM-Linie (Mitte der rechten Hälfte), Wartelinie, K auf der Fahrlinie, D 3,00 m dahinter am Fahrer*innensitz', () => {
     const k = knoten(o, fahrbahn(aussen, insel, [90, 0, 270, 180]), ringId(0), null, SUED).kreisel!
     const z = k.zufahrt!
     expect(k.zufahrtFehler).toBeNull()

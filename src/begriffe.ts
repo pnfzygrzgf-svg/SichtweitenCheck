@@ -1,4 +1,4 @@
-// ── Begriffe (Korrektur 31.10.2026, Punkt 9b; Muster fgsCheck bedarf/begriffe.ts) ──
+// ── Begriffe (Muster fgsCheck bedarf/begriffe.ts) ──
 //
 // Je Begriff ein Name und eine eigene Erklärung in Alltagssprache (ein bis zwei Sätze), kein Text aus Normen. muster: Wortformen, an
 // denen die Anzeige den Begriff in einem Text erkennt (reguläre Ausdrücke ohne Flags; ganze Wörter, Gross- und Kleinschreibung wie
@@ -21,9 +21,9 @@ export const BEGRIFFE: readonly Begriff[] = [
   { id: 'arm', name: 'Arm', muster: ['Arme?', 'Armen', 'Arms'],
     text: 'Eine Strasse, die vom Knoten wegführt. Die App nummeriert die Arme im Uhrzeigersinn ab Norden.' },
   { id: 'b', name: 'Beobachtungsdistanz B', muster: ['Beobachtungsdistanz'],
-    text: 'Wie weit hinter dem Rand der Strasse mit Vortritt das Auge des wartenden Lenkers liegt. Sie hängt von der Ortslage und von der Vortrittsregelung ab.' },
+    text: 'Wie weit hinter dem Rand der Strasse mit Vortritt das Auge der wartenden Person liegt. Sie hängt von der Ortslage und von der Vortrittsregelung ab.' },
   { id: 'd', name: "Beobachtungspunkt D und D'", muster: ['Beobachtungspunkte?', "D'"],
-    text: "Der Punkt, von dem aus die App die Sicht prüft: das Auge des wartenden Lenkers oder Velofahrers. D' ist der Punkt für die Sicht aufs Trottoir, etwas weiter hinten." },
+    text: "Der Punkt, von dem aus die App die Sicht prüft: das Auge der wartenden Person im Auto oder auf dem Velo. D' ist der Punkt für die Sicht aufs Trottoir, etwas weiter hinten." },
   { id: 'fa', name: 'F_A (Fahrzeug mit Vortritt)', muster: ['F_A'],
     text: 'Ein vortrittsberechtigtes Fahrzeug, das sich dem Knoten nähert. Die App zeigt es dort, wo es gerade noch gesehen werden muss.' },
   { id: 'fb', name: 'F_B (wartendes Fahrzeug)', muster: ['F_B', 'FB'],
@@ -33,9 +33,9 @@ export const BEGRIFFE: readonly Begriff[] = [
   { id: 'fahrbahnteilung', name: 'Fahrbahnteilung', muster: ['Fahrbahnteilung(?:en)?'],
     text: 'Stelle, an der sich eine Strasse mit Gegenverkehr in zwei Einbahnen teilt, etwa um eine Insel vor einem Kreisel. Weil sich die Fahrströme dort nicht kreuzen, rechnet die App an solchen Stellen nicht.' },
   { id: 'faeg', name: 'fäG (fahrzeugähnliche Geräte)', muster: ['fäG'],
-    text: 'Trottinette, Inlineskates, Kickboards und ähnliche Geräte. Auf dem Trottoir sind sie schneller als Fussgänger.' },
+    text: 'Trottinette, Inlineskates, Kickboards und ähnliche Geräte. Auf dem Trottoir sind sie schneller als Zufussgehende.' },
   { id: 'gehlinie', name: 'Gehlinie', muster: ['Gehlinie'],
-    text: 'Die Linie, auf der Fussgänger über eine Trottoirüberfahrt gehen. Die App prüft, ob der Lenker Fussgänger auf dieser Linie früh genug sieht.' },
+    text: 'Die Linie, auf der Zufussgehenden über eine Trottoirüberfahrt gehen. Die App prüft, ob die fahrende Person Zufussgehende auf dieser Linie früh genug sieht.' },
   { id: 'haltelinie', name: 'Halte- und Wartelinie', muster: ['Halte- (?:oder|und) Wartelinie', 'Haltelinie', 'Wartelinie'],
     text: 'Weisse Markierung quer zur Fahrbahn am Ende der Zufahrt: bei «Stop» die durchgezogene Haltelinie, bei «Kein Vortritt» die Wartelinie aus einer Reihe weisser Dreiecke. Ab ihrer Vorderkante misst die App die Beobachtungsdistanz.' },
   { id: 'stop', name: 'Kein Vortritt und Stop', muster: ['Kein Vortritt', 'Stop'],
@@ -43,7 +43,7 @@ export const BEGRIFFE: readonly Begriff[] = [
   { id: 'knoten', name: 'Knoten', muster: ['Knoten', 'Knotens'],
     text: 'Stelle, an der sich drei oder mehr Strassen treffen, also eine Kreuzung oder Einmündung. Die App nimmt die Knoten aus OpenStreetMap.' },
   { id: 'a', name: 'Knotensichtweite A', muster: ['Knotensichtweiten?', 'Sichtweite A'],
-    text: 'Wie weit der wartende Lenker auf der Strasse mit Vortritt sehen muss, gemessen ab K. Sie hängt vom Tempo, vom Strassentyp und von der Längsneigung ab.' },
+    text: 'Wie weit die wartende Person auf der Strasse mit Vortritt sehen muss, gemessen ab K. Sie hängt vom Tempo, vom Strassentyp und von der Längsneigung ab.' },
   { id: 'k', name: 'Kreuzungspunkt K', muster: ['Kreuzungspunkte?'],
     text: 'Der Punkt, an dem sich die Fahrlinie der Zufahrt und die Fahrlinie der Fahrzeuge mit Vortritt kreuzen. Ab K misst die App die Sichtweite.' },
   { id: 'neigung', name: 'Längsneigung', muster: ['Längsneigung(?:en)?', 'Gefälle', 'Steigung'],
@@ -55,9 +55,9 @@ export const BEGRIFFE: readonly Begriff[] = [
   { id: 'rv', name: 'Rechtsvortritt', muster: ['Rechtsvortritts?'],
     text: 'Ohne Signal hat der Verkehr von rechts Vortritt. Jede Zufahrt muss dann dem Arm rechts von ihr den Vortritt lassen.' },
   { id: 'sichtfeld', name: 'Sichtfeld und Sichtdreieck', muster: ['Sichtfeld(?:er|s)?', 'Sichtdreiecke?'],
-    text: 'Die Fläche zwischen dem Auge des wartenden Lenkers und der Fahrlinie mit Vortritt bis zur nötigen Sichtweite. Darin darf nichts die Sicht verdecken.' },
+    text: 'Die Fläche zwischen dem Auge der wartenden Person und der Fahrlinie mit Vortritt bis zur nötigen Sichtweite. Darin darf nichts die Sicht verdecken.' },
   { id: 'sichtlinie', name: 'Sichtlinie', muster: ['Sichtlinien?'],
-    text: 'Gerade Linie vom Auge des wartenden Lenkers zu einem Punkt auf der Fahrlinie mit Vortritt. Ist sie frei, sieht er ein Fahrzeug an diesem Punkt.' },
+    text: 'Gerade Linie vom Auge der wartenden Person zu einem Punkt auf der Fahrlinie mit Vortritt. Ist sie frei, ist ein Fahrzeug sichtbar an diesem Punkt.' },
   { id: 'strassentyp', name: 'Strassentyp (Hauptverkehrs- oder Erschliessungsstrasse)', muster: ['Strassentyp', 'Hauptverkehrsstrassen?',
     'Erschliessungsstrassen?'],
     text: 'Hauptverkehrsstrassen tragen den Durchgangsverkehr, Erschliessungsstrassen führen zu Wohnungen und Betrieben. An Hauptverkehrsstrassen verlangt die App mehr Sicht.' },

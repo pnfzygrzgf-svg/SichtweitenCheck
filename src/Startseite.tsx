@@ -41,7 +41,7 @@ export default function Startseite({ onStart }: { onStart: () => void }) {
       </p>
       <p>
         Grundlage sind offene Daten: das Luftbild SWISSIMAGE und das Höhenmodell von swisstopo, die Amtliche Vermessung über
-        geodienste.ch und OpenStreetMap, aus dem Tempo und Veloführung stammen. In der Stadt Bern fliessen die öffentlichen
+        geodienste.ch und OpenStreetMap, aus dem Tempo und Veloführung stammen. In Zürich fliessen amtliche Tempoabschnitte und Verkehrszonen ein. In der Stadt Bern fliessen die öffentlichen
         Parkfelder und der Baumkataster automatisch ein.
       </p>
       <p className="start-grenzen">
@@ -80,7 +80,8 @@ export default function Startseite({ onStart }: { onStart: () => void }) {
           Speicher dieses Browsers (je Knoten bzw. Grundstückzufahrt) und in einer Fall-Datei, wenn du sie speicherst.</div>
         <ul>
           <li>Für Karte, Rechnung und Bericht fragt die App den Kartenausschnitt bei swisstopo, geodienste.ch, OpenStreetMap
-            (Overpass) und in Bern bei map.bern.ch ab; gesendet werden nur Koordinaten. Den Suchbegriff der Ortssuche erhält
+            (Overpass), in Bern bei map.bern.ch und in Zürich bei den Geodatendiensten der Stadt und des Kantons (www.ogd.stadt-zuerich.ch, data.stadt-zuerich.ch, maps.zh.ch),
+            in St. Gallen bei daten.stadt.sg.ch ab; gesendet werden nur Koordinaten. Den Suchbegriff der Ortssuche erhält
             swisstopo; der eigene Standort bleibt im Browser.</li>
           <li>Nutzungsstatistik: Seitenaufrufe werden mit GoatCounter gezählt, ohne Cookies und ohne Speicherung der
             IP-Adresse. GitHub Pages protokolliert Zugriffe wie jeder Webserver.</li>

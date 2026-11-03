@@ -38,7 +38,7 @@ mit dem Häkchen «Trottoir ohne Hindernisse» ab der Bordkante).
    drei und mehr Strassenarmen) und zeigt sie als blaue Punkte.
 2. Knoten anklicken: die App lädt AV (±150 m) und OSM (300 m) und rechnet im Web Worker. Reichen die Zielpunkte über den
    AV-Ausschnitt hinaus (ab etwa 60 km/h), lädt sie die AV einmal mit dem nötigen Radius nach (weitester Zielpunkt ab Knoten plus
-   20 m, höchstens 400 m) und rechnet neu; der Radius steht unter «Geladene Quellen». Bei einer Einmündung schlägt sie
+   20 m, höchstens 400 m) und rechnet neu; der Radius steht unter «Datenquellen und Ladezustand». Bei einer Einmündung schlägt sie
    die Zufahrt vor (einziger Arm ausserhalb der Vortrittsstrasse); sonst im Panel (Schritt 2 «Vortritt und Zufahrt») bzw. auf
    der Karte einen Arm bzw. sein Nummernschild als Zufahrt wählen. Die Arme tragen je Knoten feste Nummern im Uhrzeigersinn ab
    Norden (1, 2, 3 …; Grundstückzufahrt «Z»), überall gleich: Schild auf der Karte rund 12 m vom Knoten auf der Armachse (bei Zoom 17 und
@@ -65,7 +65,7 @@ mit dem Häkchen «Trottoir ohne Hindernisse» ab der Bordkante).
    gestrichelt) mit K, Sichtdreiecke (grün frei, rot ab der ersten Verdeckung bis A), verdeckendes Gebäude (rot). Fahrzeuge aus der Vogelperspektive (nur Darstellung, Personenwagen 4,5 × 1,8 m angenommen):
    F<sub>B</sub> dunkel auf der Zufahrt mit dem Lenker D 2,0 m hinter der Front, F<sub>A</sub> hell je Richtung mit der Front am Ende der
    massgebenden Sichtweite A, auf den Knoten zu fahrend (`rechner/fahrzeug.ts`).
-4. Panel, Schritt 3, Block «Hindernisse» (E2a):
+4. Panel, Schritt 3, Block «Hindernisse»:
    - **Werkzeuge:** Parkfeld (Ecken anklicken, Doppelklick schliesst; Klasse Auto, Velo oder Motorrad), Längsparkierung
      (Mittellinie, Breite Vorgabe 2,0 m), Baum (Stamm anklicken), Hecke, Mauer (Linie; Häkchen «sichtbehindernd», Vorgabe ja),
      Zaun (Linie; Häkchen «dicht», sonst sichtdurchlässig), übriges (Fläche; «sichtbehindernd»). «Fertig» bzw. Doppelklick
@@ -87,7 +87,7 @@ mit dem Häkchen «Trottoir ohne Hindernisse» ab der Bordkante).
      beim nächsten Öffnen übernimmt die App sie (Hinweis unter den Knöpfen «Fall laden» / «Fall speichern»).
    - Die zuletzt gesehene Kartenansicht (Mitte und Zoom) bleibt im Browser (`sichtweitencheck.karteAnsicht`, nur Schweiz); nach
      einem Neuladen öffnet die Karte dort statt am Startort.
-5. Panel, Schritt 2 «Vortritt und Zufahrt» und Schritt 3, Block «Zufahrt» (E2b):
+5. Panel, Schritt 2 «Vortritt und Zufahrt» und Schritt 3, Block «Zufahrt»:
    - **Vortrittsregelung** (Schritt 2, über der Armwahl): Vortritt, Stop, Rechtsvortritt. Vorgabe aus OSM `highway=stop` an der Zufahrt (Stop) bzw. `give_way`
      (Vortritt); ohne Signal nach der Vortrittsstrasse (`rechner/rechnen.ts` regelungVorgabe): Hauptverkehrsstrasse (trunk, primary,
      secondary, tertiary und deren links, `priority_road`, `maxspeed` ab 50) Vortritt, Quartierstrasse (residential, living_street) mit
@@ -110,10 +110,10 @@ mit dem Häkchen «Trottoir ohne Hindernisse» ab der Bordkante).
      lädt sie AV und OSM um den Zufahrtspunkt. Schritt 1 heisst dann «Grundstückzufahrt», mit «Zufahrt neu setzen» und
      «zurück zum Knoten»; Schritt 2 zeigt nur die Vortrittsregelung. Ein Wechsel auf einen anderen Arm setzt die
      Eingaben zurück (Rückfrage, wenn welche gesetzt sind).
-6. Panel, Schritt 3, Block «Veloverkehr» (E3b): je Richtung die **Veloführung** (Vorgabe aus OSM, mit Quelle: Mischverkehr, Radstreifen
+6. Panel, Schritt 3, Block «Veloverkehr»: je Richtung die **Veloführung** (Vorgabe aus OSM, mit Quelle: Mischverkehr, Radstreifen
    aus `cycleway:*=lane`, Radweg aus `highway=cycleway` bzw. Fuss- und Radweg mit `bicycle=designated` neben der Strasse oder
    `cycleway:*=track`, kein Veloverkehr bei `bicycle=no` bzw. Autobahn und Autostrasse); «Vorgabe» bzw. eine Führung wählen.
-   Velo gegen die Einbahn (E4): ist ein Arm der Vortrittsstrasse eine Einbahn vom Knoten weg, aber für Velos offen
+   Velo gegen die Einbahn: ist ein Arm der Vortrittsstrasse eine Einbahn vom Knoten weg, aber für Velos offen
    (`oneway:bicycle=no`, `cycleway*=opposite*`, `cycleway:*:oneway` gegen die Einbahn), steht bei dieser Richtung «nur Velos» mit dem
    Tag; Vorgabe Radstreifen bei `opposite_lane`, Radweg bei `opposite_track`, sonst Mischverkehr. Ist die Zufahrt eine solche Einbahn,
    nennt der Block die Zufahrt mit dem Tag: F<sub>B</sub> ist dann ein Velo.
@@ -129,15 +129,15 @@ mit dem Häkchen «Trottoir ohne Hindernisse» ab der Bordkante).
    gestrichelt (Fläche schwach, verdeckter Teil rot gestrichelt), Veloachse Petrol gestrichelt, Velo von oben (1,8 × 0,6 m) mit dem
    Vorderrad bei A (bei «nur Velos» ohne F<sub>A</sub>); Trottoir: zwei kleine Dreiecke von D' (Bernstein-Punkt) zu den Trottoirpunkten, Fussgänger (Punkt mit Ring) bei A.
    Hecken und Zäune an der Grundstücksgrenze im Block «Hindernisse» zeichnen; sie zählen auch für das Trottoir.
-7. Panel, Schritt 5 «Massnahmen» (E3a, unter dem Ergebnis, nur wenn eine Richtung für Motorfahrzeuge oder Velo nicht erfüllt ist): die Massnahmen der Ziffer 14
+7. Panel, Schritt 5 «Massnahmen» (unter dem Ergebnis, nur wenn eine Richtung für Motorfahrzeuge oder Velo nicht erfüllt ist): die Massnahmen der Ziffer 14
    in ihrer Reihenfolge, je mit Rechnung und «reicht» bzw. «reicht nicht» oder als Vermerk. Klick auf ein Hindernis in der Liste
    hebt es auf der Karte hervor (türkis gestrichelt); «übernehmen» setzt Haltelinie, Stop bzw. Tempo (signalisiert, mit Begründung)
    als Eingabe. Beim Spiegel die Bedingungen abhaken (im Fall gemerkt; die App zählt nur).
 8. **Fall-Datei:** «Fall speichern» schreibt eine JSON-Datei (App, Version 6, Ort, Knoten bzw. Zufahrtspunkt, gewählte Zufahrt,
-   Bezeichnung, alle Eingaben aus E1 bis E3c, Hindernisse, verworfene Vorschläge, Häkchen der Quellen, Quellenstand, Auszug des Ergebnisses). «Fall
+   Bezeichnung, alle Eingaben, Hindernisse, verworfene Vorschläge, Häkchen der Quellen, Quellenstand, Auszug des Ergebnisses). «Fall
    laden» liest sie, prüft jedes Feld (ungültige Werte fallen auf die Vorgabe zurück und werden gemeldet, ungültige Hindernisse
    übergangen, eine fremde Datei wird abgewiesen), lädt den Ort und rechnet neu.
-9. **Rechtsvortritt** (E3c): in Schritt 2 «Vortritt und Zufahrt» die Regelung «Rechtsvortritt» wählen. Dann erscheinen die
+9. **Rechtsvortritt**: in Schritt 2 «Vortritt und Zufahrt» die Regelung «Rechtsvortritt» wählen. Dann erscheinen die
    **Wahrnehmbarkeit des Knotens** (sehr gut, gut, schlecht, sehr schlecht; Vorgabe «gut» als Annahme, darunter die Merkmale der
    Ziffer 18 als Stichworte im Info-Zeichen) und das Häkchen **«alle Arme prüfen»**; das Tempo ist fest 30 km/h (keine Eingabe). Oben
    im Ergebnis ein kurzer Block: «Die Zufahrt muss den Vortritt lassen: <Arm rechts>, von rechts.», «Verkehr von links (…) muss
@@ -154,7 +154,7 @@ mit dem Häkchen «Trottoir ohne Hindernisse» ab der Bordkante).
    gewählte Arm wie bisher (D, Sichtdreieck auf die Fahrstreifenachse des rechten Arms), der rechte Arm hell; bei schmaler Zufahrt
    die Fahrbahnachsen strichpunktiert mit den Punkten alle 2 m und der Fächer der Sichtlinien (frei dünn grau, verdeckt rot, die
    erste verdeckte Kombination dick). Die Normtabellen selbst zeigt die App nicht (lizenzierte Norminhalte); der Abschnitt «Normbezüge» nennt nur Tabellen, Abbildungen und Ziffern.
-10. **Bericht** (E4a): «Bericht drucken / als PDF» (neben «Fall speichern», frei nach der Rechnung) öffnet die Druckansicht über der
+10. **Bericht**: «Bericht drucken / als PDF» (neben «Fall speichern», frei nach der Rechnung) öffnet die Druckansicht über der
    Karte. Oben «Drucken / als PDF speichern» (frei, sobald das Luftbild geladen ist; nach 20 s ohne Antwort ohne Hintergrund, mit
    «erneut versuchen») und «Zurück zur Karte» (bzw. Escape). Im Feld «Bezeichnung» einen Namen für den Fall eingeben (Adresse,
    Projekt): er steht im Kopf des Berichts, im Dateinamen des PDF und in der Fall-Datei. Seite 1: Kopf (Ort, Koordinaten LV95 und
@@ -166,7 +166,7 @@ mit dem Häkchen «Trottoir ohne Hindernisse» ab der Bordkante).
 
 ## Stand
 
-Beta (Stand nach E4a, Bericht und Hilfe). Gerechnet wird die Norm (VSS 40 273:2024, VSS 40 090b); einzige Praxisregel ist der
+Beta. Gerechnet wird die Norm (VSS 40 273:2024, VSS 40 090b); einzige Praxisregel ist der
 Zwischenwert bei Hauptverkehrsstrassen (Mittel des Bereichs, so rechnet der Kanton Zug). Alle Annahmen stehen im Panel unter
 «Annahmen» und im Bericht. Im Code und in den Texten nur Ziffern, Tabellen und Zahlenwerte, kein Normtext.
 
@@ -220,7 +220,7 @@ Zwischenwert bei Hauptverkehrsstrassen (Mittel des Bereichs, so rechnet der Kant
 - **Velo** (`rechner/velo.ts`, Ziffer 13.3, Tab. 3): Veloführung je Richtung aus OSM (Mischverkehr 0,50 m vom Rand, Radstreifen in der
   Mitte, 1,50 m breit angenommen, Radweg auf seiner Achse) bzw. von Hand; Tab. 3 nach zulässiger Höchstgeschwindigkeit und Neigung,
   schnelle E-Bikes verboten (über 30 km/h). Status erfüllt bzw. nicht erfüllt.
-- **Velo gegen die Einbahn** (E4, `netz.ts` `veloGegenTag`, Arm-Felder `veloZufluss`, `veloZuflussQuelle`): Einbahn vom Knoten weg
+- **Velo gegen die Einbahn** (`netz.ts` `veloGegenTag`, Arm-Felder `veloZufluss`, `veloZuflussQuelle`): Einbahn vom Knoten weg
   mit `oneway:bicycle=no`, `cycleway`, `cycleway:left`, `cycleway:right` = `opposite`, `opposite_lane`, `opposite_track` bzw.
   `cycleway:*:oneway` gegen die Einbahn. Die Velos fahren auf der für sie rechten Seite (aus Sicht des Autoverkehrs der linken).
   Hauptarm: Motorfahrzeuge «keine Zufahrt», Velo nach Tab. 3 auf dieser Seite (Mischverkehr 0,50 m vom Rand, Gegenverkehrsstreifen in
@@ -240,18 +240,18 @@ Zwischenwert bei Hauptverkehrsstrassen (Mittel des Bereichs, so rechnet der Kant
 - **Massnahmen** (`rechner/massnahmen.ts`, Ziffer 14): nur wenn eine Richtung (Auto oder Velo) nicht erfüllt ist, als Varianten der
   Rechnung: Hindernis entfernen, Haltelinie vorverlegen (bis D 1,50 m), Stop, Rechtsabbiegegebot (bei einem Arm gegenüber nicht anwendbar, dafür Vermerk Linksabbiegeverbot), Tempo senken, Lichtsignalanlage,
   Spiegel (Bedingungen zum Abhaken), Aufhebung der Ausfahrt; beim Rechtsvortritt zuerst «aufheben» (Ziffer 16) und Wahrnehmbarkeit.
-- **Fall-Datei** (`fall.ts`, Version 6): Ort, Knoten bzw. Zufahrtspunkt, Zufahrt, Bezeichnung (E4a, höchstens 200 Zeichen), alle
+- **Fall-Datei** (`fall.ts`, Version 12): Ort, Knoten bzw. Zufahrtspunkt, Zufahrt, Bezeichnung (höchstens 200 Zeichen), alle
   Eingaben, Hindernisse, verworfene Vorschläge, Häkchen der Quellen, Spiegel-Bedingungen, Quellenstand, beim Speichern ein Auszug
-  des Ergebnisses. Prüfung je Feld (ungültig: Vorgabe bzw. übergangen, gemeldet); Versionen 1 bis 5 werden gelesen. Im Browser je
+  des Ergebnisses. Prüfung je Feld (ungültig: Vorgabe bzw. übergangen, gemeldet); ältere Versionen werden gelesen. Im Browser je
   Knoten (`SichtweitenCheck.fall.<Knoten>`) bzw. Zufahrtspunkt (`SichtweitenCheck.fall.z<E>,<N>`), nur mit Eingaben.
-- **Bericht** (`Bericht.tsx`, `berichtbild.ts`, E4a): Druckansicht als Portal über der App, A4 hoch; Kartenbild als ein WMS-Luftbild
+- **Bericht** (`Bericht.tsx`, `berichtbild.ts`): Druckansicht als Portal über der App, A4 hoch; Kartenbild als ein WMS-Luftbild
   in LV95 mit SVG darüber (Ausschnitt aus Sichtdreiecken, Verdeckern, D, Haltelinie und Fahrzeugen mit 5 m Rand, Höhe/Breite 0,55
   bis 0,7; 1200 bis 1400 px breit). «Drucken» erst mit geladenem Bild bzw. nach 20 s ohne (Hinweis «ohne Luftbild», «erneut
   versuchen»). Inhalt: Kopf, Kartenbild, Ergebnis je Richtung (bzw. Teil E), Verdecker, Massnahmen, Eingaben von Hand, Annahmen,
   Hinweise, Quellen mit Abrufdatum, Normbezüge, Version, Haftungshinweis. Status zusätzlich als Zeichen (✓, (✓), ✗, –) und im Bild
   als Strichart.
 
-### Trottoirüberfahrt und amtliches Tempo (0.6.0, Etappe K0)
+### Trottoirüberfahrt und amtliches Tempo
 
 Häkchen «Trottoirüberfahrt» (Block «Zufahrt», je Zufahrt; Fall-Datei Version 7, Feld `eingaben.trottoirueberfahrt` mit `breite`):
 kein Rechtsvortritt (VSS 40 242 Ziffer 12.3; Vorgabe Vortritt bzw. Stop aus OSM, «Rechtsvortritt» wird wie Vortritt gerechnet) und die
@@ -277,7 +277,7 @@ Gehlinie in `rechner/trottoirueberfahrt.ts`, Zuordnung des Tempos in `rechner/te
 `rechner/trottoirueberfahrt.test.ts` und `rechner/tempoamtlich.test.ts`. Grenzen: Velos auf dem Trottoir (Ziffer 15.4.2) nur als Hinweis,
 Trottoir nicht in den Massnahmen; Vortrittsvorgabe und «ausserorts» weiter nach OSM.
 
-### Kreisel: erkennen, vermessen, Fahrlinien, Ablenkungswinkel, Sicht (Etappen K1 bis K4)
+### Kreisel: erkennen, vermessen, Fahrlinien, Ablenkungswinkel, Sicht
 
 Ein Kreisel (OSM `junction=roundabout` bzw. `circular`) ist ein Knoten (`rechner/kreisel.ts`): alle Ringwege, die über gemeinsame
 Punkte zusammenhängen, bilden den Ring; Kennung ist der kleinste Ringpunkt. Die Knotensuche holt die Ringwege mit Geometrie und zeigt
@@ -288,7 +288,7 @@ höchstens 45° auseinander liegen (ohne Namen: nur eine Einbahn zum Ring mit ei
 `KREISEL_ARM_GRAD`, `KREISEL_ARM_M`). Wege, die ganz am Ring vorbeiführen, und Tram sind keine Arme; Nummern im Uhrzeigersinn ab Norden
 (Richtung ohne Bypass). Bypass (E10): eine zweite Einfahrt eines Arms, die höchstens 20 m (entlang des Rings in Fahrtrichtung) vor der
 Ausfahrt des nächsten Arms mündet (Annahme `BYPASS_M`); gestrichelt, keine Einfahrt, Hinweis «Einfädeln nicht geprüft». Velobypass
-(Nutzerbefund 01.11.2026, `velobypaesse`): `highway=cycleway` bzw. `path`/`footway` mit `bicycle=designated|yes` (ohne Querungen), über
+`highway=cycleway` bzw. `path`/`footway` mit `bicycle=designated|yes` (ohne Querungen), über
 gemeinsame Punkte zu Ketten verbunden, ganz innerhalb von 60 m um die Mitte, ohne Ringpunkt und ausserhalb des Aussenrands, mindestens
 20 m lang, die Enden mindestens 5 m ausserhalb des Aussenrands und je höchstens 25 m von der OSM-Linie (80 m) zweier verschiedener Arme
 (Annahmen `VELOBYPASS_UMKREIS_M`, `VELOBYPASS_MIN_LAENGE_M`, `VELOBYPASS_ENDE_AUSSEN_M`, `VELOBYPASS_ARM_M`, Toleranz für lückenhafte
@@ -297,7 +297,7 @@ Einmündungen des Bypasses nicht geprüft»; Velos auf dem Ring wie bisher. Die 
 `bicycle=yes` (die Veloachse am Knoten nimmt weiter nur `designated`). Die Fahrbahnteilung vor dem Kreisel bleibt Meldung am
 Teilungspunkt.
 
-Vermessung (E9, Form statt Kreis): 360 Strahlen aus dem Schwerpunkt; je Strahl zählt das Fahrbahnstück der AV (`Strasse_Weg`), auf dem
+Vermessung (Form statt Kreis): 360 Strahlen aus dem Schwerpunkt; je Strahl zählt das Fahrbahnstück der AV (`Strasse_Weg`), auf dem
 die OSM-Linie des Rings liegt (bzw. das nächste bis 2 m): Inselrand = sein Anfang, Aussenrand = sein Ende (über 35 m: Arm). Randpunkte:
 Abstand Aussenrand − OSM-Linie bis 1,5 m vom unteren Quartil (die Armtrichter liegen alle weiter aussen), dann bis 1,0 und 0,6 m von der
 angepassten Form (Fourier-Reihe bis zur zweiten Harmonischen, wenn die Randpunkte rundum liegen); dazwischen neu zentriert auf den
@@ -310,7 +310,7 @@ Mittel mindestens 3 m breit ist und die Mitte höchstens 4 m vom Schwerpunkt der
 der OSM-Linie, die in der Mitte einer 5,50 m breiten Kreiselfahrbahn liegt (`KREISEL_BREITE_OHNE_AV_M`). Kennzahlen: mittlerer,
 kleinster und grösster Aussendurchmesser (durch die Mitte); «nicht kreisrund» ab Verhältnis 1,1 (Annahme `NICHT_RUND_AB`). Typ nach dem
 mittleren Aussendurchmesser auf ganze Meter gerundet (Annahme für die Lücke): bis 25 m Minikreisel, ab 26 m Kleinkreisel (VSS 40 263
-Ziffern 3 und 4, S. 4); unter 14 m bzw. über 40 m Hinweis; von Hand umschaltbar (`eingaben.kreiselTyp`, Entscheid E1). Innenring nur als
+Ziffern 3 und 4, S. 4); unter 14 m bzw. über 40 m Hinweis; von Hand umschaltbar (`eingaben.kreiselTyp`). Innenring nur als
 Vorschlag (Ziffer 16, S. 12): je Richtung 5,50 m innerhalb des Aussenrands, wo die Kreiselfahrbahn breiter ist (`INNENRING_AB_M`); nie
 aus der AV gelesen. Tramtrassee durch die Insel: Hinweis «Durchsicht über das Tramtrassee» (Ziffer 13.3, S. 9); Tramgleis über die
 Kreiselfahrbahn: Hinweis.
@@ -323,7 +323,7 @@ Fahrbahnstück rechts davon bis 4 m; ist das Stück breiter als 7 m für eine Ri
 3, 7, 9 und 11 m ausserhalb; Einbahn: Mitte der Fahrbahn, mit Gegenverkehr: Mitte der rechten Hälfte; ohne Querschnitt 3,50 m breite
 Fahrstreifen, Annahmen
 `QUERSCHNITT_AUSSEN_M`, `FAHRSTREIFEN_ANNAHME_M`). Fahrlinie mit Vortritt je Richtung in der Mitte zwischen Aussenrand und Innenring bzw.
-Insel (Entscheid E2), gezeigt als halber Ring im Gegenuhrzeigersinn bis K; K = Schnitt mit der Fahrlinie der Einfahrt; Wartelinie =
+Insel, gezeigt als halber Ring im Gegenuhrzeigersinn bis K; K = Schnitt mit der Fahrlinie der Einfahrt; Wartelinie =
 Schnitt mit dem Aussenrand; D = B (3,00 m innerorts, 5,00 m ausserorts, Ziffer 12) davor auf der Achse, am Fahrersitz 0,50 m links. Nur
 Verkehr von links, kein Rechtsvortritt.
 
@@ -339,27 +339,27 @@ gerade Hilfslinie 3,50 m innerhalb des rechten Rands, Startpunkt an der Wartelin
 mit dem grössten Winkel; bei drei Armen nur über 180 gon (Ziffer 17); von Hand an- und abwählbar (`eingaben.kreiselBeziehungen`,
 Schlüssel «von>nach»). Tempo auf der Kreiselfahrbahn nach dem kleinsten β der aktiven, gültigen Fahrbeziehungen (Ziffer 13.2,
 S. 8–9): unter 20 gon 40 km/h, 20 bis 45 gon 35 km/h, darüber 30 km/h; ohne gültige Konstruktion 40 km/h, Minikreisel fest 30 km/h
-ohne β (Annahmen, Entscheid E1); Hinweis unter 45 gon (Ziffer 17, S. 13). Startpunkte von Hand (K5) sind in `kreiselBeta` (Parameter
+ohne β (Annahmen); Hinweis unter 45 gon (Ziffer 17, S. 13). Startpunkte von Hand (K5) sind in `kreiselBeta` (Parameter
 `start`) vorbereitet, noch ohne Eingabe in der Oberfläche.
 
 Sicht (K4, `rechner/kreiselsicht.ts`): mit gewählter Einfahrt. Ak (VSS 40 263 Ziffer 13.2, S. 8–9): A nach VSS 40 273 Tab. 1 mit dem
-Tempo aus K3; bei 35 km/h zwischen den Werten für 30 und 40 km/h linear (Annahme, Entscheid E7); Strassentyp der Kreiselfahrbahn:
-Hauptverkehrsstrasse, sobald ein Arm eine ist (Zwischenwert wie am Knoten), sonst unterer Wert; der Ring gilt als eben (Entscheid E3).
+Tempo aus K3; bei 35 km/h zwischen den Werten für 30 und 40 km/h linear (Annahme); Strassentyp der Kreiselfahrbahn:
+Hauptverkehrsstrasse, sobald ein Arm eine ist (Zwischenwert wie am Knoten), sonst unterer Wert; der Ring gilt als eben.
 Zielpunkte ab K entlang der Fahrlinie mit Vortritt gegen die Fahrtrichtung, bis 1,5 × grösster nötiger Wert, höchstens eine ganze
-Runde; wäre die nötige Länge grösser, gilt die Rundenlänge (Annahme, Nutzerentscheid 01.11.2026); Panel und Bericht zeigen dann «länger
+Runde; wäre die nötige Länge grösser, gilt die Rundenlänge (Annahme); Panel und Bericht zeigen dann «länger
 als eine Runde: begrenzt auf n m» mit dem ungekürzten Wert. Gilt für Ak und Velo, nicht für Az. Sicht von D; Status wie am Knoten. Fahrzeuge auf Karte und Skizze wie am Knoten (`fahrzeug.ts`
 `kreiselFahrzeug`): F<sub>B</sub> bei D, F<sub>A</sub> und Velo mit der Front am Ende von Ak bzw. der Velo-Linie, ein Fahrzeug in der
-Zufahrt links am Ende von Az. Velo (Entscheid E6): dieselbe Linie, A nach Tab. 3 (eben). Hindernisse wie am Knoten (Gebäude der AV,
+Zufahrt links am Ende von Az. Velo: dieselbe Linie, A nach Tab. 3 (eben). Hindernisse wie am Knoten (Gebäude der AV,
 von Hand, bestätigte Vorschläge, amtliche Parkfelder, Bäume als Palisade); der Hindernis-Block im Panel gilt auch am Kreisel. Sichtberme
-(Entscheid E4): Schnitt des Sichtfelds (Dreiecke D – Zielpunkte bis zum grösseren nötigen Wert von Auto und Velo) mit Insel und
+(): Schnitt des Sichtfelds (Dreiecke D – Zielpunkte bis zum grösseren nötigen Wert von Auto und Velo) mit Insel und
 Innenring, Tiefe ab dem Inselrand; ein Hindernis darin → nicht erfüllt; der Rest der Insel «Durchsicht verhindern» (Ziffer 13.3, S. 9;
-bfu BM.024-2024), ob sie verhindert ist, prüft die App nicht. Az (K4b, Entscheid E8, Vergleichswert, kein Normwert): ab K auf der
+bfu BM.024-2024), ob sie verhindert ist, prüft die App nicht. Az (K4b, , Vergleichswert, kein Normwert): ab K auf der
 Fahrlinie mit Vortritt gegen die Fahrtrichtung bis zum K der Zufahrt links, dann auf deren Fahrlinie (Mitte des Einfahrtsfahrstreifens wie
 in K2) hinaus, wie die fette Fahrlinie in bfu 2.446.01 Abb. 3, LU Abb. 8 und ZH Abb. 10 (die Linie am Ringrand ist dort die Masslinie);
 das Fahrzeug steht am Ende im Einfahrtsfahrstreifen, zum Ring hin; keine Begrenzung an der vorherigen Einfahrt; Werte nach Kanton Luzern vif 731.501 Tab. 2 (`AZ_LU`: 40 km/h 40/35 m, 35 km/h 30/25 m, 30 km/h 25/20 m, Regelfall/Minimal),
 Quelle bfu-Fachdokumentation 2.446.01 (2024) Kap. 2.5, Abb. 3, Kreiselrichtlinien ZH 2022 Abb. 10 und LU 731.501 Tab. 2; liegt links nur
 eine Ausfahrt, entfällt Az. Gesamtstatus: schlechtester von Ak, Velo und Sichtberme (Az zählt nicht). Noch nicht: Anhaltesichtweite auf
-der Kreiselfahrbahn und in die Ausfahrt (Entscheid E5, Hinweis); Sicht auf Fussgängerstreifen prüft fgsCheck. Bericht am Kreisel
+der Kreiselfahrbahn und in die Ausfahrt (Hinweis); Sicht auf Fussgängerstreifen prüft fgsCheck. Bericht am Kreisel
 (`KreiselBericht.tsx`): Druckansicht mit Skizze (SVG, ohne Luftbild), Ergebnis, Masse, β, Eingaben, Annahmen, Hinweise, Quellen.
 Fall-Datei Version 8: im Auszug des Ergebnisses `kreisel` (Typ, Masse, β, Tempo, Ak, Velo, Sichtberme, Az).
 
@@ -375,6 +375,9 @@ Kreisel Sandrainstrasse, Eigerplatz und Dalmazibrücke Bern mit Daten in `rechne
 
 ### Versionen
 
+- 0.8.0 (04.11.2026): schweizweite und regionale Quellen (Gebiet, BAV, swissTLM3D, Bauzonen, ASTRA, Tempo, Zonen, Signale,
+  Kartenkontext), Zuständigkeit nach Prüfpunkt, V_sig in der Regelungsannahme in Bern, Kreiselprüfung, Höhenkurven und Geländeschnitte,
+  kompakte Browser-Erinnerung; Fall-Datei Version 12.
 - 0.7.0 (31.10.2026): Block 4 und 5 der Regelprüfung und Korrekturrunde nach dem Browsertest; Einzelheiten in den
   datierten Einträgen bis 0.6.0 unten.
 - Block 5 der Regelprüfung (31.10.2026): Schmale Zufahrten (Abb. 5) nach bfu BM.021-2022 Kap. 3.2.2/Abb. 4: Sichtlinien vom
@@ -397,7 +400,7 @@ Kreisel Sandrainstrasse, Eigerplatz und Dalmazibrücke Bern mit Daten in `rechne
   in `rechner/fahrstreifen.ts`, `versetztVariabel` in `rechner/hauptachsen.ts`); Ausreisser (Breite mehr als 25 % bzw. 1,50 m vom
   Median, z. B. Trichter, Parkbucht) fallen weg, gleitender Median über 5 Stellen, zum Knoten hin konstant fortgeführt (Annahmen).
   Unter 3 gültigen Stellen bzw. ohne AV gilt die feste Lage wie bisher. Liegt die OSM-Linie schräg zur Fahrbahn, liegen D, F_B und
-  F_A damit trotzdem in der richtigen Fahrbahnhälfte. Wahrnehmbarkeit: Info-Text neu (vom Nutzer formuliert); beim Rechtsvortritt
+  F_A damit trotzdem in der richtigen Fahrbahnhälfte. Wahrnehmbarkeit: Info-Text neu; beim Rechtsvortritt
   heisst die nicht geprüfte Richtung «entfällt: diese Richtung wird beim Rechtsvortritt nicht geprüft».
   Neues Häkchen «besondere Markierung Rechtsvortritt vorhanden» (VSS 40 851) bei der Wahrnehmbarkeit: aus den Daten nicht
   erkennbar, darum Eingabe; nur Hilfe zur Einstufung und Vermerk im Bericht, ohne Wirkung auf die Rechnung (Fall-Datei: optionales
@@ -407,7 +410,7 @@ Kreisel Sandrainstrasse, Eigerplatz und Dalmazibrücke Bern mit Daten in `rechne
   springender Rand (Eckausrundung, Einmündung) wird aus dem anderen Rand und der Breite ersetzt; die Spurachsen der Vortrittsstrasse
   (F_A, Zielpunkte) folgen damit weder der Eckausrundung am Knoten noch Einmündungen. Die Achse der Zufahrt folgt in der Mündung
   dem rechten Rand mit dem Abstand der Strecke (`lageMuendung`, Lageänderung höchstens 0,15 m je m; Annahmen). Bei mehreren Spuren
-  liegt D auf der rechten Spur (Nutzerentscheid, keine Spurwahl nach `turn:lanes`).
+  liegt D auf der rechten Spur (keine Spurwahl nach `turn:lanes`).
 - Korrekturrunde nach dem Browsertest (31.10.2026): Annahmen nach Themen in Alltagssprache, technische Angaben in der ausklappbaren
   «Herleitung (technisch)» (im Bericht als Anhang); Legende überarbeitet, K als beschrifteter Punkt auf der Karte. Statt
   «Normbezüge» die Abschnitte «Grundlagen und Quellen», «Begriffe» (`begriffe.ts`) und «Regeln» (`regeln.ts`, Anzeige
@@ -447,7 +450,7 @@ Kreisel Sandrainstrasse, Eigerplatz und Dalmazibrücke Bern mit Daten in `rechne
 - Street View (31.10.2026): je geprüfte Richtung ein Link «Street View ↗» auf Google Maps, Blick von D zum Ende von A
   (`src/streetview.ts`, wie im fgsCheck).
 - 0.6.0 (23.10.2026): Trottoirüberfahrt (VSS 40 242 Ziffern 12.3, 14.4) und amtliches Tempo der Stadt Bern (V_sig), Fall-Datei Version 7.
-- 0.5.0: Beta, Stand nach E4a (Bericht und Hilfe).
+- 0.5.0: Beta mit Bericht und Hilfe.
 
 ### Prüffälle
 
@@ -457,7 +460,7 @@ sanieren, sehr gut zulässig. Brückfeldstrasse / Fischerweg (`?knoten=32865596`
 Massnahme «ohne Parkfeld» reicht. Lerberstrasse / Aargauerstalden (`?knoten=306255273`, 50 km/h, −7,3 / +7,2 %): A 70 m (oberer Wert
 wegen grosser Neigung), erfüllt. Seidenweg / Länggassstrasse (`?knoten=1022048`, Radstreifen): Auto links 78,0 m, Velo 53,7 m ≥ 50 m.
 Grundstückzufahrt Hallerstrasse (`?zufahrt=2599903.4,1200347.2`, Trottoir 2,0 m): links 7,5 m nicht erfüllt, rechts 47,1 m; Trottoir
-erfüllt. Prüfrunden je Etappe (Sonnet, Code-Lektüre, eigene Fälle): Abb. 2 nachgemessen, Abb. 6 in allen 16 Feldern bestätigt.
+erfüllt.
 
 ## Grenzen
 
@@ -485,56 +488,125 @@ Unterbau als Kopie aus dem fgsCheck-Repo, nicht verlinkt: `geo.ts`, `rechner/pol
 `flaechen.ts`, `netz.ts`, `achsen.ts`, `fahrstreifen.ts`, `spur.ts`, `hindernisse.ts`, `tempo.ts` (gekürzt), `daten/*`,
 `ausschnitt.ts`, `Ortssuche.tsx`, `Einstieg.tsx`, `Startseite.tsx`, `Hilfe.tsx`, `index.css`. `Karte.tsx` und `App.tsx` sind auf
 den Knoten umgebaut. Neu: `rechner/typen.ts`, `sichtweite.ts`, `knoten.ts`, `beobachtung.ts`, `hauptachsen.ts`, `sicht.ts`,
-`rechnen.ts`, `fahrzeug.ts` (Fahrzeug-Umrisse für die Karte), `anhaltesicht.ts` (E1). E2a aus fgsCheck: `rechner/vorschlaege.ts`
-(angepasst), Werkzeuge in `Karte.tsx` und der Abschnitt «Hindernisse» in `App.tsx`, `fall.ts` (Hindernisse, localStorage). E2b:
-`rechner/grundstueck.ts` (Grundstückzufahrt), Abschnitt «Knoten und Zufahrt» und Fall-Datei in `App.tsx` (Knöpfe wie fgsCheck),
-`fall.ts` Version 2 (alle Eingaben, Prüfung je Feld). E3a: `daten/hoehen.ts` (Höhenprofil), `rechner/neigung.ts` (Ausgleichsgerade),
-`rechner/massnahmen.ts` (Ziffer 14), Abschnitt «Massnahmen» in `App.tsx`, `fall.ts` Version 3. E3b: `rechner/velo.ts` (Tab. 2 und 3,
+`rechnen.ts`, `fahrzeug.ts` (Fahrzeug-Umrisse für die Karte), `anhaltesicht.ts`. `rechner/vorschlaege.ts`
+(angepasst), Werkzeuge in `Karte.tsx` und der Abschnitt «Hindernisse» in `App.tsx`, `fall.ts` (Hindernisse, localStorage). `rechner/grundstueck.ts` (Grundstückzufahrt), Abschnitt «Knoten und Zufahrt» und Fall-Datei in `App.tsx` (Knöpfe wie fgsCheck),
+`fall.ts` Version 2 (alle Eingaben, Prüfung je Feld). `daten/hoehen.ts` (Höhenprofil), `rechner/neigung.ts` (Ausgleichsgerade),
+`rechner/massnahmen.ts` (Ziffer 14), Abschnitt «Massnahmen» in `App.tsx`, `fall.ts` Version 3. `rechner/velo.ts` (Tab. 2 und 3,
 Veloführung, Radwege aus OSM, Trottoirachse), Velo und Trottoir in `rechnen.ts`, Velosymbol in `fahrzeug.ts`, Abschnitt «Veloverkehr»
-und Ergebniszeilen in `App.tsx`, Darstellung in `Karte.tsx`, `fall.ts` Version 4. E3c: `rechner/rechtsvortritt.ts` (Abb. 6,
+und Ergebniszeilen in `App.tsx`, Darstellung in `Karte.tsx`, `fall.ts` Version 4. `rechner/rechtsvortritt.ts` (Abb. 6,
 rechter Arm, Sichtfeld der schmalen Zufahrt nach Abb. 5 bzw. bfu Abb. 4), Rechtsvortritt in `rechnen.ts` und `massnahmen.ts`, Block «Rechtsvortritt» in `App.tsx`, Fächer
-in `Karte.tsx`, `fall.ts` Version 5. E4a: `Bericht.tsx` (Druckansicht), `berichtbild.ts` (Ausschnitt,
+in `Karte.tsx`, `fall.ts` Version 5. `Bericht.tsx` (Druckansicht), `berichtbild.ts` (Ausschnitt,
 Bildgrösse, LV95 -> SVG, Massstab), `texte.ts` (Textbausteine zum Status, aus `App.tsx`), Hilfe und Datenschutz in `Hilfe.tsx`,
-Druckregeln in `index.css`, `fall.ts` Version 6. E4 Velo gegen die Einbahn: `veloGegenTag` und `veloZufluss` in `rechner/netz.ts`,
+Druckregeln in `index.css`, `fall.ts` Version 6. Velo gegen die Einbahn: `veloGegenTag` und `veloZufluss` in `rechner/netz.ts`,
 `veloVorgabe` mit Gegenverkehr in `rechner/velo.ts`, Richtung «nur Velos» und D auf der Veloachse in `rechnen.ts`, `fbVeloLage` in
 `fahrzeug.ts`. Panel: `Info.tsx` (Info-Zeichen mit Sprechblase für die Erklärungen), Ergebnis je Richtung mit Statusfeldern und
 den Teilen nebeneinander in `App.tsx`. Lage je Richtung (links, rechts, gegenüber) und ihre Wörter in `rechner/lage.ts`.
 
 Tests: `rechner/sichtweite.test.ts` (Tab. 1, Strassentyp, ungünstige Verhältnisse, Neigung), `rechner/anhaltesicht.test.ts`
-(Abb. 2: Kontrolle bei i = 0, Nachmessung der Prüfrunde, Interpolation, Rand, Monotonie), `rechner/sicht.test.ts` (rechtwinkliger Knoten, Handlösung nach Strahlensatz; E2a: Parkfeld in der Ecke, Längsparkierung,
+(Abb. 2: Kontrolle bei i = 0, Nachmessung der Prüfrunde, Interpolation, Rand, Monotonie), `rechner/sicht.test.ts` (rechtwinkliger Knoten, Handlösung nach Strahlensatz; Parkfeld in der Ecke, Längsparkierung,
 Baumreihe, Alleebäume, Baum nahe D, Hecke ohne Wirkung, Zweirad und Zaun als Hinweis, Schatten der Stämme nach Formel),
 `rechner/vorschlaege.test.ts` (OSM-Parkierung, amtliche Felder zählen und verwerfen, Überdeckung 30 %, Baumkataster, D im
 Hindernis), `fall.test.ts` (Hindernisse hin und zurück, Prüfung, localStorage),
 `rechner/knoten.test.ts` (Arme, Vortrittsstrasse, Zufahrt, Nummern im Uhrzeigersinn ab Norden, Anzeigename), `rechner/rechnen.test.ts` (Gesamtrechnung T-Knoten: Seiten, D, B,
-K, Status; E1 Hauptverkehrsstrasse, Neigung, AV-Bedarf und Nachladen), `rechner/knoteneingaben.test.ts` (E2b: Stop und Vorgabe aus
+K, Status; Hauptverkehrsstrasse, Neigung, AV-Bedarf und Nachladen), `rechner/knoteneingaben.test.ts` (Stop und Vorgabe aus
 OSM, Rechtsvortritt, Haltelinie mit Lot und Strahlensatz, vorverlegt, D von Hand und F<sub>B</sub>, Trottoirüberfahrt mit und ohne
 Häkchen, Tempo von Hand, Grundstückzufahrt gegen den Arm, gezeichnete Richtung, OSM-Weg `service`, Meldungen), `fall.test.ts`
-(E2b: alle Eingaben hin und zurück, ungültige Werte auf die Vorgabe, fremde Datei, Zufahrtspunkt im localStorage),
-`rechner/neigung.test.ts` (E3a: 6 % mit Ausreisser, Vorzeichen je Richtung, Dienst-Fehler, Abruf mit Attrappe, Wirkung in der
-Rechnung, Fall-Datei Version 2 und 3), `rechner/massnahmen.test.ts` (E3a: T-Knoten mit Parkfeld, Handlösung nach Strahlensatz für
+(alle Eingaben hin und zurück, ungültige Werte auf die Vorgabe, fremde Datei, Zufahrtspunkt im localStorage),
+`rechner/neigung.test.ts` (6 % mit Ausreisser, Vorzeichen je Richtung, Dienst-Fehler, Abruf mit Attrappe, Wirkung in der
+Rechnung, Fall-Datei Version 2 und 3), `rechner/massnahmen.test.ts` (T-Knoten mit Parkfeld, Handlösung nach Strahlensatz für
 Haltelinie, Tempo, Rechtsabbiegegebot, Spiegel, Stop ausserorts, Grundstückzufahrt; ohne Veloverkehr gerechnet),
-`rechner/velo.test.ts` (E3b: Tab. 3 mit E-Bike-Variante, Tab. 2, Veloführung aus OSM, Veloachse bei Mischverkehr und Radstreifen
+`rechner/velo.test.ts` (Tab. 3 mit E-Bike-Variante, Tab. 2, Veloführung aus OSM, Veloachse bei Mischverkehr und Radstreifen
 mit Handlösung nach Strahlensatz, Radweg mit B ab der Aussenkante, Trottoir am T-Knoten mit Hecke, Neigung des Trottoirs,
-Gesamtstatus, Massnahmen mit Velo, Velosymbol, Fall-Datei Version 4), `rechner/rechtsvortritt.test.ts` (E3c: Abb. 6 mit allen 16
+Gesamtstatus, Massnahmen mit Velo, Velosymbol, Fall-Datei Version 4), `rechner/rechtsvortritt.test.ts` (Abb. 6 mit allen 16
 Feldern und Zwischenwerten, rechter Arm an Kreuzung, schiefen Knoten und T-Einmündung, T-Knoten mit Gebäudeecke nach Strahlensatz
 je Wahrnehmbarkeit, alle Arme einer Kreuzung, Sichtfeld an einer schmalen Zufahrt 3,0 m mit Hauswand, Handlösung), dazu die
-übernommenen Tests des Unterbaus. E4a: `berichtbild.test.ts` (Ausschnitt flach, hoch und Mindestgrösse, alle Dreiecke,
+übernommenen Tests des Unterbaus. `berichtbild.test.ts` (Ausschnitt flach, hoch und Mindestgrösse, alle Dreiecke,
 Verdecker und Fahrzeuge eines Ergebnisses im Bild, Bildgrösse, Verschiebung und Skalierung nach SVG, Massstab, Textbausteine je
-Status), `fall.test.ts` (Version 6 mit Bezeichnung, Version 5 lesbar). E4: `rechner/velogegen.test.ts` (Tags des Velos gegen die
+Status), `fall.test.ts` (Version 6 mit Bezeichnung, Version 5 lesbar). `rechner/velogegen.test.ts` (Tags des Velos gegen die
 Einbahn, Veloführung, Hauptarm «nur Velos» mit Seite der Veloachse und Handlösung nach Strahlensatz, Massnahmen, Zufahrt mit D auf der
 Veloachse, Einbahn ohne Velotags unverändert; Rechtsvortritt mit Velo gegen die Einbahn auf der Zufahrt bzw. auf dem Arm rechts), `rechner/lage.test.ts` (Zufahrt auf der durchgehenden Strasse: Gegenverkehr, Hinweis, Rechtsvortritt, «kein Arm»; T-Knoten
 und Grundstückzufahrt links/rechts).
 
-**Geladene Quellen auf der Karte** (seit 01.11.2026, wie VeloroutenCheck und fgsCheck; `src/quellenEbenen.ts`, Fenster in `Karte.tsx`): Der Knopf «Geladene Quellen» unten links öffnet ein an der Kopfzeile verschiebbares Fenster (Lage und Wahl in localStorage `swc.quellenPos`, `swc.quellen`) mit je einem Kästchen pro Quelle, nur Quellen mit Daten (`ebenenSichtbar`), die übrigen in einer Zeile «Ohne Daten im Ausschnitt»: Tempo (Geoportal Stadt Bern V_sig; gestrichelt OSM maxspeed), Vortritt (OSM give_way, stop, priority_road), Lichtsignale, Längsneigung (die bis zu vier Profile aus swissALTI3D mit ihrem Wert), Rad- und Fusswege, Strassentyp (OSM highway), Parkfelder und Bäume (ganzer geladener Ausschnitt, nicht nur die Reichweite), amtliche Vermessung (alle Arten) sowie Tram und Fussgängerübergänge. Alles aus den schon geladenen Daten (`ebenenAusDaten`), ohne neue Abfrage; gleiche Farbstufen wie die anderen beiden Rechner; Linien mit dunklem Rand, Punkte als Quadrate mit Zeichen (Form statt Farbe allein), im eigenen Pane ohne Mausereignisse (Klicks bleiben den Werkzeugen), Text beim Überfahren über einen Treffertest, ab Zoomstufe 18 der Wert. Der Tooltip eines Arms nennt die gelesenen OSM-Tags seines Wegs (`osmTagZeile`).
+**Geladene Quellen auf der Karte** (seit 01.11.2026, wie VeloroutenCheck und fgsCheck; `src/quellenEbenen.ts`, Fenster in `Karte.tsx`): Der Knopf «Datenquellen und Ladezustand» unten links öffnet ein an der Kopfzeile verschiebbares Fenster (Lage und Wahl in localStorage `swc.quellenPos`, `swc.quellen`) mit je einem Kästchen pro Quelle, nur Quellen mit Daten (`ebenenSichtbar`), die übrigen in einer Zeile «Ohne Daten im Ausschnitt»: Tempo (Geoportal Stadt Bern V_sig; gestrichelt OSM maxspeed), Vortritt (OSM give_way, stop, priority_road), Lichtsignale, Längsneigung (die bis zu vier Profile aus swissALTI3D mit ihrem Wert), Rad- und Fusswege, Strassentyp (OSM highway), Parkfelder und Bäume (ganzer geladener Ausschnitt, nicht nur die Reichweite), amtliche Vermessung (alle Arten) sowie Tram und Fussgängerübergänge. Alles aus den schon geladenen Daten (`ebenenAusDaten`), ohne neue Abfrage; gleiche Farbstufen wie die anderen beiden Rechner; Linien mit dunklem Rand, Punkte als Quadrate mit Zeichen (Form statt Farbe allein), im eigenen Pane ohne Mausereignisse (Klicks bleiben den Werkzeugen), Text beim Überfahren über einen Treffertest, ab Zoomstufe 18 der Wert. Der Tooltip eines Arms nennt die gelesenen OSM-Tags seines Wegs (`osmTagZeile`).
 
 Smartphone (seit 28.10.2026, wie VeloroutenCheck): unter 700 px Karte oben, Panel darunter mit eigenem Scrollen; der Knopf ▾/▴ unter der Ebenenwahl schaltet die Kartenhöhe zwischen 30, 45 (Standard, vorher fest 60 %) und 70 % der Fensterhöhe (`Karte.tsx`, in localStorage gespeichert). Auf Touch-Geräten sind Knöpfe und Felder mindestens 44 px hoch (ausser den Knöpfen im Text), Eingaben 16 px, damit iOS beim Antippen nicht hineinzoomt (`index.css`); Auswahlfelder sind nie breiter als ihr Platz. Die Quellenangabe der Karte ist einzeilig und klappt auf Tippen auf. Panel und Kartensteuerung halten den sicheren Bereich des iPhones ein (`viewport-fit=cover`). «Zum Home-Bildschirm»: `public/manifest.webmanifest`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png` (aus `logo.svg`), `theme-color` in `index.html`.
+
+## Schweizweite und regionale Datenquellen
+
+Vortrittsregelung und Sichtweiten rechnen weiterhin nach Norm; die Quellen liefern Tempo, Zonen, Signale und Kartenkontext.
+Reihenfolge je Wert: eigene Angabe, amtliche örtliche Quelle, OSM. Ein leerer, abgebrochener oder unvollständiger Abruf gilt nie als
+«keines». «Datenquellen und Ladezustand» nennt geladene Objekte, Fehler, Datenstand, Vollständigkeit und Abrufzeit; «Kartenebenen»
+zeigt die Objekte und unterscheidet «lädt», «Fehler beim Laden» und «Ohne Daten im Ausschnitt». Datenstände kommen aus den geladenen
+Daten bzw. amtlichen Metadaten; fehlt ein Stand, bleibt er unbekannt. Metadatenfehler blockieren die Geodaten nicht. Die Berner
+Produktstände kommen von `map.bern.ch/geoportal/rest/api/GeoDataSet/read_produkt.php`, die AV-Publikationsstände von
+`www.geodienste.ch/info/services.csv?base_topics=av&language=de`; beide Abrufe enthalten keine Eingaben oder Ergebnisse.
+
+### Gebiet und Zuständigkeit
+
+Gemeinde und Kanton kommen aus swissBOUNDARIES3D (`ch.swisstopo.swissboundaries3d-gemeinde-flaeche.fill`), abgefragt für das laufende
+Jahr und, wenn dafür noch kein gültiger Stand vorliegt, einmal für das Vorjahr; das verwendete Jahr wird angezeigt. Am Prüfpunkt gilt
+die Gemeinde der AV-Fläche (`zustaendigkeitAmOrt` in `gemeinsam/gebiet.ts`). Fällt die Gebietsabfrage aus, zählen Gemeinde und Kanton
+der AV, sichtbar unter «Örtliche Zuständigkeit». Rechenwirksame Quellen (Tempo, Zonen, Signale, LSA) richten sich nach dem Prüfpunkt,
+Kartenkontext nach dem geladenen Ausschnitt. Ein Zürcher Datenpaket hat nur am Zürcher Prüfpunkt Vorrang.
+
+### Tempo und Verkehrszonen
+
+Stadt Zürich: heute signalisierte Geschwindigkeiten und bestehende Verkehrszonen im Rechteck ±200 m, nur IST-Ebenen; ein Fahrverbot
+ist kein Tempo 0. Die Zuordnung prüft Strassenname, Richtung (20°), Abstand zur amtlichen Achse (4 m), Höhe und Verkehrszonen; bei
+Konflikten bleibt sie offen, und die Rechnung weist den OSM-Rückfall aus.
+
+Weitere Inventare: Kanton ZH, BS, GE, UR, SO, SZ, FR, JU sowie Stadtzonen Luzern, St. Gallen und Lausanne. Kantonsstrassen sind keine
+Vollabdeckung, verfügte Zonen kein Umsetzungsnachweis, Tag- und Nachtwerte werden nicht vermischt. Automatisch verwendet werden nur
+eindeutige, namensgleiche Linien bis 3 m und 10°; alles andere bleibt Vorschlag. `amtlichNaechste` trennt «keine Linie», «Linie ohne
+Wert» und «ausserhalb des Ausschnitts». Amtliches Tempo wirkt je Richtung und in der Vortrittsvorgabe, in Bern auch V_sig: Liefern
+drei Proben eines Arms denselben Wert, zählt er für die Regelungsannahme. Es belegt aber weder Ortstafel noch Zone noch Signal und
+ersetzt kein Kreiselfahrtempo. Vortrittssignale und eigene Angaben gehen vor.
+
+### Streifen, Signale und Lichtsignale
+
+Inventare aus GE, LU, ZH, SZ, BS, den Städten Luzern, Zürich und St. Gallen sowie ZG erscheinen als eigene Kartenebenen. «Amtliche
+Signale zuordnen» verlangt die Bestätigung von Knoten, Zufahrt und Betriebszustand; Stop, Kein Vortritt und LSA wirken erst danach
+in der Rechnung. Signal 4.11 allein ist keine Querungsgeometrie, das Inventarattribut SICHERHEIT keine geprüfte Verkehrssicherheit.
+
+### Bundesquellen und Haltestellen
+
+BAV-Haltestellen (aktive Bus- und Tramhalte, keine Haltekanten) dienen nur der Karte und Quelleninformation. Tramgleise und
+Verkehrsbedeutung aus swissTLM3D, ARE-Bauzonen und ASTRA-Unfälle erscheinen im geladenen Ausschnitt; ASTRA bleibt reiner Kartenkontext.
+Dichte GeoAdmin-Antworten werden vor dem Filtern aufgeteilt, höchstens 85 Teilabfragen je Quelle. Tramgeometrie belegt keinen
+Haltestellenbereich, TLM-Verkehrsbedeutung ist keine Normklasse, Bauzonen sind nur ein Indiz. TLM-Vorschläge stehen beim Strassentyp,
+die Ortslage lässt sich unter «Erforderliche Sichtweite» wählen oder anhand des Bauzonen-Hinweises bestätigen; sie wirkt auf B und
+den Überholfall.
+
+### Kartenkontext
+
+Beleuchtung (Stadt Zürich, Staatsstrassen Kanton Zürich, Stadt St. Gallen), taktile Rillen an VBZ-Haltestellen und das Fuss- und
+Velowegnetz der Stadt Zürich (`gemeinsam/e6.ts`). Die Ebenen sind zunächst aus und wirken nicht auf die Rechnung. Ein Leuchtenstandort
+belegt keine Beleuchtung, ein Rillenpunkt keine hindernisfreie Querung, ein fehlendes Objekt keine Abwesenheit.
+
+### Speicherung
+
+Beim Öffnen eines Falls werden alle Quellen neu geladen; eigene und bestätigte Eingaben gehen vor. Die Fall-Datei enthält Rohantwort,
+Herkunft, Stand und Abrufzeit der Ausschnitte, abgeleitete Objekte bildet das Einlesen neu. Unbekannte regionale Teile werden mit
+Hinweis übersprungen, bekannte bleiben erhalten. Die Browser-Erinnerung speichert nur Eingaben, Entscheide und Quellenwahl; schlägt
+sie fehl, erscheint ein Hinweis mit Verweis auf «Fall speichern».
+
+### Gemeinsame Datenmodule
+
+`src/daten/anbieter/gemeinsam/` ist eine Kopie aus dem fgsCheck, die führende Fassung liegt dort. Übernahme aus dessen App-Ordner:
+
+```bash
+node scripts/anbieter_uebernehmen.mjs ../../SichtweitenCheck/SichtweitenCheckWeb
+```
+
+`src/daten/anbieter/herkunft.json` hält Basis-Commit und SHA-256 je Datei fest, `herkunft.test.ts` prüft sie. GML liest fast-xml-parser
+(MIT); die Bibliotheken für POI-Kacheln kommen mit den gemeinsamen Modulen, der SichtweitenCheck ruft aber keine POI-Kacheln ab. Lizenzen unter `public/licenses/`.
 
 ## Datenschutz und Quellen
 
 Keine Anmeldung, kein eigener Server; gerechnet wird im Browser (Web Worker). Nicht gesendet werden Eingaben, Bezeichnung, Zahlen
 und Status; die Dienste erhalten nur Koordinaten bzw. Ausschnitte (Tabelle). Im
 Browser (localStorage) liegt je Knoten bzw. Grundstückzufahrt mit Eingaben ein Eintrag `SichtweitenCheck.fall.<Knoten>` bzw.
-`SichtweitenCheck.fall.z<E>,<N>` (Eingaben, Hindernisse, Häkchen, Bezeichnung, Koordinaten); ohne Eingaben wird nichts gespeichert und
+`SichtweitenCheck.fall.z<E>,<N>` (Eingaben, Entscheide, Quellenwahl, Hindernisse, Bezeichnung, Koordinaten; keine geladenen Quelldaten); ohne Eingaben wird nichts gespeichert und
 ein vorhandener Eintrag entfernt (`fallMerken` in `src/fall.ts`). Alle Einträge löscht man über die Website-Daten der Seite im
 Browser. Der Browser fragt direkt an (die Dienste sehen technisch die IP-Adresse und Browserangaben):
 
@@ -547,6 +619,9 @@ Browser. Der Browser fragt direkt an (die Dienste sehen technisch die IP-Adresse
 | google.com/maps (Street View) | nur auf Klick auf «Street View ↗»: Standpunkt D und Blickrichtung (`src/streetview.ts`), neues Fenster, nichts eingebettet |
 | Overpass: overpass.osm.ch, ersatzweise overpass-api.de, overpass.kumi.systems, overpass.private.coffee | Kartenausschnitt (Knoten und Strassennamen) mit Rand bzw. Umkreis 300 m um den Knoten |
 | map.bern.ch (nur Stadt Bern) | Rechteck ±150 m (amtliche Parkfelder, auf Wunsch Baumkataster; signalisierte Höchstgeschwindigkeit) |
+| api3.geo.admin.ch (Bund) | Gebiet, BAV, swissTLM3D, Bauzonen, ASTRA: Punkt bzw. Rechteck ±200 m |
+| data.geo.admin.ch (swisstopo) | nur mit eingeschalteten Höhenkurven: Kacheln von swissALTI3D im sichtbaren Ausschnitt |
+| Kantonale und städtische Dienste (u. a. ogd.stadt-zuerich.ch, data.stadt-zuerich.ch, maps.zh.ch, daten.stadt.sg.ch; je nach Ort) | Rechteck ±200 m bzw. öffentliche Dienstmetadaten; die App nennt Empfänger und Lizenz je Quelle unter «Hilfe» |
 
 Der eigene Standort wird nur im Browser ermittelt und angezeigt, nicht gespeichert und nicht gesendet. Eine Nutzungsstatistik mit
 GoatCounter (sichtweiten.goatcounter.com; nur Seitenaufrufe und der Aufruf der Prüfung als Pfad «pruefen», ohne Cookies und ohne Speicherung der IP-Adresse).

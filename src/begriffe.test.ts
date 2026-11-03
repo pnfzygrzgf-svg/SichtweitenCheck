@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { BEGRIFFE, begriffeAlphabetisch, begriffeImText, begriffTeile, begriffRegex } from './begriffe'
 
-// Korrektur 31.10.2026 (Punkt 9b): Begriffe in Alltagssprache, je ein bis zwei Sätze, eigene Worte
+// Begriffe in Alltagssprache, je ein bis zwei Sätze, eigene Worte
 describe('Begriffe', () => {
   it('keine doppelten ids und Namen; Muster gültig', () => {
     expect(new Set(BEGRIFFE.map(b => b.id)).size).toBe(BEGRIFFE.length)

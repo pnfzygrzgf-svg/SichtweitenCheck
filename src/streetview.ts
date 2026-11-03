@@ -1,4 +1,4 @@
-// ── Google Street View als Link (Nutzerwunsch 31.10.2026, wie fgsCheck streetview.ts und VeloroutenCheck) ──
+// ── Google Street View als Link (wie fgsCheck streetview.ts und VeloroutenCheck) ──
 //
 // Nur ein Link auf Google Maps (Maps URLs, map_action=pano: Google sucht das nächste Panorama), keine Einbettung, kein API-Schlüssel.
 // Die Koordinaten gehen erst beim Klick an Google. Je geprüfte Richtung der Blick des wartenden Lenkers: von D zum Punkt am Ende der

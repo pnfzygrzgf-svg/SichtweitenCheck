@@ -1,16 +1,16 @@
 // ── Kreisel: Sicht aus der gewählten Einfahrt (K4) und zwischen benachbarten Zufahrten (K4b), Plan Kreisel 31.10./01.11.2026 ──
 //
 // Ak (VSS 40 263 Ziffer 13.2, S. 8–9, Abb. 3): A nach VSS 40 273 Tab. 1 mit dem Tempo aus K3 (kleinstes β; Minikreisel fest 30 km/h,
-// ohne gültige Konstruktion 40 km/h); bei 35 km/h zwischen den Werten für 30 und 40 km/h linear (Annahme, Entscheid E7). Strassentyp der
+// ohne gültige Konstruktion 40 km/h); bei 35 km/h zwischen den Werten für 30 und 40 km/h linear (Annahme). Strassentyp der
 // Kreiselfahrbahn: Hauptverkehrsstrasse, sobald ein Arm eine ist (wie am Knoten: Zwischenwert), sonst unterer Wert; der Ring gilt als eben
-// (Entscheid E3). Zielpunkte ab K entlang der Fahrlinie mit Vortritt (E2, E9) gegen die Fahrtrichtung, Sicht von D (B hinter der
+//. Zielpunkte ab K entlang der Fahrlinie mit Vortritt (E2, E9) gegen die Fahrtrichtung, Sicht von D (B hinter der
 // Wartelinie, am Fahrersitz); Status wie am Knoten (erfüllt ab dem oberen Wert, massgebend erfüllt, nicht erfüllt). Hindernisse wie am
 // Knoten (Gebäude der AV, von Hand, bestätigte Vorschläge, amtliche Parkfelder; Bäume als Palisade).
-// Velo (Entscheid E6): dieselbe Linie, A nach VSS 40 273 Tab. 3 (eben).
-// Sichtberme (Entscheid E4): Teil der Insel bzw. des Innenrings im Sichtfeld (Dreiecke D – Zielpunkte bis zum grösseren nötigen Wert);
+// Velo: dieselbe Linie, A nach VSS 40 273 Tab. 3 (eben).
+// Sichtberme: Teil der Insel bzw. des Innenrings im Sichtfeld (Dreiecke D – Zielpunkte bis zum grösseren nötigen Wert);
 // ein Hindernis darin → nicht erfüllt. Der Rest der Insel: «Durchsicht verhindern» (VSS 40 263 Ziffer 13.3, S. 9; bfu BM.024-2024),
 // ein Hindernis dort ist erwünscht; ob die Durchsicht tatsächlich verhindert ist, prüft die App nicht.
-// Az (K4b, Entscheid E8, Vergleichswert, kein Normwert): ab K auf der Fahrlinie mit Vortritt gegen die Fahrtrichtung bis zum K der
+// Az (K4b, Vergleichswert, kein Normwert): ab K auf der Fahrlinie mit Vortritt gegen die Fahrtrichtung bis zum K der
 // Zufahrt links, dann auf deren Fahrlinie (Mitte des Einfahrtsfahrstreifens) hinaus, wie die fette Fahrlinie in bfu 2.446.01 Abb. 3, LU
 // Abb. 8 und ZH Abb. 10 (die Linie am Ringrand ist dort nur die Masslinie); nicht an der vorherigen Einfahrt begrenzt; Werte nach LU 731.501 Tab. 2 mit dem Tempo aus β
 // (Regelfall / Minimal). Ohne Zufahrt links (nur Ausfahrt) entfällt Az.
@@ -107,7 +107,7 @@ export function kreiselSicht(k: KreiselInfo, verdeckend: Verdeckend[]):
   const typQuelle = hvs.length ? `Hauptverkehrsstrasse: Arm ${armText(hvs[0])} (OSM highway=${hvs[0].hw})` : 'kein Arm ist eine Hauptverkehrsstrasse (OSM highway)'
   const sw = kreiselA(tempo, typ)
   // Linie der Fahrlinie mit Vortritt ab K gegen die Fahrtrichtung (abnehmender Winkel), höchstens eine ganze Runde; ist die nötige Länge
-  // grösser, gilt die Rundenlänge (Annahme, Nutzerentscheid 01.11.2026)
+  // grösser, gilt die Rundenlänge (Annahme)
   const gK = profilWinkel(v.mitte, z.K)
   const linie: P[] = [z.K]
   for (let g = Math.floor(gK); g > gK - 360; g--) linie.push(profilPunkt(v.mitte, v.fahrlinie, g))

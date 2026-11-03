@@ -1,3 +1,4 @@
+import { SichtTaste, SichtfelderWahl, kreiselSichtId } from './Sichtfelder'
 // ── Kreisel im Panel (K1 bis K4): Typ mit Umschalter, Form und Masse aus der AV bzw. aus OSM geschätzt, Innenring-Vorschlag, Arme
 //    mit Bypass, Wahl der Einfahrt (K2: Fahrlinien, K, D), Ablenkungswinkel β je Fahrbeziehung und Tempo auf der Kreiselfahrbahn (K3),
 //    Ergebnis der Sicht (K4: Ak, Velo, Sichtberme, Az als Vergleichswert) ──
@@ -119,7 +120,7 @@ export default function KreiselBlock({ kn, setTyp, zufahrt, zufahrtWaehlen, setB
               oder fehlt er, gilt ein anderer Abstand; ohne Querschnitt {f2(FAHRSTREIFEN_ANNAHME_M)} m breite Fahrstreifen; Annahmen).</p>
             <p><b>Fahrlinie mit Vortritt:</b> je Richtung in der Mitte zwischen Aussenrand und Innenring bzw. Insel, im Gegenuhrzeigersinn
               von links auf die Einfahrt (Entscheid E2). K ist ihr Schnitt mit der Fahrlinie der Einfahrt.</p>
-            <p><b>D:</b> B = {f2(z.B)} m hinter dem Rand der Kreiselfahrbahn (Wartelinie) auf der Fahrlinie der Einfahrt, am Fahrersitz
+            <p><b>D:</b> B = {f2(z.B)} m hinter dem Rand der Kreiselfahrbahn (Wartelinie) auf der Fahrlinie der Einfahrt, am Fahrer*innensitz
               {' '}{f2(FAHRERSITZ_M)} m links davon (Annahme, wie am Knoten).</p></Info></td><td className="klein">{z.lageQuelle}</td></tr>
           <tr><td>D</td><td>B {f2(z.B)} m hinter der Wartelinie <span className="klein">({z.bGrund})</span></td></tr>
         </tbody>
@@ -172,13 +173,14 @@ export function KreiselErgebnis({ kn }: { kn: KnotenInfo }) {
   const zeile = (name: string, t: KreiselSichtTeil, noetig: string, az = false) => (
     <tr><td>{name}</td><td>{noetig}<div className="klein">{t.text}</div></td><td>{vorhandenText(t)}{t.verdecker && !t.bisEnde &&
       <div className="klein">verdeckt ab {f1(t.verdecker.sVerdeckt)} m: {t.verdecker.name}</div>}</td>
-      <td><span className="feld" style={{ borderColor: STATUS_FARBE[t.status], background: `${STATUS_FARBE[t.status]}1f` }}>{kreiselStatusText(t, az)}</span></td></tr>)
+      <td><SichtTaste id={kreiselSichtId(kn.id, s.arm + '|' + (az ? 'Az' : name.toLowerCase().includes('velo') ? 'Velo' : 'Ak'))} art={name.toLowerCase().includes('velo') ? 'velo' : 'auto'} className="feld" style={{ borderColor: STATUS_FARBE[t.status], backgroundColor: `${STATUS_FARBE[t.status]}1f` }}>{kreiselStatusText(t, az)}</SichtTaste></td></tr>)
   return (
     <section>
       <h2>4 Ergebnis</h2>
+      <SichtfelderWahl arten={['auto', 'velo']} />
       <p className="leitsatz">Sicht aus der Einfahrt {armText(arm)} nach links auf die Kreiselfahrbahn: <b>{STATUS_TEXT[s.gesamt]}</b>
         <Info titel="Sicht am Kreisel">
-          <p><b>Ak:</b> von D (B {f2(k.zufahrt!.B)} m hinter der Wartelinie, am Fahrersitz) auf die Fahrlinie mit Vortritt, ab K gegen die
+          <p><b>Ak:</b> von D (B {f2(k.zufahrt!.B)} m hinter der Wartelinie, am Fahrer*innensitz) auf die Fahrlinie mit Vortritt, ab K gegen die
             Fahrtrichtung (VSS 40 263 Ziffer 13.2, S. 8–9). A nach VSS 40 273 Tab. 1 mit dem Tempo aus dem Ablenkungswinkel.</p>
           <p>Die Linie läuft höchstens eine ganze Runde auf der Fahrlinie mit Vortritt. Wäre die nötige Sicht länger, gilt die Rundenlänge als
             nötig (Annahme); der ungekürzte Wert steht daneben.</p>

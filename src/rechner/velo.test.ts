@@ -235,7 +235,7 @@ describe('E3b: Radweg (Ziffer 12, Abb. 2)', () => {
 
 describe('E3b: Trottoir (Ziffer 13.2, Tab. 2)', () => {
   // Trottoir y = −5 … −3 durchgehend (Breite 2 m, Achse y = −4), Fahrbahn der Nebenstrasse ab y = −5. Trottoirhinterkante y −5,
-  // D' = (0,75; −8) (3,00 m dahinter, Fahrersitz). Hecke an der Grundstücksgrenze 1 m hinter der Hinterkante: Linie y = −6 von
+  // D' = (0,75; −8) (3,00 m dahinter, Fahrer*innensitz). Hecke an der Grundstücksgrenze 1 m hinter der Hinterkante: Linie y = −6 von
   // x = −30 bis −2 (Puffer 0,30 m beidseits, ohne Kappe: Ecke zur Zufahrt und zur Strasse (−2; −5,7)).
   // Nach links: Sichtlinie D'–(−2; −5,7): Richtung (−2,75; 2,3), bis y = −4 (dy 4): x = 0,75 − 2,75 · 4 / 2,3 = −4,033,
   // s = 1,25 + 4,033 = 5,28 m < 15 m (Tab. 2 bei 0 %): nicht erfüllt. Nach rechts frei: ≥ 15 m, erfüllt. Die Trottoirhinterkante
@@ -256,7 +256,7 @@ describe('E3b: Trottoir (Ziffer 13.2, Tab. 2)', () => {
     nahe(l.sichtpunkte[10], 1.25 - 10, -4, 0.06); nahe(r.sichtpunkte[10], 1.25 + 10, -4, 0.06)
     expect([l.A, l.status, r.A, r.status, l.text]).toEqual([15, 'erfuellt', 15, 'erfuellt', 'Tab. 2, Spalte ≥ 0 %'])
     expect(e.trottoirProfil.length).toBeGreaterThan(10)
-    expect(e.annahmen.join(' | ')).toContain('Für die Sicht aufs Trottoir liegt das Auge D\' 3,00 m hinter der Trottoirhinterkante, am Fahrersitz ' +
+    expect(e.annahmen.join(' | ')).toContain('Für die Sicht aufs Trottoir liegt das Auge D\' 3,00 m hinter der Trottoirhinterkante, am Fahrer*innensitz ' +
       '(VSS 40 273 Ziffer 13.2, S. 8).')
   })
   it('Hecke 1 m hinter der Hinterkante: nach links 5,28 m < 15 m nicht erfüllt (Strahlensatz), Gesamtstatus nicht erfüllt', () => {

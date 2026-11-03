@@ -1,3 +1,13 @@
+import { useHoehenkurven } from './hoehenkurven/Karte'
+import { HoehenkurvenWahl } from './hoehenkurven/Wahl'
+import { AvEbenenWahl } from './AvEbenenWahl'
+import { EbenenGruppe, HoehenprofilAnsicht } from './hoehenprofil/Ansicht'
+import { profilObjekteWaehlen, standardProfil } from './hoehenprofil/modell'
+import { avKartenStil, avArtSichtbar, avArtenLesen } from './daten/anbieter/gemeinsam/avKarte'
+import { swcSichtMasse } from './sichtMasse'
+import type { ZufahrtEntwurf } from './zufahrtEntwurf'
+import { strassenRichtung, zufahrtWinkel, ZUFAHRT_HERKUNFT } from './rechner/grundstueck'
+import { useSichtWahl, sichtZeigen, sichtMassZeigen, richtungSichtId, kreiselSichtId, type SichtArt } from './Sichtfelder'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -23,20 +33,15 @@ import { BESCHRIFT_ZOOM, EBENEN, ebenenFarbe, ebenenSichtbar, ebenenSymbol, type
 // E2a aus fgsCheck: Zeichenwerkzeuge (Klick setzt Punkte, Doppelklick schliesst, Fadenkreuz), Hindernisse und Vorschläge,
 // Ecken ziehen; neu: Verdecker im Sichtdreieck hervorgehoben (voll rot, Palisade gelb, Hinweis violett gestrichelt).
 // E3b: Velo-Sichtdreieck (Petrol gestrichelt), Veloachse und Velosymbol am Ende von A; Trottoir: Dreiecke von D' zu den
-// Trottoirpunkten (Bernstein), Fussgänger (Punkt mit Ring) am Ende von A, D'.
+// Trottoirpunkten (Bernstein), Zufussgehende (Punkt mit Ring) am Ende von A, D'.
 // E2b: Werkzeuge «Haltelinie setzen» und «Zufahrt setzen» (Grundstückzufahrt, zweiter Klick zeichnet die Richtung), D zum
 // Ziehen (D von Hand), Haltelinie als Querlinie, Nullpunkt von B, Zufahrtspunkt.
 // Block 5: Halte- oder Wartelinie (Feld haltelinie), Überholfall als zweites, schwächeres Sichtdreieck, Sichtfeld der schmalen Zufahrt
 // beim Rechtsvortritt (bfu BM.021 Abb. 4: Pfad und Sichtlinien von D).
 
 // AV-Farben wie fgsCheck (Gebäude neutral dunkelgrau, damit Rot für «verdeckt» bleibt)
-export const AV_FARBEN: Record<string, string> = {
-  Strasse_Weg: '#6e6e6e',
-  Trottoir: '#e6e6c8',
-  Verkehrsinsel: '#96c878',
-  Gebaeude: '#3f3f46',
-}
-const AV_DECKKRAFT: Record<string, number> = { Strasse_Weg: 0.25, Trottoir: 0.45, Verkehrsinsel: 0.6, Gebaeude: 0.5 }
+export { AV_FARBEN } from './daten/anbieter/gemeinsam/avKarte'
+
 export const KNOTEN_FARBE = '#0ea5e9'
 export const STATUS_FARBE: Record<string, string> = {
   erfuellt: '#15803d', massgebend: '#ca8a04', nicht_erfuellt: '#dc2626', keine_zufahrt: '#64748b',
@@ -55,7 +60,7 @@ export const FB_FARBE = '#1e293b'
 export const FA_FARBE = '#f8fafc'
 /** E3b: Velo-Prüfung (Petrol, wie VeloroutenCheck) und Trottoir-Prüfung (Bernstein, wie fgsCheck) */
 export const VELO_FARBE = '#0f766e'
-export const TROTTOIR_FARBE = '#4f46e5'   // Indigo (Entscheid 31.10.2026: Orange nur für die Zufahrt)
+export const TROTTOIR_FARBE = '#4f46e5'   // Indigo (Orange nur für die Zufahrt)
 const SCHEIBE_FARBE = '#94a3b8'
 /** Nummernschild der gewählten Zufahrt (App-Farbe; Karte: CSS .arm-nr.gewaehlt, Bericht: Kartenbild) */
 export const NR_GEWAEHLT_FARBE = '#15803d'
@@ -117,7 +122,7 @@ const TREFFER_PANE = 'treffer'
 const OBEN_PANE = 'oben'
 /** D über allem Übrigen (auch über F<sub>B</sub> und den Strassennamen), damit er sich ziehen lässt */
 const D_PANE = 'dpunkt'
-/** Nummernschilder der Arme über Linien, Dreiecken und Strassennamen (Nutzer 31.10.2026: sonst teils von der Armlinie verdeckt;
+/** Nummernschilder der Arme über Linien, Dreiecken und Strassennamen (sonst teils von der Armlinie verdeckt;
  *  im gemeinsamen Pane hängt die Reihenfolge Marker/SVG vom z-index aus der Bildschirmlage ab); nur D liegt darüber */
 const SCHILD_PANE = 'schilder'
 // Knoten: nur Marker im Sichtbereich mit diesem Rand (Anteil je Seite) zeichnen
@@ -175,7 +180,10 @@ export const nrIcon = (a: Pick<ArmInfo, 'nr'>, gewaehlt: boolean): L.DivIcon =>
   L.divIcon({ className: gewaehlt ? 'arm-nr gewaehlt' : 'arm-nr', iconSize: [22, 22], html: `<span>${esc(a.nr)}</span>` })
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
 // Geladene Quellen (quellenEbenen.ts, seit 01.11.2026): unter den Objekten der Prüfung, ohne Mausereignisse
+const Q_WERT_PANE = 'quellenWerte'
 const Q_PANE = 'quellen'
+const Q_FLAECHE_PANE = 'quellenFlaechen'
+const Q_PROFIL_PANE = 'quellenProfile'
 /** Tags des OSM-Wegs eines Arms, die die Rechnung liest (Fahrstreifen, Parkierung, Radstreifen, Tempo, Zone, Vortritt, Überholen; S6,
  *  01.11.2026), als Zeile im Tooltip; ohne solche Tags leer */
 const OSM_TAG_MUSTER = /^(highway|lanes|turn:lanes|oneway|maxspeed|zone:maxspeed|cycleway|parking|width|overtaking|priority_road|sidewalk)(:|$)/
@@ -193,9 +201,10 @@ function verdeckerName(v: { art: string; name: string }): string {
 }
 
 /** Auto von oben als zwei Polygone (Umriss, Scheibe) mit Tooltip */
-function autoZeichnen(ebene: L.LayerGroup, mitte: P, richtung: P, farbe: string, rand: string, tooltip: string): void {
+function autoZeichnen(ebene: L.LayerGroup, mitte: P, richtung: P, farbe: string, rand: string, tooltip: string, schalten?: () => void): void {
   L.polygon(autoUmriss(mitte, richtung).map(ll), { color: rand, weight: 1.5, fillColor: farbe, fillOpacity: 0.9, pane: OBEN_PANE })
-    .bindTooltip(tooltip, { sticky: true }).addTo(ebene)
+    .bindTooltip(tooltip + (schalten ? '<br><i>Klick: Sichtfeld dieses Fahrzeugs ein-/ausblenden</i>' : ''), { sticky: true })
+    .on('click', e => { if (schalten) { L.DomEvent.stopPropagation(e); schalten() } }).addTo(ebene)
   L.polygon(autoScheibe(mitte, richtung).map(ll), { color: SCHEIBE_FARBE, weight: 1, fillColor: SCHEIBE_FARBE, fillOpacity: 0.9,
     interactive: false, pane: OBEN_PANE }).addTo(ebene)
 }
@@ -203,7 +212,7 @@ function autoZeichnen(ebene: L.LayerGroup, mitte: P, richtung: P, farbe: string,
 /** Velo als Piktogramm fester Grösse (Vogelperspektive, in Fahrtrichtung gedreht): das Velo von 1,8 × 0,6 m wäre als Polygon bei
  *  Zoom 18 nur wenige Pixel gross und ging unter dem D-Punkt unter. Länge VELO_SYMBOL_PX, Breite ein Drittel davon. */
 const VELO_SYMBOL_PX = 34
-function veloZeichnen(ebene: L.LayerGroup, mitte: P, richtung: P, farbe: string, rand: string, tooltip: string): void {
+function veloZeichnen(ebene: L.LayerGroup, mitte: P, richtung: P, farbe: string, rand: string, tooltip: string, schalten?: () => void): void {
   const n = Math.hypot(richtung[0], richtung[1]) || 1
   // Bildschirm: x nach Osten, y nach Süden; CSS-Drehung im Uhrzeigersinn
   const grad = Math.atan2(-richtung[1] / n, richtung[0] / n) * 180 / Math.PI
@@ -216,7 +225,8 @@ function veloZeichnen(ebene: L.LayerGroup, mitte: P, richtung: P, farbe: string,
     `<rect x="40" y="1" width="3" height="18" rx="1.5" fill="${farbe}" stroke="${rand}" stroke-width="1"/>` +
     `<circle cx="27" cy="10" r="5" fill="${farbe}" stroke="${rand}" stroke-width="1.5"/></svg>`
   L.marker(ll(mitte), { icon: L.divIcon({ className: 'velo-symbol', html, iconSize: [w, h], iconAnchor: [w / 2, h / 2] }),
-    pane: OBEN_PANE, keyboard: false }).bindTooltip(tooltip, { sticky: true }).addTo(ebene)
+    pane: OBEN_PANE, keyboard: false }).bindTooltip(tooltip + (schalten ? '<br><i>Klick: Sichtfeld dieses Fahrzeugs ein-/ausblenden</i>' : ''), { sticky: true })
+    .on('click', e => { if (schalten) { L.DomEvent.stopPropagation(e); schalten() } }).addTo(ebene)
 }
 
 const KARTE_STUFEN = [30, 45, 70]   // Kartenhöhe auf dem Smartphone in % der Fensterhöhe
@@ -229,7 +239,7 @@ export default function Karte(props: {
   av: AvFlaeche[] | null
   kantone: string[]
   knoten: OsmKnoten[]
-  /** Korrektur 31.10.2026 (Punkt 13): LSA-Knoten (Lichtsignal in OSM am Knoten bzw. auf einem Arm) im geladenen Umkreis */
+  /** LSA-Knoten (Lichtsignal in OSM am Knoten bzw. auf einem Arm) im geladenen Umkreis */
   lsa?: Set<number>
   strassennamen: Strassenname[]
   gewaehlt: number | null
@@ -238,6 +248,8 @@ export default function Karte(props: {
   hindernisse: Hindernis[]                           // Eingaben des Falls (von Hand, bestätigte Vorschläge)
   werkzeug: Werkzeug
   knotenWerkzeug: KnotenWerkzeug                     // E2b: Haltelinie bzw. Zufahrt setzen
+  zufahrtVorschau?: ZufahrtEntwurf | null
+  onZufahrtRichtung?: (p: P) => void
   zufahrtErster: P | null                            // Zufahrt setzen: erster Klick (wartet auf die Richtung)
   zeichnung: P[]
   bearbeiten: string | null                          // Id des gewählten bzw. bearbeiteten Hindernisses (Ecken ziehen)
@@ -263,6 +275,20 @@ export default function Karte(props: {
     zeichnung, bearbeiten, kartenRef, hervor = null } = props
   /** ein Werkzeug ist aktiv: Klicks auf Knoten, Arme und Hindernisse gehen an das Werkzeug */
   const werkzeugAktiv = () => !!(cb.current.werkzeug || cb.current.knotenWerkzeug)
+  const [sicht, sichtSetzen] = useSichtWahl()
+  const [hkMap, setHkMap] = useState<L.Map | null>(null)
+  const hk = useHoehenkurven(hkMap, av)
+  const [avAn, setAvAn] = useState(true)
+  const [avArten, setAvArten] = useState(() => { try { return avArtenLesen(localStorage.getItem('swc.avArten')) } catch { return avArtenLesen(null) } })
+  const avArtSetzen = (art: string, an: boolean) => setAvArten(alt => { const neu = new Set(alt); if (an) neu.add(art); else neu.delete(art); return neu })
+
+  const sichtKlick = (art: SichtArt, id?: string) => {
+    if (werkzeugAktiv()) return
+    sichtSetzen(art, !sichtZeigen(sicht, art, id), id)
+  }
+  const autoMitSicht = (...args: Parameters<typeof autoZeichnen>) => autoZeichnen(...args.slice(0, 6) as [L.LayerGroup, P, P, string, string, string], args[6])
+  const veloMitSicht = (...args: Parameters<typeof veloZeichnen>) => veloZeichnen(...args.slice(0, 6) as [L.LayerGroup, P, P, string, string, string], args[6])
+
   const elRef = useRef<HTMLDivElement>(null)
   const ebenenRef = useRef<Record<string, L.LayerGroup> | null>(null)
   const cb = useRef(props)
@@ -278,6 +304,8 @@ export default function Karte(props: {
     return n
   })
   const [qOffen, setQOffen] = useState(false)
+  const [profilAuswahl, setProfilAuswahl] = useState<string | null>(null)
+  const [alleGelaendeProfile, setAlleGelaendeProfile] = useState(false)
   const [qPos, setQPos] = useState<{ x: number; y: number } | null>(() => {
     try { const v = JSON.parse(localStorage.getItem('swc.quellenPos') ?? 'null'); return v && Number.isFinite(v.x) && Number.isFinite(v.y) ? v : null } catch { return null }
   })
@@ -375,10 +403,13 @@ export default function Karte(props: {
     namenPane.style.zIndex = '450'
     namenPane.style.pointerEvents = 'none'
     map.createPane(HIND_PANE).style.zIndex = '410'
-    // Geladene Quellen: unter den Objekten der Prüfung (overlayPane 400), ohne Mausereignisse (Tooltip über den Treffertest)
+    // Geladene Quellen: über den Hindernissen (410), unter den Treffern (420), ohne Mausereignisse (Tooltip über den Treffertest)
     const qPane = map.createPane(Q_PANE)
-    qPane.style.zIndex = '398'
+    qPane.style.zIndex = '415'
+    const qFlaeche = map.createPane(Q_FLAECHE_PANE); qFlaeche.style.zIndex = '403'; qFlaeche.style.pointerEvents = 'none'
+    const qProfil = map.createPane(Q_PROFIL_PANE); qProfil.style.zIndex = '580'; qProfil.style.pointerEvents = 'none'
     qPane.style.pointerEvents = 'none'
+    const qWert = map.createPane(Q_WERT_PANE); qWert.style.zIndex = '610'; qWert.style.pointerEvents = 'none'
     quellenRef.current = L.layerGroup().addTo(map)
     const qTip = L.tooltip({ direction: 'top', offset: [0, -12] })
     let qRaf = 0
@@ -402,12 +433,12 @@ export default function Karte(props: {
     map.createPane(SCHILD_PANE).style.zIndex = '455'
     map.createPane(D_PANE).style.zIndex = '460'
     const eb: Record<string, L.LayerGroup> = {
-      av: L.layerGroup().addTo(map), sicht: L.layerGroup().addTo(map), hind: L.layerGroup().addTo(map), treffer: L.layerGroup().addTo(map),
+      masse: L.layerGroup().addTo(map), av: L.layerGroup().addTo(map), sicht: L.layerGroup().addTo(map), hind: L.layerGroup().addTo(map), treffer: L.layerGroup().addTo(map),
       arme: L.layerGroup().addTo(map), knoten: L.layerGroup().addTo(map), namen: L.layerGroup().addTo(map), standort: L.layerGroup().addTo(map),
-      zeichnen: L.layerGroup().addTo(map),
+      zeichnen: L.layerGroup().addTo(map), zufahrtVorschau: L.layerGroup().addTo(map), fahrzeug: L.layerGroup().addTo(map),
     }
-    L.control.layers({ 'Luftbild (SWISSIMAGE)': luftbild, 'Landeskarte (swisstopo)': landeskarte }, { 'Amtliche Vermessung': eb.av,
-      'Knoten (OSM)': eb.knoten, 'Strassennamen (OSM)': eb.namen, 'Sichtdreiecke': eb.sicht, 'Hindernisse': eb.hind,
+    L.control.layers({ 'Luftbild (SWISSIMAGE)': luftbild, 'Landeskarte (swisstopo)': landeskarte }, {
+      'Knoten (OSM)': eb.knoten, 'Strassennamen (OSM)': eb.namen, 'Fahrzeuge und Personen': eb.fahrzeug, 'Hindernisse': eb.hind,
       'Verdecker im Sichtdreieck': eb.treffer, 'Arme': eb.arme },
     { collapsed: true }).addTo(map)
     L.control.scale({ imperial: false }).addTo(map)
@@ -451,6 +482,7 @@ export default function Karte(props: {
     map.on('moveend', () => { markerAbgleich(); namenAbgleich(); cb.current.onAusschnitt() })
     map.on('zoomend', () => schilderAbgleich())
     kartenRef.current = map
+    setHkMap(map)
     ebenenRef.current = eb
     return () => { map.remove(); kartenRef.current = null; ebenenRef.current = null; quellenRef.current = null }
   }, [mitte, kartenRef])
@@ -460,22 +492,36 @@ export default function Karte(props: {
     if (el) el.style.cursor = werkzeug || knotenWerkzeug ? 'crosshair' : ''
   }, [werkzeug, knotenWerkzeug])
 
+  // Beim Laden neuer AV-Daten die für die Prüfung wichtigen Flächen automatisch einblenden.
+  // Innerhalb derselben Prüfung bleiben die einzelnen Arten weiterhin von Hand schaltbar.
+  useEffect(() => {
+    if (!av?.length) return
+    setAvAn(true)
+    setAvArten(alt => {
+      const grundlagen = ['trottoir', 'verkehrsinsel', 'gebaeude']
+      return grundlagen.every(art => alt.has(art)) ? alt : new Set([...alt, ...grundlagen])
+    })
+  }, [av])
+
   // AV-Bodenbedeckung
   useEffect(() => {
     const map = kartenRef.current, eb = ebenenRef.current
     if (!map || !eb) return
     eb.av.clearLayers()
+    try { localStorage.setItem('swc.avArten', JSON.stringify([...avArten])) } catch { /* Sitzung */ }
+    if (avAn && !map.hasLayer(eb.av)) eb.av.addTo(map)
+    else if (!avAn && map.hasLayer(eb.av)) map.removeLayer(eb.av)
     if (!av) return
     for (const f of av) {
-      const farbe = AV_FARBEN[f.art]
-      if (!farbe) continue
-      L.polygon(f.ringe.map(r => r.map(ll)), { color: farbe, weight: 1, fillColor: farbe, fillOpacity: AV_DECKKRAFT[f.art] ?? 0.25, interactive: false })
+      if (!avArtSichtbar(f.art, avAn, avArten)) continue
+      const { farbe, deckkraft } = avKartenStil(f.art)
+      L.polygon(f.ringe.map(r => r.map(ll)), { color: farbe, weight: 1, fillColor: farbe, fillOpacity: deckkraft, interactive: false })
         .addTo(eb.av)
     }
     const text = `Amtliche Vermessung, Kanton ${kantone.join(', ') || '?'}, geodienste.ch`
     map.attributionControl.addAttribution(text)
     return () => { map.attributionControl.removeAttribution(text) }
-  }, [av, kantone, kartenRef])
+  }, [av, kantone, kartenRef, avAn, avArten])
 
   // Strassennamen (OSM)
   useEffect(() => {
@@ -501,7 +547,7 @@ export default function Karte(props: {
     markerRef.current = neu
     markerAbgleich()
   }, [knoten])
-  // LSA-Knoten im Tooltip kennzeichnen (Korrektur 31.10.2026, Punkt 13)
+  // LSA-Knoten im Tooltip kennzeichnen
   useEffect(() => {
     for (const { k, m } of markerRef.current.values()) m.setTooltipContent(knotenTip(k, props.lsa))
   }, [props.lsa, knoten])
@@ -586,7 +632,7 @@ export default function Karte(props: {
     L.circleMarker(ll(z.K), { radius: 5, color: D_RAND_FARBE, weight: 2, fillColor: KREISEL_FAHRLINIE_FARBE, fillOpacity: 1, pane: D_PANE })
       .bindTooltip('K: Schnitt der Fahrlinie der Einfahrt mit der Fahrlinie mit Vortritt').addTo(ebene)
     L.circleMarker(ll(z.D), { radius: 6, color: D_RAND_FARBE, weight: 2, fillColor: D_FARBE, fillOpacity: 1, pane: D_PANE })
-      .bindTooltip(`D: ${f2(z.B)} m hinter der Wartelinie, am Fahrersitz`).addTo(ebene)
+      .bindTooltip(`D: ${f2(z.B)} m hinter der Wartelinie, am Fahrer*innensitz`).addTo(ebene)
     // K4: Sichtberme schraffiert (freihalten), Rest der Insel «Durchsicht verhindern», Sichtdreiecke Ak (bzw. Velo, wenn länger) und Az
     const s = k.sicht
     if (!s) return
@@ -598,43 +644,55 @@ export default function Karte(props: {
           (s.berme.hindernisse.length ? `<br>darin: ${esc(s.berme.hindernisse.join(', '))} – nicht erfüllt` : ''), { sticky: true }).addTo(ebene)
       for (const l of schraffur(r)) L.polyline(l.map(ll), { color: '#b45309', weight: 1, opacity: 0.8, interactive: false, pane: OBEN_PANE }).addTo(ebene)
     }
-    const fan = (t: KreiselSichtTeil, name: string, farbe: string) => {
+    const fan = (t: KreiselSichtTeil, name: string, farbe: string, ebene: L.LayerGroup) => {
       if (t.dreieckFrei.length > 2) L.polygon(t.dreieckFrei.map(ll), { color: farbe, weight: 1, fillColor: farbe, fillOpacity: 0.15, pane: OBEN_PANE })
         .bindTooltip(`${name}: frei bis ${f1(Math.min(t.vorhanden, t.oben))} m (nötig ${f1(t.A)} m)`, { sticky: true }).addTo(ebene)
       if (t.dreieckVerdeckt.length > 2) L.polygon(t.dreieckVerdeckt.map(ll), { color: VERDECKT_FARBE, weight: 1, fillColor: VERDECKT_FARBE,
         fillOpacity: 0.2, pane: OBEN_PANE }).bindTooltip(`${name}: verdeckt ab ${f1(t.vorhanden)} m${t.verdecker ? ` durch ${esc(t.verdecker.name)}` : ''}`,
           { sticky: true }).addTo(ebene)
     }
-    fan(s.auto, 'Ak (Motorfahrzeuge)', STATUS_FARBE[s.auto.status])
+    const sid = (art: string) => kreiselSichtId(kn.id, s.arm + '|' + art)
+    const ak = sichtGruppe('auto', sid('Ak')), az = sichtGruppe('auto', sid('Az')), vk = sichtGruppe('velo', sid('Velo'))
+    fan(s.auto, 'Ak (Motorfahrzeuge)', STATUS_FARBE[s.auto.status], ak)
     // Fahrzeuge wie am Knoten: wartendes Auto F_B bei D, Auto F_A mit Vortritt am Ende von Ak, Velo am Ende seiner Linie, Auto in der
     // Nachbarzufahrt am Ende von Az (alle auf K bzw. den Ring zu)
     const fb = fbLage(z.Dachse, z.rand)
-    autoZeichnen(ebene, fb[0], fb[1], FB_FARBE, '#ffffff', 'F<sub>B</sub>: wartendes Fahrzeug in der Einfahrt, Lenker bei D')
+    autoMitSicht(ebenenRef.current!.fahrzeug, fb[0], fb[1], FB_FARBE, '#ffffff', 'F<sub>B</sub>: wartendes Fahrzeug in der Einfahrt, Fahrer*innenauge bei D')
     const fa = kreiselFahrzeug(s.auto.achse, s.auto.A, faLage)
-    if (fa) autoZeichnen(ebene, fa[0], fa[1], FA_FARBE, '#111827', `F<sub>A</sub> auf der Kreiselfahrbahn: Front am Ende von Ak, ${f1(s.auto.A)} m`)
+    if (fa) autoMitSicht(ebenenRef.current!.fahrzeug, fa[0], fa[1], FA_FARBE, '#111827', `F<sub>A</sub> auf der Kreiselfahrbahn: Front am Ende von Ak, ${f1(s.auto.A)} m`, () => sichtKlick('auto', sid('Ak')))
     const fv = kreiselFahrzeug(s.velo.achse, s.velo.A, veloLage)
-    if (fv) veloZeichnen(ebene, fv[0], fv[1], VELO_FARBE, '#ffffff', `Velo auf der Kreiselfahrbahn: Vorderrad am Ende der nötigen Sicht, ${s.velo.A} m`)
+    if (fv) veloMitSicht(ebenenRef.current!.fahrzeug, fv[0], fv[1], VELO_FARBE, '#ffffff', `Velo auf der Kreiselfahrbahn: Vorderrad am Ende der nötigen Sicht, ${s.velo.A} m`, () => sichtKlick('velo', sid('Velo')))
     if (s.az) {
       const fz = kreiselFahrzeug(s.az.achse, s.az.A, faLage)
-      if (fz) autoZeichnen(ebene, fz[0], fz[1], FA_FARBE, '#111827', `Fahrzeug in der Zufahrt links (${esc(s.azLinks ?? '')}): Front am Ende von Az, ` +
-        `${s.az.A} m (Vergleichswert)`)
+      if (fz) autoMitSicht(ebenenRef.current!.fahrzeug, fz[0], fz[1], FA_FARBE, '#111827', `Fahrzeug in der Zufahrt links (${esc(s.azLinks ?? '')}): Front am Ende von Az, ` +
+        `${s.az.A} m (Vergleichswert)`, () => sichtKlick('auto', sid('Az')))
     }
-    if (s.velo.A > s.auto.oben || s.velo.status !== 'erfuellt') fan(s.velo, 'Velo', VELO_FARBE)
+    fan(s.velo, 'Velo', VELO_FARBE, vk)
     if (s.az) {
       L.polyline(s.az.achse.map(ll), { color: STATUS_FARBE[s.az.status], weight: 2, dashArray: '8 5', pane: OBEN_PANE })
         .bindTooltip(`Az zur Zufahrt links (${esc(s.azLinks ?? '')}), Vergleichswert: vorhanden ${f1(s.az.vorhanden)} m, Regelfall ${s.az.A} m, ` +
-          `Minimal ${s.az.minimal} m`, { sticky: true }).addTo(ebene)
+          `Minimal ${s.az.minimal} m`, { sticky: true }).addTo(az)
       if (s.az.dreieckVerdeckt.length > 2) L.polygon(s.az.dreieckVerdeckt.map(ll), { color: VERDECKT_FARBE, weight: 1, fillColor: VERDECKT_FARBE,
-        fillOpacity: 0.15, pane: OBEN_PANE }).addTo(ebene)
+        fillOpacity: 0.15, pane: OBEN_PANE }).addTo(az)
     }
   }
 
+
+  const sichtGruppe = (art: SichtArt, id: string): L.FeatureGroup => {
+    const g = L.featureGroup().on('click', e => { if (!werkzeugAktiv()) { L.DomEvent.stopPropagation(e); sichtKlick(art, id) } })
+    if (sichtZeigen(sicht, art, id)) g.addTo(ebenenRef.current!.sicht)
+    return g
+  }
 
   // Arme des gewählten Knotens (Klick: Zufahrt wählen), Ergebnis: Sichtdreiecke, Achsen, D, K, verdeckende Gebäude
   useEffect(() => {
     const eb = ebenenRef.current
     if (!eb) return
-    eb.sicht.clearLayers(); eb.arme.clearLayers()
+    eb.sicht.clearLayers(); eb.arme.clearLayers(); eb.fahrzeug.clearLayers()
+    for (const art of ['auto', 'velo', 'trottoir', 'ueberholen'] as const) {
+      eb[art] = L.featureGroup()
+      if (sichtZeigen(sicht, art)) eb[art].addTo(eb.sicht)
+    }
     schilderRef.current = []
     const kn = rechnung?.knoten
     if (!kn) { namenAbgleich(); return }
@@ -658,7 +716,7 @@ export default function Karte(props: {
         const tip = `${esc(armText(a))}${istZ ? '' : ' – vortrittsberechtigt'}${osmTagZeile(a.wid, cb.current.osmTags)}`
         linie.bindTooltip(tip, { sticky: true })
         schild.bindTooltip(zp ? `${tip}<br>Zufahrtspunkt (geklickt${zp.weg !== null ? `, OSM-Weg ${zp.weg}` : ''}), Richtung ` +
-          `${zp.gezeichnet ? 'gezeichnet' : zp.weg !== null ? 'entlang des Wegs' : 'senkrecht zum Rand'}` : tip)
+          `${zp.herkunft ? ZUFAHRT_HERKUNFT[zp.herkunft] : zp.gezeichnet ? 'gezeichnet' : zp.weg !== null ? 'entlang des Wegs' : 'senkrecht zum Rand'}${zp.winkel != null ? `, ${f1(zp.winkel)}°` : ''}` : tip)
       } else {
         const tip = `${esc(armText(a))}${istZ ? ' – Zufahrt' : istV ? (rvRechts !== undefined ?
           ' – von rechts (Rechtsvortritt)' : ' – vortrittsberechtigt') : ''}${osmTagZeile(a.wid, cb.current.osmTags)}<br><i>Klick: als Zufahrt wählen</i>`
@@ -671,7 +729,7 @@ export default function Karte(props: {
       schilderRef.current.push({ m: schild, lage })
     }
     namenAbgleich()
-    // Korrektur 31.10.2026 (Punkt 13): gewählter LSA-Knoten mit Kennzeichnung
+    // Gewählter LSA-Knoten mit Kennzeichnung
     if (kn.lsa) L.marker(ll(kn.p), { icon: L.divIcon({ className: 'lsa-marke', iconSize: [0, 0], html: '<span>LSA</span>' }), pane: OBEN_PANE,
       keyboard: false, interactive: false }).addTo(eb.arme)
     if (!e) return
@@ -680,42 +738,44 @@ export default function Karte(props: {
     // verdeckte dick
     const m = e.rechtsvortritt?.arm.sichtfeld
     if (m) {
-      L.polyline(m.pfad.map(ll), { color: '#111827', weight: 1.5, dashArray: '8 3 2 3', interactive: false, pane: OBEN_PANE }).addTo(eb.sicht)
+      const ziel = sichtGruppe('auto', richtungSichtId(e, { richtung: 'rechts' }))
+      L.polyline(m.pfad.map(ll), { color: '#111827', weight: 1.5, dashArray: '8 3 2 3', interactive: false, pane: OBEN_PANE }).addTo(ziel)
       for (const l of m.linien.filter(x => x.frei))
-        L.polyline([ll(m.D), ll(l.p)], { color: '#64748b', weight: 1, opacity: 0.45, interactive: false }).addTo(eb.sicht)
+        L.polyline([ll(m.D), ll(l.p)], { color: '#64748b', weight: 1, opacity: 0.45, interactive: false }).addTo(ziel)
       for (const l of m.linien.filter(x => !x.frei)) {
         const erste = !!m.erste && l.s === m.erste.s
         L.polyline([ll(m.D), ll(l.p)], { color: VERDECKT_FARBE, weight: erste ? 4 : 2, opacity: 0.9, pane: OBEN_PANE })
           .bindTooltip(`Abb. 5: Sichtlinie zum Punkt bei ${f1(l.s)} m Pfadlänge (${f1(l.sRechts)} m auf dem rechten Arm) verdeckt` +
-            `${l.verdecker ? ` durch ${esc(l.verdecker)}` : ''}${erste ? ' (erste verdeckte)' : ''}`, { sticky: true }).addTo(eb.sicht)
+            `${l.verdecker ? ` durch ${esc(l.verdecker)}` : ''}${erste ? ' (erste verdeckte)' : ''}`, { sticky: true }).addTo(ziel)
       }
       for (const l of m.linien)
         L.circleMarker(ll(l.p), { radius: 2, color: '#111827', weight: 1, fillColor: '#ffffff', fillOpacity: 1, interactive: false, pane: OBEN_PANE })
-          .addTo(eb.sicht)
+          .addTo(ziel)
     }
     for (const r of e.richtungen) {
+      const id = richtungSichtId(e, r), ziel = { auto: sichtGruppe('auto', id), velo: sichtGruppe('velo', id), ueberholen: sichtGruppe('ueberholen', id) }
       const name = `${lageNach(r)} (${esc(r.strasse)})`
       // Motorfahrzeuge; ohne Verkehr von dieser Seite nur das Velo (E4: Velo gegen die Einbahn)
       if (r.status !== 'keine_zufahrt') {
         if (r.dreieckFrei.length >= 3)
           L.polygon(r.dreieckFrei.map(ll), { color: FREI_FARBE, weight: 1, fillColor: FREI_FARBE, fillOpacity: 0.3 })
-            .bindTooltip(`Sichtdreieck ${name}: frei bis ${f1(Math.min(r.vorhanden, r.massgebend))} m`, { sticky: true }).addTo(eb.sicht)
+            .bindTooltip(`Sichtdreieck ${name}: frei bis ${f1(Math.min(r.vorhanden, r.massgebend))} m`, { sticky: true }).addTo(ziel.auto)
         if (r.dreieckVerdeckt.length >= 3)
           L.polygon(r.dreieckVerdeckt.map(ll), { color: VERDECKT_FARBE, weight: 1, fillColor: VERDECKT_FARBE, fillOpacity: 0.3 })
-            .bindTooltip(`Sichtdreieck ${name}: verdeckt ab ${f1(r.vorhanden)} m (erforderlich ${r.massgebend} m)`, { sticky: true }).addTo(eb.sicht)
-        L.polyline(r.achse.map(ll), { color: ACHSE_FARBE, weight: 2, dashArray: '6 5', interactive: false, pane: OBEN_PANE }).addTo(eb.sicht)
+            .bindTooltip(`Sichtdreieck ${name}: verdeckt ab ${f1(r.vorhanden)} m (erforderlich ${r.massgebend} m)`, { sticky: true }).addTo(ziel.auto)
+        L.polyline(r.achse.map(ll), { color: ACHSE_FARBE, weight: 2, dashArray: '6 5', interactive: false, pane: OBEN_PANE }).addTo(ziel.auto)
         // Überholfall (Block 5, Ziffer 6): zweites Sichtdreieck auf den Gegenfahrstreifen, schwächer und gestrichelt
         const u = r.ueberholfall
         if (u) {
           if (u.dreieckFrei.length >= 3)
             L.polygon(u.dreieckFrei.map(ll), { color: FREI_FARBE, weight: 1, dashArray: '2 4', fillColor: FREI_FARBE, fillOpacity: 0.1 })
               .bindTooltip(`Überholfall ${name} (Sichtlinie S' auf den Gegenfahrstreifen): frei bis ${f1(Math.min(u.vorhanden, u.A))} m ` +
-                `(erforderlich ${u.A} m)`, { sticky: true }).addTo(eb.sicht)
+                `(erforderlich ${u.A} m)`, { sticky: true }).addTo(ziel.ueberholen)
           if (u.dreieckVerdeckt.length >= 3)
             L.polygon(u.dreieckVerdeckt.map(ll), { color: VERDECKT_FARBE, weight: 1, dashArray: '2 4', fillColor: VERDECKT_FARBE, fillOpacity: 0.15 })
-              .bindTooltip(`Überholfall ${name}: verdeckt ab ${f1(u.vorhanden)} m (erforderlich ${u.A} m)`, { sticky: true }).addTo(eb.sicht)
+              .bindTooltip(`Überholfall ${name}: verdeckt ab ${f1(u.vorhanden)} m (erforderlich ${u.A} m)`, { sticky: true }).addTo(ziel.ueberholen)
           L.polyline(u.achse.map(ll), { color: ACHSE_FARBE, weight: 1, dashArray: '2 5', opacity: 0.8, interactive: false, pane: OBEN_PANE })
-            .addTo(eb.sicht)
+            .addTo(ziel.ueberholen)
         }
         // Fläche, die die Sichtweite begrenzt: innerhalb von A in der Liste der Verdecker (unten, rot); verdeckt sie erst
         // ausserhalb von A, orange
@@ -723,17 +783,17 @@ export default function Karte(props: {
           const innen = r.dreieckVerdeckt.length >= 3, farbe = innen ? VERDECKT_FARBE : SPAETER_FARBE
           L.polygon(r.verdecker.ring.map(ll), { color: innen ? '#7f1d1d' : '#9a3412', weight: 2, fillColor: farbe, fillOpacity: 0.55 })
             .bindTooltip(`${esc(verdeckerName(r.verdecker))}: verdeckt ${name} ab rund ${f1(r.vorhanden)} m` +
-              (innen ? '' : `, erst nach der erforderlichen Sichtweite (${r.massgebend} m)`), { sticky: true }).addTo(eb.sicht)
+              (innen ? '' : `, erst nach der erforderlichen Sichtweite (${r.massgebend} m)`), { sticky: true }).addTo(ziel.auto)
         }
         // Ende der massgebenden Sichtweite A auf der Achse
         const iA = Math.min(r.massgebend, r.sichtpunkte.length - 1)
         if (iA > 0) L.circleMarker(ll(r.sichtpunkte[iA]), { radius: 4, color: '#111827', weight: 1.5, fillColor: STATUS_FARBE[r.status], fillOpacity: 1,
           pane: OBEN_PANE })
-          .bindTooltip(`Ende der erforderlichen Sichtweite (A) ${name}: ${r.massgebend} m`).addTo(eb.sicht)
+          .bindTooltip(`Ende der erforderlichen Sichtweite (A) ${name}: ${r.massgebend} m`).addTo(ziel.auto)
         // FA: vortrittsberechtigtes Fahrzeug mit der Front am Ende von A, auf K zu fahrend
         const fa = faLage(r.sichtpunkte, iA)
-        if (fa) autoZeichnen(eb.sicht, fa[0], fa[1], FA_FARBE, '#111827',
-          `F<sub>A</sub> ${name}: Front am Ende der erforderlichen Sichtweite, ${r.massgebend} m`)
+        if (fa) autoMitSicht(eb.fahrzeug, fa[0], fa[1], FA_FARBE, '#111827',
+          `F<sub>A</sub> ${name}: Front am Ende der erforderlichen Sichtweite, ${r.massgebend} m`, () => sichtKlick('auto', id))
       }
       // Velo (E3b): Sichtdreieck Petrol gestrichelt, Fläche schwach; verdeckter Teil rot gestrichelt; Velo am Ende von A
       const v = r.velo
@@ -741,39 +801,41 @@ export default function Karte(props: {
         const vn = `Velo ${name}`
         if (v.dreieckFrei.length >= 3)
           L.polygon(v.dreieckFrei.map(ll), { color: VELO_FARBE, weight: 2, dashArray: '6 4', fillColor: VELO_FARBE, fillOpacity: 0.08 })
-            .bindTooltip(`Sichtdreieck ${vn}: frei bis ${f1(Math.min(v.vorhanden, v.A))} m (erforderlich ${v.A} m)`, { sticky: true }).addTo(eb.sicht)
+            .bindTooltip(`Sichtdreieck ${vn}: frei bis ${f1(Math.min(v.vorhanden, v.A))} m (erforderlich ${v.A} m)`, { sticky: true }).addTo(ziel.velo)
         if (v.dreieckVerdeckt.length >= 3)
           L.polygon(v.dreieckVerdeckt.map(ll), { color: VERDECKT_FARBE, weight: 2, dashArray: '6 4', fillColor: VERDECKT_FARBE, fillOpacity: 0.12 })
-            .bindTooltip(`Sichtdreieck ${vn}: verdeckt ab ${f1(v.vorhanden)} m (erforderlich ${v.A} m)`, { sticky: true }).addTo(eb.sicht)
-        L.polyline(v.achse.map(ll), { color: VELO_FARBE, weight: 2, dashArray: '3 4', interactive: false, pane: OBEN_PANE }).addTo(eb.sicht)
+            .bindTooltip(`Sichtdreieck ${vn}: verdeckt ab ${f1(v.vorhanden)} m (erforderlich ${v.A} m)`, { sticky: true }).addTo(ziel.velo)
+        L.polyline(v.achse.map(ll), { color: VELO_FARBE, weight: 2, dashArray: '3 4', interactive: false, pane: OBEN_PANE }).addTo(ziel.velo)
         const iV = Math.min(v.A, v.sichtpunkte.length - 1)
         const vl = veloLage(v.sichtpunkte, iV)
-        if (vl) veloZeichnen(eb.sicht, vl[0], vl[1], VELO_FARBE, '#ffffff',
-          `Velo ${name}: Vorderrad am Ende der erforderlichen Sichtweite, ${v.A} m`)
+        if (vl) veloMitSicht(eb.fahrzeug, vl[0], vl[1], VELO_FARBE, '#ffffff',
+          `Velo ${name}: Vorderrad am Ende der erforderlichen Sichtweite, ${v.A} m`, () => sichtKlick('velo', id))
       }
     }
-    // K je geprüfte Richtung als beschrifteter Punkt wie D (Korrektur 31.10.2026, Punkt 10)
+    // K je geprüfte Richtung als beschrifteter Punkt wie D
     for (const k of kreuzungspunkte(e))
       L.marker(ll(k.p), { icon: L.divIcon({ className: 'k-punkt', iconSize: [12, 12], html: `<span>${k.text}</span>` }), pane: OBEN_PANE,
-        keyboard: false, zIndexOffset: 800 }).bindTooltip(esc(k.tooltip)).addTo(eb.sicht)
-    // Trottoir (E3b): zwei kleine Dreiecke von D' zu den Trottoirpunkten (Bernstein), Fussgänger am Ende von A
+        keyboard: false, zIndexOffset: 800 }).bindTooltip(esc(k.tooltip)).addTo(eb.auto)
+    // Trottoir (E3b): zwei kleine Dreiecke von D' zu den Trottoirpunkten (Bernstein), Zufussgehende am Ende von A
     const tp = e.trottoirPruefung
     if (tp) {
       for (const t of tp.richtungen) {
+        const id = richtungSichtId(e, t), ziel = sichtGruppe('trottoir', id)
         const tn = `Trottoir ${lageWort(t)}`
         if (t.dreieckFrei.length >= 3)
           L.polygon(t.dreieckFrei.map(ll), { color: TROTTOIR_FARBE, weight: 1.5, fillColor: TROTTOIR_FARBE, fillOpacity: 0.25 })
-            .bindTooltip(`Sichtdreieck ${tn}: frei bis ${f1(Math.min(t.vorhanden, t.A))} m (erforderlich ${t.A} m)`, { sticky: true }).addTo(eb.sicht)
+            .bindTooltip(`Sichtdreieck ${tn}: frei bis ${f1(Math.min(t.vorhanden, t.A))} m (erforderlich ${t.A} m)`, { sticky: true }).addTo(ziel)
         if (t.dreieckVerdeckt.length >= 3)
           L.polygon(t.dreieckVerdeckt.map(ll), { color: VERDECKT_FARBE, weight: 1.5, fillColor: VERDECKT_FARBE, fillOpacity: 0.25 })
-            .bindTooltip(`Sichtdreieck ${tn}: verdeckt ab ${f1(t.vorhanden)} m (erforderlich ${t.A} m)`, { sticky: true }).addTo(eb.sicht)
-        L.polyline(t.achse.map(ll), { color: TROTTOIR_FARBE, weight: 1.5, dashArray: '2 4', interactive: false, pane: OBEN_PANE }).addTo(eb.sicht)
+            .bindTooltip(`Sichtdreieck ${tn}: verdeckt ab ${f1(t.vorhanden)} m (erforderlich ${t.A} m)`, { sticky: true }).addTo(ziel)
+        L.polyline(t.achse.map(ll), { color: TROTTOIR_FARBE, weight: 1.5, dashArray: '2 4', interactive: false, pane: OBEN_PANE }).addTo(ziel)
         const iT = Math.min(t.A, t.sichtpunkte.length - 1)
         if (iT > 0) {
           L.circleMarker(ll(t.sichtpunkte[iT]), { radius: 7, color: TROTTOIR_FARBE, weight: 3, fill: false, pane: OBEN_PANE, interactive: false })
-            .addTo(eb.sicht)
+            .addTo(eb.fahrzeug)
           L.circleMarker(ll(t.sichtpunkte[iT]), { radius: 3, color: '#111827', weight: 1, fillColor: STATUS_FARBE[t.status], fillOpacity: 1, pane: OBEN_PANE })
-            .bindTooltip(`Fussgänger ${tn}: am Ende der erforderlichen Sichtweite, ${t.A} m`).addTo(eb.sicht)
+            .bindTooltip(`Zufussgehende ${tn}: am Ende der erforderlichen Sichtweite, ${t.A} m; Klick: Trottoirsicht ein-/ausblenden`)
+            .on('click', e => { if (!werkzeugAktiv()) { L.DomEvent.stopPropagation(e); sichtKlick('trottoir', id) } }).addTo(eb.fahrzeug)
         }
       }
       // Trottoirüberfahrt (K0): D' zum Ziehen wie D (D' von Hand); sonst fester Punkt
@@ -819,15 +881,15 @@ export default function Karte(props: {
         .bindTooltip(`Beginn der Beobachtungsdistanz B: ${esc(e.nullpunktText)}`).addTo(eb.sicht)
     // Zufahrtspunkt einer Grundstückzufahrt (geklickt): das Schild «Z» bei den Armen
     // FB: vortrittsbelastetes Fahrzeug auf der Zufahrt, Lenker (D) 2,0 m hinter der Front; folgt D von Hand. Velo gegen die Einbahn
-    // auf der Zufahrt (E4): F_B als Velo (schwarz wie das Auto F_B, weiss umrandet), der Velofahrer bei D
+    // auf der Zufahrt (E4): F_B als Velo (schwarz wie das Auto F_B, weiss umrandet), der velofahrende Person bei D
     if (e.zufahrtVelo) {
       const fv = fbVeloLage(e.Dachse, add(e.Dachse, e.fbRichtung))
-      veloZeichnen(eb.sicht, fv[0], fv[1], FB_FARBE, '#ffffff',
-        `F<sub>B</sub>: Velo gegen die Einbahn, Velofahrer bei D`)
+      veloMitSicht(eb.fahrzeug, fv[0], fv[1], FB_FARBE, '#ffffff',
+        `F<sub>B</sub>: Velo gegen die Einbahn, velofahrende Person bei D`)
     } else {
       const fb = fbLage(e.Dachse, add(e.Dachse, e.fbRichtung))
-      autoZeichnen(eb.sicht, fb[0], fb[1], FB_FARBE, '#ffffff',
-        `F<sub>B</sub>: wartendes Fahrzeug, Lenker bei D`)
+      autoMitSicht(eb.fahrzeug, fb[0], fb[1], FB_FARBE, '#ffffff',
+        `F<sub>B</sub>: wartendes Fahrzeug, Fahrer*innenauge bei D`)
     }
     // D zum Ziehen (E2b): D von Hand; nicht, solange ein Werkzeug aktiv ist
     const aktiv = !!(werkzeug || knotenWerkzeug)
@@ -835,10 +897,10 @@ export default function Karte(props: {
     L.marker(ll(e.D), { draggable: !aktiv, keyboard: false, pane: D_PANE, zIndexOffset: 1000, bubblingMouseEvents: true,
       icon: L.divIcon({ className: e.Dhand ? 'd-punkt hand' : 'd-punkt', iconSize: [16, 16], html: '<span>D</span>' }) })
       .bindTooltip(e.Dhand ? `Beobachtungspunkt D von Hand<br><i>ziehen: verschieben; im Panel zurücksetzen</i>` :
-        `Beobachtungspunkt D (${e.zufahrtVelo ? 'Velofahrer' : 'Fahrersitz'})<br><i>ziehen: D von Hand</i>`)
+        `Beobachtungspunkt D (${e.zufahrtVelo ? 'velofahrende Person' : 'Fahrer*innensitz'})<br><i>ziehen: D von Hand</i>`)
       .on('dragend', (ev: L.LeafletEvent) => { const g = (ev.target as L.Marker).getLatLng(); cb.current.onD(lv95(g.lat, g.lng)) })
       .addTo(eb.sicht)
-  }, [rechnung, zufahrt, werkzeug, knotenWerkzeug])
+  }, [rechnung, zufahrt, werkzeug, knotenWerkzeug, sicht])
 
   // Hindernisse (Eingaben), Vorschläge (gestrichelt), amtliche Parkfelder (durchgezogen nach Klasse, verworfene gepunktet);
   // Klick wählt (Panel: bearbeiten, verwerfen, bestätigen); beim Bearbeiten Ecken ziehen
@@ -902,13 +964,18 @@ export default function Karte(props: {
     const eb = ebenenRef.current
     if (!eb) return
     eb.treffer.clearLayers()
-    for (const r of rechnung?.ergebnis?.richtungen ?? []) for (const t of r.verdeckerListe) {
+    const treffer = (rechnung?.ergebnis?.richtungen ?? []).flatMap(r => [
+      ...(sichtZeigen(sicht, 'auto', richtungSichtId(rechnung!.ergebnis!, r)) ? r.verdeckerListe : []),
+      ...(sichtZeigen(sicht, 'velo', richtungSichtId(rechnung!.ergebnis!, r)) ? r.velo?.verdeckerListe ?? [] : []),
+      ...(sichtZeigen(sicht, 'ueberholen', richtungSichtId(rechnung!.ergebnis!, r)) ? r.ueberholfall?.verdeckerListe ?? [] : []),
+    ])
+    for (const t of rechnung?.ergebnis?.trottoirPruefung?.richtungen ?? []) if (sichtZeigen(sicht, 'trottoir', richtungSichtId(rechnung!.ergebnis!, t))) treffer.push(...t.verdeckerListe)
+    for (const t of treffer) {
       const farbe = TREFFER_FARBE[t.wirkung], gebaeude = t.quelle === 'AV'
       L.polygon(t.ring.map(ll), { color: t.wirkung === 'voll' ? '#7f1d1d' : farbe, weight: 3, dashArray: t.wirkung === 'hinweis' ? '4 3' : undefined,
         fillColor: farbe, fillOpacity: gebaeude ? 0.55 : 0.2, interactive: gebaeude, pane: TREFFER_PANE })
-        .bindTooltip(`${esc(verdeckerName(t))}: ${t.wirkung === 'hinweis' ? 'im Sichtfeld' : 'verdeckt'} für ${lageText(r)} ` +
-          `ab ${f1(t.sErst)} m` + (t.wirkung === 'palisade' ? ' (Palisade)' : t.wirkung === 'hinweis' ? ' (nur Hinweis)' : ''), { sticky: true })
-        .addTo(eb.treffer)
+        .bindTooltip(`${esc(verdeckerName(t))}: ${t.wirkung === 'hinweis' ? 'im Sichtfeld' : 'verdeckt'} ab ${f1(t.sErst)} m` +
+          (t.wirkung === 'palisade' ? ' (Palisade)' : t.wirkung === 'hinweis' ? ' (nur Hinweis)' : ''), { sticky: true }).addTo(eb.treffer)
     }
     // Massnahmen (E3a): gewähltes Hindernis hervorheben und in die Karte holen
     if (hervor && hervor.length >= 3) {
@@ -917,7 +984,7 @@ export default function Karte(props: {
       const map = kartenRef.current, b = L.latLngBounds(hervor.map(ll))
       if (map && !map.getBounds().contains(b)) map.panTo(b.getCenter())
     }
-  }, [rechnung, hervor])
+  }, [rechnung, hervor, sicht])
 
   // Zeichnung in Arbeit; Zufahrt setzen: erster Klick (wartet auf die Richtung)
   useEffect(() => {
@@ -931,6 +998,56 @@ export default function Karte(props: {
     L.polyline(zeichnung.map(ll), { color: '#f43f5e', weight: 2, dashArray: '3 3', interactive: false }).addTo(eb.zeichnen)
     for (const p of zeichnung) L.circleMarker(ll(p), { radius: 4, color: '#f43f5e', fillColor: '#ffffff', fillOpacity: 1, interactive: false }).addTo(eb.zeichnen)
   }, [zeichnung, zufahrtErster])
+
+  // Vorschau gehört ausschliesslich zum aktiven Setzwerkzeug, nie zu einem bestehenden Knoten.
+  useEffect(() => {
+    const eb = ebenenRef.current
+    if (!eb) return
+    eb.zufahrtVorschau.clearLayers()
+    const v = props.zufahrtVorschau
+    if (knotenWerkzeug !== 'zufahrt' || !v) return
+    const g = v.geo, p = v.eingabe.p, r = g.richtung, t = strassenRichtung(einheit(v.basis.strassenRichtung))
+    const ende = add(p, r, 12), achse = g.weg === null ? [g.kp, ende] : g.zMl(20)
+    const winkel = zufahrtWinkel(g.strassenRichtung, r)
+    const gruppe = eb.zufahrtVorschau
+    const pfeil = (a: P, u: P, farbe: string) => {
+      const q: P = [-u[1], u[0]], spitze = add(a, u, 2)
+      L.polyline([add(a, q, 0.8), spitze, add(a, q, -0.8)].map(ll), { color: farbe, weight: 3, interactive: false, pane: D_PANE }).addTo(gruppe)
+    }
+    L.polyline([add(v.basis.kp, t, -14), add(v.basis.kp, t, 14)].map(ll), { color: '#475569', weight: 3, dashArray: '5 4', interactive: false, pane: D_PANE }).addTo(gruppe)
+    pfeil(add(v.basis.kp, t, 12), t, '#475569')
+    L.marker(ll(add(v.basis.kp, t, 16)), { interactive: false, pane: D_PANE,
+      icon: L.divIcon({ className: 'zufahrt-winkel-label', html: '0°', iconSize: [30, 22] }) }).addTo(gruppe)
+    L.polyline(achse.map(ll), { color: '#f59e0b', weight: 4, dashArray: '7 4', interactive: false, pane: D_PANE }).addTo(gruppe)
+    pfeil(add(p, r, 9), r, '#b45309')
+    const griff = L.marker(ll(ende), { draggable: true, keyboard: true, bubblingMouseEvents: false, pane: D_PANE,
+      icon: L.divIcon({ className: 'zufahrt-richtungsgriff', html: '<span>↔</span>', iconSize: [26, 26], iconAnchor: [13, 13] }) })
+      .bindTooltip(`Richtung ins Grundstück: ${f1(winkel)}°. Ziehen: Winkel wählen; danach «Zufahrt übernehmen».`, { permanent: true, direction: 'top' })
+      .on('click', e => L.DomEvent.stopPropagation(e))
+      .on('dragend', (e: L.LeafletEvent) => { const x = (e.target as L.Marker).getLatLng(); cb.current.onZufahrtRichtung?.(lv95(x.lat, x.lng)) })
+      .addTo(gruppe)
+    // Fahrzeug fährt aus dem Grundstück auf die Strasse; Achsenpfeil bezeichnet die Gegenrichtung ins Grundstück.
+    autoZeichnen(gruppe, add(p, r, 5), [-r[0], -r[1]], FB_FARBE, '#ffffff', 'Vorschau: Fahrzeug fährt zur Strasse')
+    return () => { griff.remove(); gruppe.clearLayers() }
+  }, [props.zufahrtVorschau, knotenWerkzeug])
+
+  useEffect(() => {
+    const eb = ebenenRef.current
+    if (!eb) return
+    eb.masse.clearLayers()
+    if (!sicht.masse) return
+    const da = new Set<string>()
+    for (const m of swcSichtMasse(rechnung?.ergebnis ?? null, rechnung?.knoten ?? null)) {
+      if (!sichtMassZeigen(sicht, m)) continue
+      const key = JSON.stringify([m.text, m.p, m.linien]); if (da.has(key)) continue; da.add(key)
+      for (const l of m.linien) {
+        L.polyline(l.map(ll), { color: '#ffffff', weight: 4, interactive: false, pane: Q_PROFIL_PANE }).addTo(eb.masse)
+        L.polyline(l.map(ll), { color: '#111827', weight: 1.3, ...(m.rolle === 'bezug' ? { dashArray: '6 5' } : {}), interactive: false, pane: Q_PROFIL_PANE }).addTo(eb.masse)
+      }
+      L.marker(ll(m.p), { interactive: false, keyboard: false, pane: Q_WERT_PANE, title: m.hinweis,
+        icon: L.divIcon({ className: 'sicht-mass', html: esc(m.text), iconSize: [0, 0], iconAnchor: [0, 20] }) }).addTo(eb.masse)
+    }
+  }, [rechnung, sicht])
 
   const ortWaehlen = (o: Ort) => kartenRef.current?.setView([o.lat, o.lon], ortZoom(o.art))
   const hinweise = [props.hinweis, standortHinweis].filter((h): h is KartenHinweis => !!h)
@@ -955,17 +1072,25 @@ export default function Karte(props: {
     if (!g) return
     g.clearLayers()
     const daten = props.quellenEbenen ?? {}
+    const profilId = standardProfil((daten.gelaende ?? []).flatMap(o => o.hoehenprofil ? [o.hoehenprofil] : []), profilAuswahl)?.id
     const aktiv: { o: EbenenObjekt; farbe: string; symbol: string }[] = []
-    for (const def of EBENEN) if (qAn.has(def.id)) for (const o of daten[def.id] ?? []) aktiv.push({ o, farbe: ebenenFarbe(def, o.klasse), symbol: ebenenSymbol(def, o.klasse) })
-    const marke = (p: P, text: string, farbe: string) => L.marker(ll(p), { pane: Q_PANE, interactive: false, keyboard: false,
+    for (const def of EBENEN) if (def.id !== 'av' && qAn.has(def.id))
+      for (const o of def.id === 'gelaende' ? profilObjekteWaehlen(daten.gelaende ?? [], profilAuswahl, alleGelaendeProfile) : daten[def.id] ?? [])
+        aktiv.push({ o, farbe: ebenenFarbe(def, o.klasse), symbol: ebenenSymbol(def, o.klasse) })
+    const marke = (p: P, text: string, farbe: string) => L.marker(ll(p), { pane: Q_WERT_PANE, interactive: false, keyboard: false,
       icon: L.divIcon({ className: 'q-wert', iconSize: [0, 0], html: `<span style="border-color:${farbe}">${esc(text)}</span>` }) }).addTo(g)
     for (const { o, farbe, symbol } of aktiv) {
-      if (o.ringe) L.polygon(o.ringe.map(r => r.map(ll)), { pane: Q_PANE, interactive: false, color: farbe, weight: 1.5, fillColor: farbe, fillOpacity: o.deckkraft ?? 0.3 }).addTo(g)
+      if (o.ringe) L.polygon(o.ringe.map(r => r.map(ll)), { pane: Q_FLAECHE_PANE, interactive: false, color: farbe, weight: 1.5, fillColor: farbe, fillOpacity: o.deckkraft ?? 0.3 }).addTo(g)
       if (o.linien) {
         const lls = o.linien.map(l => l.map(ll))
-        L.polyline(lls, { pane: Q_PANE, interactive: false, color: '#111827', weight: 7, opacity: 0.75 }).addTo(g)
-        L.polyline(lls, { pane: Q_PANE, interactive: false, color: farbe, weight: 4, opacity: 1, ...(o.gestrichelt ? { dashArray: '6 6' } : {}) }).addTo(g)
-        if (qZoom >= BESCHRIFT_ZOOM && o.wert) { const l = o.linien.reduce((a, b) => (b.length > a.length ? b : a)); marke(l[l.length >> 1], o.wert, farbe) }
+        L.polyline(lls, { pane: o.profil ? Q_PROFIL_PANE : Q_PANE, interactive: false, color: o.profil ? '#ffffff' : '#111827', weight: o.profil ? 10 : 7, opacity: o.profil ? 1 : 0.75 }).addTo(g)
+        L.polyline(lls, { pane: o.profil ? Q_PROFIL_PANE : Q_PANE, interactive: false, color: farbe, weight: o.profil ? 5 : 4, opacity: 1, ...(o.profil ? { dashArray: '9 5' } : o.gestrichelt ? { dashArray: '6 6' } : {}) }).addTo(g)
+        if (o.profil) for (const l of o.linien) for (const p of [l[0], l[l.length - 1]]) L.circleMarker(ll(p), { pane: Q_PROFIL_PANE, radius: 4, color: farbe, weight: 2, fillColor: '#ffffff', fillOpacity: 1, interactive: false }).addTo(g)
+        if ((o.profil || qZoom >= BESCHRIFT_ZOOM) && o.wert) { const l = o.linien.reduce((a, b) => (b.length > a.length ? b : a)); marke(l[l.length >> 1], o.profil ? `Profil ${o.wert}` : o.wert, farbe) }
+        if (o.hoehenprofil && o.hoehenprofil.id === profilId) {
+          L.polyline(lls, { pane: Q_PROFIL_PANE, interactive: false, color: '#ffffff', weight: 11 }).addTo(g)
+          L.polyline(lls, { pane: Q_PROFIL_PANE, interactive: false, color: '#0369a1', weight: 5 }).addTo(g)
+        }
       }
       if (o.punkt) {
         L.marker(ll(o.punkt), { pane: Q_PANE, interactive: false, keyboard: false,
@@ -993,7 +1118,7 @@ export default function Karte(props: {
       for (const { o } of aktiv) if (o.ringe?.[0] && innen(p, o.ringe[0])) return o.text
       return null
     } : null
-  }, [props.quellenEbenen, qAn, qZoom])
+  }, [props.quellenEbenen, qAn, qZoom, profilAuswahl, alleGelaendeProfile])
 
   return (
     <div className="kartenrahmen" style={{ '--karte-h': `${stufe}dvh` } as CSSProperties}>
@@ -1004,27 +1129,37 @@ export default function Karte(props: {
         {stufe === 70 ? '▴' : '▾'}
       </button>
       <button type="button" className={'q-knopf' + (qOffen ? ' offen' : '')} aria-expanded={qOffen} onClick={() => setQOffen(o => !o)}
-              title="Geladene Quellen auf der Karte zeigen: woraus die Rechnung liest">
-        Geladene Quellen{(() => { const k = ebenenSichtbar(props.quellenEbenen ?? {}).zeigen.filter(e => qAn.has(e.id)).length; return k ? ` (${k})` : '' })()} ▴
+              title="Kartenebenen zeigen: geladene Daten auf der Karte">
+        Kartenebenen{(() => { const k = (hk.an ? 1 : 0) + ebenenSichtbar(props.quellenEbenen ?? {}).zeigen.filter(e => e.id === 'av' ? avAn && (props.quellenEbenen?.av ?? []).some(o => avArten.has(o.klasse)) : qAn.has(e.id)).length; return k ? ` (${k})` : '' })()} ▴
       </button>
       {qOffen && (() => {
-        const { zeigen, ohne } = ebenenSichtbar(props.quellenEbenen ?? {})
+        const { zeigen, ohne, laedt, fehler } = ebenenSichtbar(props.quellenEbenen ?? {})
         return (
-          <div className="q-fenster" role="group" aria-label="Geladene Quellen" ref={qFensterRef}
+          <div className="q-fenster" role="group" aria-label="Kartenebenen" ref={qFensterRef}
                style={qPos ? { left: qPos.x, top: qPos.y, bottom: 'auto', maxHeight: `calc(100% - ${qPos.y + 10}px)` } : undefined}>
             <div className="q-kopf" onPointerDown={qZiehen} title="An dieser Zeile ziehen, um das Fenster zu verschieben (Doppelklick: zurück an den Ursprung)"
                  onDoubleClick={() => { setQPos(null); try { localStorage.removeItem('swc.quellenPos') } catch { /* egal */ } }}>
-              <span><span className="griff" aria-hidden="true">⠿</span> Geladene Quellen</span>
+              <span><span className="griff" aria-hidden="true">⠿</span> Kartenebenen</span>
               <button type="button" onClick={() => setQOffen(false)} aria-label="Schliessen">×</button>
             </div>
-            {zeigen.map(e => (
-              <label key={e.id} className="q-ebene" title={e.quelle}>
+            {[...zeigen.map(e => ({ id: e.id as string, titel: e.titel })), { id: 'hoehenkurven', titel: hk.titel }].sort((a,b)=>a.titel.localeCompare(b.titel,'de-CH')).map(eintrag => {
+              if (eintrag.id === 'hoehenkurven') return <HoehenkurvenWahl key={eintrag.id} an={hk.an} setzen={hk.setzen} stand={hk.stand} klasse="q-ebene" />
+              const e = zeigen.find(e => e.id === eintrag.id)!
+              return e.id === 'av' ? <AvEbenenWahl key={e.id} quelle={e.quelle} objekte={props.quellenEbenen?.av ?? []}
+              an={avAn} setzen={setAvAn} arten={avArten} artSetzen={avArtSetzen} /> : (
+              <EbenenGruppe key={e.id} mitProfil={e.id === 'gelaende'} titel={e.titel}><label className="q-ebene" title={e.quelle}>
                 <input type="checkbox" checked={qAn.has(e.id)} onChange={x => qSchalten(e.id, x.target.checked)} />
                 <span><b>{e.titel}</b> <small className="zahl">{(props.quellenEbenen?.[e.id] ?? []).length} im Ausschnitt</small><small>{e.quelle}</small>
                   {qAn.has(e.id) && <span className="q-legende">{e.legende.map(([k, farbe, text, symbol]) => <span key={k}>{symbol ? <i className="sym" style={{ background: farbe }}>{symbol}</i> : <i style={{ background: farbe }} />}{text}</span>)}</span>}
                 </span>
               </label>
-            ))}
+              {e.id === 'gelaende' && <HoehenprofilAnsicht profile={(props.quellenEbenen?.gelaende ?? []).flatMap(o => o.hoehenprofil ? [o.hoehenprofil] : [])}
+                onAuswahl={id => { setProfilAuswahl(id); if (id) qSchalten('gelaende', true) }} kartenAlle={alleGelaendeProfile}
+                onKartenAlle={an => { setAlleGelaendeProfile(an); if (an) qSchalten('gelaende', true) }} />}
+              </EbenenGruppe>
+            )})}
+            {laedt.length > 0 && <p className="q-fuss" role="status">Lädt: {laedt.map(e => e.titel).join(', ')}.</p>}
+            {fehler.length > 0 && <p className="q-fuss" role="status">Fehler beim Laden: {fehler.map(e => e.titel).join(', ')}. Einzelheiten unter «Datenquellen und Ladezustand».</p>}
             {ohne.length > 0 && <p className="q-fuss">Ohne Daten im Ausschnitt: {ohne.map(e => e.titel).join(', ')}.</p>}
             <p className="q-fuss">Gezeigt wird, was beim Laden gelesen wurde; ab Zoomstufe {BESCHRIFT_ZOOM} mit dem Wert. Überfahren zeigt die Angaben.</p>
           </div>

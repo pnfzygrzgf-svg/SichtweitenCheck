@@ -1,3 +1,16 @@
+import { zustaendigkeitAmOrt, istZuerichAmOrt, gemeindeText } from './daten/anbieter/gemeinsam/gebiet'
+import { useHoehenkurvenQuelle } from './hoehenkurven/stand'
+import { SichtGesamtTaste, MassWahl, SichtTaste, richtungSichtId, type SichtArt } from './Sichtfelder'
+import { ZufahrtHilfe } from './ZufahrtHilfe'
+import { zufahrtKontext, zufahrtGeo, zufahrtEntwurf, type ZufahrtKontext } from './zufahrtEntwurf'
+import { ZUFAHRT_HERKUNFT } from './rechner/grundstueck'
+import type { ZufahrtHerkunft } from './rechner/typen'
+import { BundesFeld } from './BundesFeld'
+import { AmtlicheSignale } from './AmtlicheSignale'
+import { useRegionalQuellen } from './regionalQuellen'
+import { useZuerichQuellen } from './zuerichQuellen'
+import { zhStrassen } from './daten/anbieter/gemeinsam/zuerichZuordnung'
+import { quellenSortiert, quellenThema } from './daten/anbieter/gemeinsam/sortierung'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { MARKE } from './marke'
 import type L from 'leaflet'
@@ -6,6 +19,9 @@ import Karte, { AV_FARBEN, STATUS_FARBE, KNOTEN_FARBE, FREI_FARBE, VERDECKT_FARB
   VELO_FARBE, TROTTOIR_FARBE,
   type KartenHinweis, type Werkzeug, type KnotenWerkzeug } from './Karte'
 import { ladeAvRoh, avParsen, type AvFlaeche, type GeoJson } from './daten/av'
+import { useAmtlicheOrtQuellen } from './amtlicheOrtQuellen'
+import { QuellenMetadaten } from './daten/anbieter/gemeinsam/metadaten'
+import { quellenQualitaetText } from './daten/anbieter/gemeinsam/qualitaet'
 import { ladeOsmRoh, ladeOsmUmKnoten, ladeKnoten, overpassSperre, strassennamen, namenKarte, type OsmKnoten,
   type StrassenMitte, KREISEL_TAG, osmParsen } from './daten/osm'
 import { istAbbruch, type Abruf } from './daten/holen'
@@ -22,8 +38,9 @@ import { WAHRNEHMBARKEITEN, WAHRNEHMBARKEIT_TEXT, WAHRNEHMBARKEIT_VORGABE, ZUSTA
   RV_A_MIN_M, SCHMAL_M, ENG_LAENGE_M, ENG_SCHRITT_M, type Wahrnehmbarkeit } from './rechner/rechtsvortritt'
 import { VELOFUEHRUNGEN, VELOFUEHRUNG_TEXT, TAB3_EBIKE, TAB3_GRENZE, D_VELO_M, RADSTREIFEN_M,
   RADWEG_NAH_M, TROTTOIR_NEIGUNG_AUSLEGUNG, type Velofuehrung } from './rechner/velo'
-import { ladeNeigung } from './daten/hoehen'
-import { ebenenAusDaten, type ProfilAnzeige } from './quellenEbenen'
+import { ladeNeigung, profilUrl } from './daten/hoehen'
+import type { HoehenProfil } from './hoehenprofil/modell'
+import { ebenenBeschriften, ebenenAusDaten, type ProfilAnzeige } from './quellenEbenen'
 import { HOEHEN_QUELLE, PROFIL_MIN_M } from './rechner/neigung'
 import { HALTELINIE_MIN_M, type Massnahme, type Uebernahme } from './rechner/massnahmen'
 import { AV_RADIUS_M, OSM_RADIUS_M, KATASTER_RADIUS_M, avNachladen, REGELUNG_TEXT, TEMPO_ART_TEXT, LSA_TEXT, RV_TEMPO_TEXT } from './rechner/rechnen'
@@ -117,15 +134,15 @@ const GRUND_OHNE_LADEN_M = 50
 /** Schlüssel geladener Daten: Knoten bzw. Mitte (für «Nachladen gescheitert») */
 const datenKey = (d: Daten) => (d.nid !== null ? `k${d.nid}` : `z${zufahrtspunktKey(d.ort)}`)
 /** Längsneigung aus dem Höhenmodell (E3a): Messungen und wofür (Daten, Zufahrtspunkt, Zufahrt); vorschlag: Zufahrt war nicht gewählt */
-interface HoehenStand { sig: string; arme: string; vorschlag: boolean; stand: HoehenVorgabe }
-const zpSig = (z: ZufahrtspunktEingabe | null) => (z ? `${zufahrtspunktKey(z.p)}:${z.richtung ? z.richtung.join(',') : '-'}` : '')
+interface HoehenStand { sig: string; arme: string; vorschlag: boolean; stand: HoehenVorgabe; profile?: Partial<Record<keyof HoehenVorgabe, HoehenProfil>> }
+const zpSig = (z: ZufahrtspunktEingabe | null) => (z ? `${zufahrtspunktKey(z.p)}:${z.richtung ? z.richtung.join(',') : '-'}:${z.herkunft ?? ''}` : '')
 const HOEHEN_NAME = 'Höhenmodell (swisstopo, swissALTI3D, Profile)'
 /** LV95 auf cm (Eingaben von der Karte) */
 const cm = (p: P): P => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]
 
 /** Eingabefeld Längsneigung [%]; übernimmt den Wert 300 ms nach dem letzten Tastendruck (nicht jede Taste eine Rechnung).
  *  wert null = Vorgabe (aus dem Höhenmodell, E3a): das Feld zeigt die Vorgabe; eine Eingabe gilt als «von Hand». Vorgabe
- *  unbekannt (Entscheid 31.10.2026): das Feld bleibt leer mit «unbekannt» als Platzhalter */
+ *  unbekannt: das Feld bleibt leer mit «unbekannt» als Platzhalter */
 const NEIGUNG_PAUSE_MS = 300
 const neigungText = (x: number) => String(x).replace('.', ',').replace('-', '−')
 function NeigungFeld({ wert, vorgabe, unbekannt, onWert, name }: { wert: number | null; vorgabe: number; unbekannt: boolean
@@ -146,8 +163,8 @@ function NeigungFeld({ wert, vorgabe, unbekannt, onWert, name }: { wert: number 
         const v = neigungLesen(e.target.value)
         if (v !== null && (wert === null || v !== wert)) timer.current = window.setTimeout(() => onWert(v), NEIGUNG_PAUSE_MS)
       }} />
-    {wert !== null && <>{' '}<button className="zweit klein" title="Vorgabe aus dem Höhenmodell übernehmen" onClick={() => {
-      clearTimeout(timer.current); onWert(null) }}>Vorgabe</button></>}
+    {wert !== null && <>{' '}<button className="zweit klein" title="Wert aus dem Höhenmodell übernehmen" onClick={() => {
+      clearTimeout(timer.current); onWert(null) }}>Aus Höhenmodell</button></>}
     {!ok && <span className="fehler klein"> Zahl zwischen −30 und +30 eingeben (gilt weiter: {leer ? 'unbekannt' : `${fi(gilt)} %`})</span>}
   </>
 }
@@ -176,13 +193,13 @@ function AnteilFeld({ wert, onWert }: { wert: number | null; onWert: (v: number 
 
 /** Block «Erforderliche Sichtweite» (Schritt 3): Strassentyp, ungünstige Verhältnisse, Längsneigung je Richtung (E1); beim
  *  Rechtsvortritt nur die Längsneigung */
-function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false, ueber = null }: { s: StrasseErgebnis; eingaben: Eingaben;
+function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false, ueber = null, bundTyp, bundOrtslage }: { bundTyp?: React.ReactNode; bundOrtslage?: React.ReactNode; s: StrasseErgebnis; eingaben: Eingaben;
   setEingaben: (f: (e: Eingaben) => Eingaben) => void; richtungen: RichtungErgebnis[]; rv?: boolean; ueber?: UeberholStand | null }) {
   // Zustand der Bedienelemente aus den Eingaben (sofort), Vorgaben aus dem Ergebnis bzw. aus der eingegebenen Neigung
   const typ = eingaben.typ ?? s.typVorgabe
   // Neigung wie gerechnet: von Hand (sofort), sonst die Vorgabe aus dem Höhenmodell (aus dem Ergebnis)
   const neigungVorgabe = richtungen.some(r => Math.abs(eingaben.neigung[r.richtung] ?? r.neigungVorgabe) > NEIGUNG_GROSS_PROZENT + 1e-9)
-  // Neigung einer Richtung unbekannt (ohne Eingabe von Hand): die Vorgabe «grosse Längsneigung» bleibt aus (Entscheid 31.10.2026)
+  // Neigung einer Richtung unbekannt (ohne Eingabe von Hand): die Vorgabe «grosse Längsneigung» bleibt aus
   const neigungOffen = !neigungVorgabe && richtungen.some(r => r.neigungVorgabeUnbekannt && eingaben.neigung[r.richtung] === null)
   const anteil = eingaben.schwerverkehrAnteil ?? null
   const anteilUngunst = anteil !== null && anteil > SCHWERVERKEHR_PROZENT + 1e-9
@@ -203,29 +220,30 @@ function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false, u
           {!rv && <><tr><td>Strassentyp (Vortrittsstrasse)<Info titel="Strassentyp">
             <p>Wert der Tab. 1 nach Strassentyp: Erschliessungs-, Sammel- und Verbindungsstrassen der untere Wert, Hauptverkehrsstrassen
               der Zwischenwert ({ZWISCHENWERT_TEXT}), mit ungünstigen Verhältnissen der obere Wert.</p>
-            <p>Vorgabe aus OSM als Annahme der App: trunk, primary, secondary, tertiary und deren links = Hauptverkehrsstrasse (tertiary
+            <p>Annahme der App aus OSM: trunk, primary, secondary, tertiary und deren links = Hauptverkehrsstrasse (tertiary
               damit auf der sicheren Seite), sonst Erschliessungsstrasse (hier {s.typQuelle}: {STRASSENTYP_TEXT[s.typVorgabe]}); im Feld
               wählbar.</p></Info></td><td>
             <select value={typ} aria-label="Strassentyp der Vortrittsstrasse"
-              onChange={ev => { const t = ev.target.value as Strassentyp; setEingaben(e => ({ ...e, typ: t })) }}>
+              onChange={ev => { const t = ev.target.value as Strassentyp; setEingaben(e => ({ ...e, typ: t, bundesbelege: { ...e.bundesbelege, typ: undefined } })) }}>
               {(['es', 'hvs'] as Strassentyp[]).map(t => <option key={t} value={t}>{STRASSENTYP_TEXT[t]}</option>)}
             </select>
-            <div className="klein">{eingaben.typ !== null ? `(gewählt; Vorgabe ${TYP_KURZ[s.typVorgabe]})` :
+            <div className="klein">{eingaben.typ !== null ? `(gewählt; automatisch abgeleitet: ${TYP_KURZ[s.typVorgabe]})` :
               <span className="warnung">({annahmeText(s.typQuelle)})</span>}</div>
+            {bundTyp}
           </td></tr>
           <tr><td>Ungünstige Verhältnisse<Info titel="Ungünstige Verhältnisse">
             <p>Bei einer Hauptverkehrsstrasse hebt ein Häkchen den Wert der Tab. 1 vom Zwischenwert auf den oberen Wert. Bei
               Erschliessungs-, Sammel- und Verbindungsstrassen sind ungünstige Verhältnisse nur ein Hinweis: der untere Wert bleibt.</p>
-            <p>Vorgaben: mehr als ein Fahrstreifen je Richtung aus OSM (lanes:forward bzw. lanes:backward, sonst lanes: bei einer
+            <p>Automatisch ermittelt: mehr als ein Fahrstreifen je Richtung aus OSM (lanes:forward bzw. lanes:backward, sonst lanes: bei einer
               Einbahn ab 2, sonst ab 3; hier {s.fahrstreifenQuelle}); grosse Längsneigung bei einem Gefälle über{' '}
               {NEIGUNG_GROSS_PROZENT} % in einer Richtung, also |i| über {NEIGUNG_GROSS_PROZENT} % (bei unbekannter Neigung nicht gesetzt:
               kein Mass bekannt); hoher Schwerverkehrsanteil über {SCHWERVERKEHR_PROZENT} % aus dem eingegebenen Anteil, das Häkchen setzt
               ihn von Hand (dann unabhängig vom Anteil).</p>
             <p>{UNGUNST_MASSE_TEXT}.</p></Info></td><td>
-            {haekchen('fahrstreifen', eingaben.fahrstreifen === null ? `Vorgabe ${quelleText(s.fahrstreifenQuelle)}` :
-              `gewählt; Vorgabe ${vorgabe(s.ungunstVorgabe.fahrstreifen)}`)}
-            {haekchen('neigung', eingaben.neigungGross === null ? `Vorgabe aus der Längsneigung${neigungOffen ? '; unbekannt, nicht gesetzt' :
-              ''}` : `gewählt; Vorgabe ${vorgabe(neigungVorgabe)}`, eingaben.neigungGross === null && neigungOffen)}
+            {haekchen('fahrstreifen', eingaben.fahrstreifen === null ? `automatisch: ${quelleText(s.fahrstreifenQuelle)}` :
+              `gewählt; automatisch ermittelt: ${vorgabe(s.ungunstVorgabe.fahrstreifen)}`)}
+            {haekchen('neigung', eingaben.neigungGross === null ? `aus der Längsneigung${neigungOffen ? '; unbekannt, nicht gesetzt' :
+              ''}` : `gewählt; automatisch ermittelt: ${vorgabe(neigungVorgabe)}`, eingaben.neigungGross === null && neigungOffen)}
             {haekchen('schwerverkehr', eingaben.schwerverkehr ? 'von Hand gesetzt: gilt unabhängig vom Anteil' :
               anteilUngunst ? `nicht von Hand; aus dem Anteil über ${SCHWERVERKEHR_PROZENT} %: ungünstig` : 'von Hand bzw. aus dem Anteil')}
             <div className="klein">Schwerverkehrsanteil{' '}
@@ -239,31 +257,32 @@ function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false, u
               (VSS 40 273 Ziffer 6, S. 4; Abb. 1, S. 5): das überholende Fahrzeug fährt {f2(D_MFZ_M)} m vom anderen Fahrbahnrand, die Zielpunkte
               reichen bis zur selben erforderlichen Sichtweite A, die Hindernisse wie für Motorfahrzeuge. Der Teil zählt zum Status der
               Richtung.</p>
-            <p>Vorgabe aus OSM (overtaking=no bzw. overtaking:forward/backward=no für den Verkehr zum Knoten: verboten, sonst erlaubt; hier{' '}
+            <p>Aus OSM (overtaking=no bzw. overtaking:forward/backward=no für den Verkehr zum Knoten: verboten, sonst erlaubt; hier{' '}
               {ueber.vorgabeQuelle}); das Häkchen gilt für beide Richtungen. Innerorts und beim Rechtsvortritt keine Prüfung.</p></Info></td><td>
             <label style={ueber.ausserorts ? undefined : { opacity: 0.55 }}><input type="checkbox" checked={eingaben.ueberholen ?? ueber.vorgabe}
               onChange={ev => { const v = ev.target.checked; setEingaben(e => ({ ...e, ueberholen: v })) }} /> Überholen im Knotenbereich
               erlaubt</label>
             {(eingaben.ueberholen ?? null) !== null && <>{' '}<button className="zweit klein"
-              onClick={() => setEingaben(e => ({ ...e, ueberholen: null }))}>Vorgabe</button></>}
-            <div className="klein">{(eingaben.ueberholen ?? null) !== null ? <>(<Hand />; Vorgabe {ueber.vorgabe ? 'erlaubt' : 'verboten'},{' '}
-              {ueber.vorgabeQuelle})</> : <span className={ueber.vorgabe && ueber.ausserorts ? 'warnung' : ''}>(Vorgabe: {ueber.vorgabeQuelle})</span>}</div>
+              onClick={() => setEingaben(e => ({ ...e, ueberholen: null }))}>Wieder aus Daten übernehmen</button></>}
+            <div className="klein">{(eingaben.ueberholen ?? null) !== null ? <>(<Hand />; aus Daten: {ueber.vorgabe ? 'erlaubt' : 'verboten'},{' '}
+              {ueber.vorgabeQuelle})</> : <span className={ueber.vorgabe && ueber.ausserorts ? 'warnung' : ''}>(aus Daten: {ueber.vorgabeQuelle})</span>}</div>
             {!ueber.ausserorts && <div className="klein">innerorts: ohne Wirkung (Überholfall nur ausserorts)</div>}
             {ueber.ausserorts && !ueber.geprueft && ueber.grund && <div className="klein">nicht geprüft: {ueber.grund}</div>}
           </td></tr>}</>}
+          {bundOrtslage && <tr><td>Inner-/Ausserorts</td><td>{bundOrtslage}</td></tr>}
           <tr><td>Längsneigung i<Info titel="Längsneigung">
             {rv && <p>Rechtsvortritt: Tab. 1, Strassentyp und ungünstige Verhältnisse gelten nicht (ausgeblendet); die Längsneigung wirkt
               nur auf das Velo (Tab. 3).</p>}
             <p>Neigung der Strecke, auf der dieser Verkehr auf den Knoten zu fährt, in seiner Fahrtrichtung: fährt er bergab, ist i
               negativ. Auf einer durchgehenden Steigung haben die beiden Richtungen entgegengesetzte Vorzeichen.</p>
-            <p>Vorgabe aus dem Höhenmodell swissALTI3D (Ausgleichsgerade über das Profil der Fahrstreifenachse ab K bis A massgebend,
+            <p>Wert aus dem Höhenmodell swissALTI3D (Ausgleichsgerade über das Profil der Fahrstreifenachse ab K bis A massgebend,
               mindestens {PROFIL_MIN_M} m); von Hand überschreibbar. Die Anhaltesichtweite gilt ab |i| über {NEIGUNG_EBEN_PROZENT} % als
               Untergrenze (die unteren Werte der Tab. 1 gelten für i ≤ ±{NEIGUNG_EBEN_PROZENT} %, VSS 40 273 Ziffer 13.1).</p>
             <p>Ohne Messung (kein Höhenprofil, zu kurz, Dienst-Fehler) ist die Neigung unbekannt: die App nimmt den strengsten Wert der
               Tab. 3 (Spalte ≤ −4 %) und die Anhaltesichtweite bei {fi(ANHALTESICHT_I_MIN)} % (Entscheid 31.10.2026); eine Neigung von
               Hand verfeinert das. Solange das Höhenmodell lädt, vorerst 0 %.</p>
             <ul>{richtungen.map(r => <li key={r.richtung}>{lageText(r)}: {eingaben.neigung[r.richtung] !== null ?
-              `von Hand; Vorgabe ${neigungVorgabeKurz(r)} (${r.neigungVorgabeQuelle})` : `Vorgabe: ${r.neigungQuelle}`}</li>)}</ul></Info></td><td>
+              `von Hand; Höhenmodell: ${neigungVorgabeKurz(r)} (${r.neigungVorgabeQuelle})` : `automatisch ermittelt: ${r.neigungQuelle}`}</li>)}</ul></Info></td><td>
             {richtungen.map(r => {
               const hand = eingaben.neigung[r.richtung] !== null
               const modell = r.neigungQuelle.startsWith(HOEHEN_QUELLE + ',')
@@ -271,7 +290,7 @@ function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false, u
                 <NeigungFeld wert={eingaben.neigung[r.richtung]} vorgabe={r.neigungVorgabe} unbekannt={r.neigungVorgabeUnbekannt} name={lageText(r)}
                   onWert={v => setEingaben(e => ({ ...e, neigung: { ...e.neigung, [r.richtung as Richtung]: v } }))} /> %{' '}
                 <span className={hand || modell ? 'klein' : 'klein warnung'}>
-                  {hand ? <>(<Hand />; Vorgabe {neigungVorgabeKurz(r)})</> : modell ? '(Höhenmodell)' :
+                  {hand ? <>(<Hand />; Höhenmodell: {neigungVorgabeKurz(r)})</> : modell ? '(Höhenmodell)' :
                   `(${r.neigungQuelle})`}</span></label></div>
             })}
           </td></tr>
@@ -308,7 +327,9 @@ const trottoirStand = (t: TrottoirRichtung | null): TeilStand => (t ? { feld: `T
 /** graue Zeile der Statusübersicht: auf dieser Seite liegt kein Arm (der andere Arm liegt gegenüber) */
 const OhneArm = ({ seite }: { seite: Richtung }) => <li className="klein"><span className="richtungsname"><span className="farbe rund"
   style={{ background: GRAU }} />{seite}: kein Arm</span></li>
-const Feld = ({ s }: { s: TeilStand }) => <span className="feld" style={{ borderColor: s.farbe, background: `${s.farbe}1f` }}>{s.feld}</span>
+const Feld = ({ s, art, id }: { s: TeilStand; art?: SichtArt; id?: string }) => art ?
+  <SichtTaste art={art} id={id} className="feld" style={{ borderColor: s.farbe, backgroundColor: `${s.farbe}1f` }}>{s.feld}</SichtTaste> :
+  <span className="feld" style={{ borderColor: s.farbe, background: `${s.farbe}1f` }}>{s.feld}</span>
 /** Verdecker kurz: Art und Name ohne Zusatz in Klammern am Schluss (Quelle), ohne Wiederholung der Art */
 function verdeckerKurz(v: { art: string; name: string }) {
   const name = kurzQuelle(v.name)
@@ -381,7 +402,7 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false,
             <p>A: erforderliche Sichtweite ab dem Kreuzungspunkt K entlang der Fahrstreifenachse (Knotensichtweite, VSS 40 273 Abb. 1).</p>
             <p>Motorfahrzeuge ({r.rv ? 'Rechtsvortritt, Teil E, Abb. 6' : r.status === 'keine_zufahrt' ? 'keine Prüfung' : 'Tab. 1'}).</p>
             <ul>
-              <li>Tempo {r.tempo} km/h ({r.tempoQuelle}{r.tempoArt ? `; Vorgabe ${r.tempoVorgabe} km/h, ${r.tempoVorgabeQuelle}` : ''}).</li>
+              <li>Tempo {r.tempo} km/h ({r.tempoQuelle}{r.tempoArt ? `; ${r.tempoVorgabeQuelle.startsWith('Annahme') ? 'Annahme' : 'Datenwert'}: ${r.tempoVorgabe} km/h, ${r.tempoVorgabeQuelle}` : ''}).</li>
               {r.status === 'keine_zufahrt' ? <li>{r.keinGrund ?? STATUS_TEXT.keine_zufahrt}.</li> : <>
                 {!r.rv && <li>Tab. 1 nach Strassentyp: {r.typWert} m ({r.typText}); Bereich {r.erforderlichUnten} … {r.erforderlichOben} m.</li>}
                 {!r.rv && <li>Anhaltesichtweite (VSS 40 090b Abb. 2): {r.anhalte ? <>bei {fi(r.anhalte.i)} %{r.neigungUnbekannt ?
@@ -419,7 +440,7 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false,
           A={v?.A} Aquelle="Tab. 3" t={v ?? undefined} leer={v ? undefined : nichtGeprueft ? 'nicht geprüft (Rechtsvortritt)' : 'kein Veloverkehr'}
           herleitung={<>
             <p>Veloverkehr (Tab. 3{r.veloGegen ? ', Velo gegen die Einbahn' : ''}): {VELOFUEHRUNG_TEXT[r.veloFuehrung]} ({r.veloGewaehlt ?
-              `gewählt; Vorgabe ${VELOFUEHRUNG_TEXT[r.veloVorgabe]}, ${r.veloVorgabeQuelle}` : `Vorgabe: ${r.veloVorgabeQuelle}`}).</p>
+              `gewählt; aus Daten: ${VELOFUEHRUNG_TEXT[r.veloVorgabe]}, ${r.veloVorgabeQuelle}` : `aus Daten: ${r.veloVorgabeQuelle}`}).</p>
             {v ? <>
               <ul>
                 <li>Veloachse: {v.lageText}.</li>
@@ -435,13 +456,13 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false,
         {mitTrottoir && <TeilSpalte name="Trottoir" farbe={TROTTOIR_FARBE} stand={trottoirStand(t)} A={t?.A} Aquelle="Tab. 2"
           t={t ?? undefined} leer={t ? undefined : 'keines'}
           herleitung={t ? <>
-            <p>Trottoir: Fussgänger und fahrzeugähnliche Geräte, die von dieser Seite auf dem Trottoir zur Zufahrt kommen (Tab. 2).</p>
+            <p>Trottoir: Zufussgehende und fahrzeugähnliche Geräte, die von dieser Seite auf dem Trottoir zur Zufahrt kommen (Tab. 2).</p>
             <ul>
               {gehlinie ? <li>Trottoirüberfahrt, Phase Trottoir (VSS 40 242 Ziffer 14.4): D' = B {f2(B_INNERORTS_M)} m hinter dem hinteren
-                Rand der Überfahrt (VSS 40 273 Ziffer 13.2), {velo ? 'auf der Veloachse' : 'am Fahrersitz'}; Zielpunkte auf der Gehlinie{' '}
+                Rand der Überfahrt (VSS 40 273 Ziffer 13.2), {velo ? 'auf der Veloachse' : 'am Fahrer*innensitz'}; Zielpunkte auf der Gehlinie{' '}
                 {f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt ({achseQuelle}).</li> :
               <li>D' = B {f2(B_INNERORTS_M)} m hinter der Trottoirhinterkante (VSS 40 273 Ziffer 13.2), {velo ? 'auf der Veloachse' :
-                'am Fahrersitz'}; Zielpunkte auf der Trottoirachse ({achseQuelle}).</li>}
+                'am Fahrer*innensitz'}; Zielpunkte auf der Trottoirachse ({achseQuelle}).</li>}
               <li>Längsneigung in Gehrichtung zur Zufahrt {t.neigungUnbekannt ? 'unbekannt' : `${fi(t.neigung)} %`} ({t.neigungQuelle}).
                 {' '}{TROTTOIR_NEIGUNG_AUSLEGUNG}.</li>
               <li>Erforderliche Sichtweite A {t.A} m ({t.text}).</li>
@@ -472,7 +493,7 @@ function RvBlock({ rv, links, linksName }: { rv: RechtsvortrittErgebnis; links: 
           den Vortritt lassen. Geprüft wird {a.armName} gegen den Arm rechts: {a.rechtsName}.</p>
         <ul>
           <li>{RV_TEMPO_TEXT} B {f2(rv.B)} m (Abb. 4).</li>
-          <li>Wahrnehmbarkeit {WAHRNEHMBARKEIT_TEXT[rv.wahrnehmbarkeit]} ({rv.wahrnehmbarkeitGewaehlt ? 'gewählt' : 'Vorgabe, Annahme'}).</li>
+          <li>Wahrnehmbarkeit {WAHRNEHMBARKEIT_TEXT[rv.wahrnehmbarkeit]} ({rv.wahrnehmbarkeitGewaehlt ? 'gewählt' : 'Annahme der App'}).</li>
           {a.status !== 'keine' && <li>Sichtweite vorhanden {a.bisEnde ? '≥ ' : ''}{f1(a.vorhanden)} m; {RV_A_M} m anzustreben, {RV_A_MIN_M} m Minimum
             bei sehr guter Wahrnehmbarkeit (Ziffer 16).</li>}
           <li>Fahrbahnbreite: Zufahrt {breite(a.breite)}, rechter Arm {breite(a.breiteRechts)}{a.schmal ? ` (schmal, höchstens ${f2(SCHMAL_M)} m: ` +
@@ -482,7 +503,7 @@ function RvBlock({ rv, links, linksName }: { rv: RechtsvortrittErgebnis; links: 
             `auf dem rechten Arm; ${m.erste.verdecker})` : ''}. Konstruktion nach bfu BM.021 Kap. 3.2.2, Abb. 4: Sichtlinien von D zu
             Punkten alle {ENG_SCHRITT_M} m auf einem Pfad von {ENG_LAENGE_M} m ab D über den Schnitt der Achsen ({f1(m.bisX)} m ab D) auf
             den rechten Arm (schmaler Arm: Fahrbahnmitte, breiter Arm: Fahrstreifen); gezählt der Schnittpunkt und die Punkte dahinter
-            (Annahmen: Beobachter und Pfadbeginn in D).</li>}
+            (Annahmen: beobachtende Person und Pfadbeginn in D).</li>}
           {a.status === 'keine' && a.grund && <li>Keine Prüfung nach Abb. 6: {a.grund}.</li>}
           {links?.keinGrund && <li>{rvGrundText(links)}.</li>}
         </ul></Info></p>}
@@ -504,7 +525,7 @@ function RvAlle({ rv, armWaehlen }: { rv: RechtsvortrittErgebnis; armWaehlen: (k
   if (!rv.alle) return null
   return <>
     <h4>Alle Arme<Info titel="Alle Arme"><p>Nur Motorfahrzeuge nach Abb. 6 bzw. Abb. 5 (ohne Velo und Trottoir); der gewählte Arm mit
-      seinen Eingaben, die übrigen mit den Vorgaben (ohne Halte- oder Wartelinie, D von Hand, Neigung). Ein Klick auf den Arm wählt ihn.</p>
+      seinen Eingaben, die übrigen mit den Daten und Annahmen der App (ohne Halte- oder Wartelinie, D von Hand, Neigung). Ein Klick auf den Arm wählt ihn.</p>
       {rv.alle.filter(x => x.status === 'keine').map(x => <p key={x.arm}>{x.armName}: {x.grund}.</p>)}</Info></h4>
     <table className="zahlen">
       <thead><tr><th>Arm</th><th>gegen rechts</th><th>Sichtweite vorhanden</th><th>Status</th></tr></thead>
@@ -530,7 +551,7 @@ function VeloAbschnitt({ e, eingaben, setEingaben }: { e: Ergebnis; eingaben: Ei
             <p>Mischverkehr: Veloachse {f2(D_VELO_M)} m vom rechten Fahrbahnrand (Ziffer 10). Radstreifen: Mitte des Streifens
               ({f2(RADSTREIFEN_M)} m breit angenommen), die Autoachse liegt dann {f2(D_MFZ_M)} m daneben. Radweg: Achse des Radwegs; näher
               als {f2(RADWEG_NAH_M)} m am Fahrbahnrand gilt B ab seiner Aussenkante (Ziffer 12).</p>
-            <ul>{e.richtungen.map(r => <li key={r.richtung}>{lageText(r)}: Vorgabe {VELOFUEHRUNG_TEXT[r.veloVorgabe]} aus{' '}
+            <ul>{e.richtungen.map(r => <li key={r.richtung}>{lageText(r)}: Veloführung {VELOFUEHRUNG_TEXT[r.veloVorgabe]} aus{' '}
               {r.veloVorgabeQuelle}{r.veloGegen ? `; Einbahn vom Knoten weg mit Velo gegen die Einbahn (OSM ${r.veloGegen}): Veloachse am ` +
               'für das Velo rechten, aus Sicht des Autoverkehrs linken Fahrbahnrand' : ''}.</li>)}</ul>
             </Info></td><td>
@@ -541,10 +562,10 @@ function VeloAbschnitt({ e, eingaben, setEingaben }: { e: Ergebnis; eingaben: Ei
                   const a = ev.target.value
                   setEingaben(x => ({ ...x, velo: { links: null, rechts: null, ...x.velo, [r.richtung]: a === 'osm' ? null : a as Velofuehrung } }))
                 }}>
-                  <option value="osm">Vorgabe ({VELOFUEHRUNG_TEXT[r.veloVorgabe]})</option>
+                  <option value="osm">Aus Daten: {VELOFUEHRUNG_TEXT[r.veloVorgabe]}</option>
                   {VELOFUEHRUNGEN.map(f => <option key={f} value={f}>{VELOFUEHRUNG_TEXT[f]}</option>)}
                 </select>
-                {' '}<span className="klein">({wert ? <><Hand />; Vorgabe {VELOFUEHRUNG_TEXT[r.veloVorgabe]}</> : r.veloVorgabeQuelle})</span>
+                {' '}<span className="klein">({wert ? <><Hand />; aus Daten: {VELOFUEHRUNG_TEXT[r.veloVorgabe]}</> : r.veloVorgabeQuelle})</span>
                 {r.veloGegen ? <div className="klein">nur Velos (Einbahn vom Knoten weg)</div> :
                   r.status === 'keine_zufahrt' ? <div className="klein">kein Verkehr von dieser Seite</div> : null}</div>
             })}
@@ -795,7 +816,7 @@ function TempoZeile({ r, wert, setzen }: { r: RichtungErgebnis; wert: TempoEinga
         const a = ev.target.value
         setzen(a === 'osm' ? null : { art: a as TempoArt, wert: wert?.wert ?? r.tempoVorgabe, begruendung: wert?.begruendung ?? '' })
       }}>
-        <option value="osm">Vorgabe ({r.tempoVorgabe} km/h)</option>
+        <option value="osm">{r.tempoVorgabeQuelle.startsWith('Annahme') ? 'Annahme' : 'Aus Daten'}: {r.tempoVorgabe} km/h</option>
         {TEMPO_ARTEN.map(a => <option key={a} value={a}>{TEMPO_ART_TEXT[a]}</option>)}
       </select>
       {wert && <>{' '}<input type="number" min={TEMPO_MIN} max={TEMPO_MAX} step={1} value={zahl} className={ok ? '' : 'falsch'}
@@ -803,21 +824,8 @@ function TempoZeile({ r, wert, setzen }: { r: RichtungErgebnis; wert: TempoEinga
         <input type="text" className="begruendung" placeholder="Begründung (Quelle, Messung, Projekt)" maxLength={BEGRUENDUNG_MAX}
           aria-label={`Tempo ${name}: Begründung`} value={text} onChange={e => setText(e.target.value)} onBlur={uebernehmen} onKeyDown={enter} /></>}
       {wert && !ok && <span className="fehler klein"> ganze Zahl von {TEMPO_MIN} bis {TEMPO_MAX} eingeben (gilt weiter: {wert.wert} km/h)</span>}
-      {wert ? <div className="klein">(<Hand />; Vorgabe {r.tempoVorgabe} km/h)</div> :
+      {wert ? <div className="klein">(<Hand />; {r.tempoVorgabeQuelle.startsWith('Annahme') ? 'Annahme' : 'Datenwert'} {r.tempoVorgabe} km/h)</div> :
         <>{' '}<span className={r.tempoAnnahme ? 'klein warnung' : 'klein'}>({kurzQuelle(r.tempoVorgabeQuelle)})</span></>}
-    </div>
-  )
-}
-
-/** Hilfe zum Werkzeug «Zufahrt setzen» (Grundstückzufahrt) */
-function ZufahrtHilfe({ erster, senkrecht, abbrechen }: { erster: P | null; senkrecht: () => void; abbrechen: () => void }) {
-  return (
-    <div className="werkzeughilfe">
-      <b>Zufahrt setzen:</b> {erster ? 'zweiter Klick auf der Zufahrt (im Grundstück) zeichnet ihre Richtung; oder senkrecht zum Rand ' +
-        'übernehmen.' : 'Punkt auf dem Fahrbahnrand der Vortrittsstrasse anklicken, in der Mitte der Zufahrt (bzw. auf einen OSM-Weg ' +
-        'service nahe der Einmündung).'}
-      <div><button onClick={senkrecht} disabled={!erster}>senkrecht zum Rand übernehmen</button>{' '}
-        <button className="zweit" onClick={abbrechen}>Abbrechen</button></div>
     </div>
   )
 }
@@ -833,7 +841,7 @@ function RegelungAbschnitt({ e, eingaben, setEingaben }: { e: Ergebnis | null; e
           <tr><td>Regelung für die gewählte Zufahrt<Info titel="Regelung für die gewählte Zufahrt">
             <p>Die Regelung gilt für die gewählte Zufahrt: «Kein Vortritt» (Signal 3.02) bzw. «Stop» (Signal 3.01) heisst, diese Zufahrt
               muss den Vortritt gewähren; «Rechtsvortritt» ohne Signal.</p>
-            <p>Vorgabe aus den Signalen in OSM an der Zufahrt (highway=stop: «Stop», highway=give_way: «Kein Vortritt»), sonst nach der
+            <p>Aus den Signalen in OSM an der Zufahrt (highway=stop: «Stop», highway=give_way: «Kein Vortritt»), sonst nach der
               Vortrittsstrasse{e ? `; hier ${e.regelungQuelle}: ` +
               `«${REGELUNG_TEXT[e.regelungVorgabe]}»` : ', sobald ein Arm gewählt ist'}.</p>
             {regelung === 'stop' && <p>Stop: B {f2(B_INNERORTS_M)} m auch ausserorts (Ziffer 12).</p>}
@@ -849,9 +857,9 @@ function RegelungAbschnitt({ e, eingaben, setEingaben }: { e: Ergebnis | null; e
               }}>
               {REGELUNGEN.map(r => <option key={r} value={r}>{REGELUNG_TEXT[r]}</option>)}
             </select>
-            {eingaben.regelung !== null && e && <>{' '}<button className="zweit klein" onClick={() => setEingaben(x => ({ ...x, regelung: null }))}>Vorgabe</button></>}
-            <div className="klein">{!e ? (eingaben.regelung !== null ? '(gewählt)' : '(Vorgabe aus OSM, sobald ein Arm gewählt ist)') :
-              eingaben.regelung !== null ? `(gewählt; Vorgabe ${REGELUNG_TEXT[e.regelungVorgabe]})` :
+            {eingaben.regelung !== null && e && <>{' '}<button className="zweit klein" onClick={() => setEingaben(x => ({ ...x, regelung: null }))}>Wieder automatisch ermitteln</button></>}
+            <div className="klein">{!e ? (eingaben.regelung !== null ? '(gewählt)' : '(aus OSM abgeleitet, sobald ein Arm gewählt ist)') :
+              eingaben.regelung !== null ? `(gewählt; automatisch ermittelt: ${REGELUNG_TEXT[e.regelungVorgabe]})` :
               <span className="warnung">({annahmeText(e.regelungQuelle)})</span>}</div>
             {regelung === 'rechtsvortritt' && e?.zufahrtspunkt && <div className="klein warnung">Gilt an einer Grundstückzufahrt nicht:
               gerechnet wie «Kein Vortritt».</div>}
@@ -859,7 +867,7 @@ function RegelungAbschnitt({ e, eingaben, setEingaben }: { e: Ergebnis | null; e
               einer Trottoirüberfahrt nicht (VSS 40 242 Ziffer 12.3): gerechnet wie «Kein Vortritt».</div>}
           </td></tr>
           {regelung === 'rechtsvortritt' && !e?.zufahrtspunkt && !eingaben.trottoirueberfahrt && <tr><td>Wahrnehmbarkeit des Knotens<Info titel="Wahrnehmbarkeit">
-            {/* Text vom Nutzer formuliert (31.10.2026) */}
+            {/* festgelegter Wortlaut */}
             <p><b>Wahrnehmbarkeit:</b> Wie gut erkennen Fahrende rechtzeitig, dass hier eine Kreuzung mit Rechtsvortritt kommt? Je
               schlechter, desto mehr Sichtweite braucht es. Die App kann das nicht messen, bitte vor Ort einstufen.</p>
             <p>Eher gut (Beispiele Abb. 7–9, S. 12–13): Hecken oder Gärten enden vor der Kreuzung; ein Gehweg führt sichtbar um die Ecke;
@@ -872,7 +880,7 @@ function RegelungAbschnitt({ e, eingaben, setEingaben }: { e: Ergebnis | null; e
               das Ergebnis als Tabelle.</p></Info></td><td>
             <select value={eingaben.wahrnehmbarkeit ?? 'vorgabe'} aria-label="Wahrnehmbarkeit des Knotens"
               onChange={ev => { const v = ev.target.value; setEingaben(x => ({ ...x, wahrnehmbarkeit: v === 'vorgabe' ? null : v as Wahrnehmbarkeit })) }}>
-              <option value="vorgabe">Vorgabe ({WAHRNEHMBARKEIT_TEXT[WAHRNEHMBARKEIT_VORGABE]})</option>
+              <option value="vorgabe">Annahme: {WAHRNEHMBARKEIT_TEXT[WAHRNEHMBARKEIT_VORGABE]}</option>
               {WAHRNEHMBARKEITEN.map(w => <option key={w} value={w}>{WAHRNEHMBARKEIT_TEXT[w]}</option>)}
             </select>
             {' '}<span className={eingaben.wahrnehmbarkeit ? 'klein' : 'klein warnung'}>({eingaben.wahrnehmbarkeit ? 'gewählt' : 'Annahme'})</span>
@@ -964,17 +972,17 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
               <button className="zweit klein" onClick={() => werkzeugWaehlen(null)}>Abbrechen</button></div>}
           </td></tr>
           <tr><td>Beobachtungspunkt D<Info titel="Beobachtungspunkt D">
-            <p>D ist das Auge von F<sub>B</sub>: {e.zufahrtVelo ? `Velofahrer auf der Achse des Velogegenverkehrs (${e.zufahrtVelo.lageText})` :
-              `Fahrersitz, ${f2(FAHRERSITZ_M)} m links der Achse des Zufahrtsstreifens`}, B {f2(e.B)} m hinter der {e.nullpunktText}.</p>
+            <p>D ist das Auge von F<sub>B</sub>: {e.zufahrtVelo ? `velofahrende Person auf der Achse des Velogegenverkehrs (${e.zufahrtVelo.lageText})` :
+              `Fahrer*innensitz, ${f2(FAHRERSITZ_M)} m links der Achse des Zufahrtsstreifens`}, B {f2(e.B)} m hinter der {e.nullpunktText}.</p>
             <p>«D setzen» und auf der Karte die neue Stelle anklicken, oder den Punkt D auf der Karte ziehen: dann gilt D von Hand;
-              «zurücksetzen» stellt die Vorgabe wieder her.</p></Info></td><td>
+              «zurücksetzen» stellt die berechnete Ausgangslage wieder her.</p></Info></td><td>
             {e.Dhand ? <>{f2(e.Dlage.laengs)} m hinter der {e.nullpunktText}, {f2(Math.abs(e.Dlage.seitlich))} m{' '}
               {e.Dlage.seitlich >= 0 ? 'links' : 'rechts'} der Achse <span className="klein">(<Hand />)</span>{' '}</> :
-              <>{e.zufahrtVelo ? 'Velofahrer' : 'Fahrersitz'}, B {f2(e.B)} m <span className="klein">(Vorgabe)</span>{' '}</>}
+              <>{e.zufahrtVelo ? 'velofahrende Person' : 'Fahrer*innensitz'}, B {f2(e.B)} m <span className="klein">(berechnet)</span>{' '}</>}
             <button className={dAktiv ? 'aktiv klein' : 'zweit klein'} onClick={() => werkzeugWaehlen(dAktiv ? null : 'd')}>
               {e.Dhand ? 'neu setzen' : 'D setzen'}</button>
             {e.Dhand && <>{' '}<button className="zweit klein" onClick={() => setEingaben(x => ({ ...x, D: null }))}>zurücksetzen</button></>}
-            {dAktiv && <div className="werkzeughilfe"><b>D setzen:</b> auf der Karte die Stelle des Fahrersitzes anklicken (oder den Punkt D
+            {dAktiv && <div className="werkzeughilfe"><b>D setzen:</b> auf der Karte die Stelle des Fahrer*innensitzes anklicken (oder den Punkt D
               ziehen); D gilt dann von Hand, F<sub>B</sub> folgt.{' '}
               <button className="zweit klein" onClick={() => werkzeugWaehlen(null)}>Abbrechen</button></div>}
             {dWarnungen(e).map(w => <div key={w} className="klein warnung">{w}</div>)}
@@ -999,7 +1007,7 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
               (geht der AV vor)</div>}
             {e.trottoirueberfahrt && <div className="klein">D' (Phase Trottoir): {e.trottoirueberfahrt.DtrottoirQuelle === 'hand' ?
               <><Hand />{' '}<button className="zweit klein" onClick={() => setEingaben(x => ({ ...x, Dtrottoir: null }))}>zurücksetzen</button></> :
-              `B ${f2(B_INNERORTS_M)} m hinter dem hinteren Rand (VSS 40 273 Ziffer 13.2; Vorgabe, auf der Karte ziehen)`}</div>}
+              `B ${f2(B_INNERORTS_M)} m hinter dem hinteren Rand (VSS 40 273 Ziffer 13.2; berechnete Lage, auf der Karte ziehen)`}</div>}
             {!e.trottoirueberfahrt && eingaben.Dtrottoir && <div className="klein warnung">D' von Hand gesetzt, gilt nur mit dem Häkchen{' '}
               <button className="zweit klein" onClick={() => setEingaben(x => ({ ...x, Dtrottoir: null }))}>entfernen</button></div>}
           </td></tr>
@@ -1024,7 +1032,7 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
             <p>Welches Tempo massgebend ist, regelt Ziffer 10 (signalisiert, Projektierungsgeschwindigkeit VP, V85 bzw. fahrbares Tempo);
               Art und Begründung festhalten.</p>
             {e.rechtsvortritt && <p>Rechtsvortritt: {RV_TEMPO_TEXT} Das Tempo wirkt hier auf die Velos (Tab. 3, S. 9).</p>}
-            {<ul>{e.richtungen.map(r => <li key={r.richtung}>{lageText(r)}: Vorgabe {r.tempoVorgabe} km/h aus{' '}
+            {<ul>{e.richtungen.map(r => <li key={r.richtung}>{lageText(r)}: {r.tempoVorgabeQuelle.startsWith('Annahme') ? 'Annahme' : 'Datenwert'} {r.tempoVorgabe} km/h aus{' '}
                 {r.tempoVorgabeQuelle}</li>)}</ul>}</Info></td><td>
             {e.richtungen.filter(r => !rvNichtGeprueft(r)).map(r => <TempoZeile key={r.richtung} r={r} wert={eingaben.tempo[r.richtung]}
               setzen={t => setEingaben(x => ({ ...x, tempo: { ...x.tempo, [r.richtung]: t } }))} />)}
@@ -1090,12 +1098,17 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   const [nochmals, setNochmals] = useState<{ wahl: Wahl; fall: Fall | null } | null>(null)   // nach einem Fehler beim Laden: «erneut laden»
   const [avFehler, setAvFehler] = useState<string | null>(null)               // Nachladen der AV gescheitert
   const [quellen, setQuellen] = useState<Record<string, QuellenStand>>({})
+  const hkQuellen = useHoehenkurvenQuelle()
   const rechnungFuer = useRef('')                      // Daten und Ziel der angezeigten Rechnung (Höhenprofile, E3a)
   // mit Zeitpunkt des Abrufs, sobald geladen (Quellen im Bericht)
-  const setzeQuelle = (k: string, s: QuellenStand) => {
+  const quellenMetadaten = useRef(new QuellenMetadaten())
+  const setzeQuelle = useCallback((k: string, s: QuellenStand) => {
     const x = s.ms !== undefined ? { ...s, zeit: new Date().toISOString() } : s
     setQuellen(q => ({ ...q, [k]: x }))
-  }
+    if (s.ms !== undefined && !s.fehler) void quellenMetadaten.current.laden(k, s.kantone).then(m => {
+      if (m) setQuellen(q => q[k] === x ? { ...q, [k]: { ...x, ...m } } : q)
+    })
+  }, [])
   const [berichtOffen, setBerichtOffen] = useState(false)
   const berichtSchliessen = useCallback(() => setBerichtOffen(false), [])
 
@@ -1153,9 +1166,13 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   // Je Knoten bzw. Zufahrtspunkt im localStorage gemerkt (fall.ts); nach jeder Änderung neu gerechnet. Zufahrt, Zufahrtspunkt und
   // Eingaben (E1, E2b) stehen im Fall; für die Rechnung über ihren JSON-Text, damit eine andere Änderung am Fall nicht neu rechnet
   const [fall, setFall] = useState<Fall | null>(null)
+  const bund = useAmtlicheOrtQuellen(setFall, setzeQuelle)
+  const zh = useZuerichQuellen(setFall, setzeQuelle)
+  const regional = useRegionalQuellen(setFall, setzeQuelle, 'swc')
   const [fallHinweis, setFallHinweis] = useState<string | null>(null)
   const aendern = useCallback((f: (x: Fall) => Fall) => setFall(x => (x ? f(structuredClone(x)) : x)), [])
-  useEffect(() => { if (fall) fallMerken(fall) }, [fall])
+  const [speicherHinweis, setSpeicherHinweis] = useState<string | null>(null)
+  useEffect(() => { if (fall) setSpeicherHinweis(fallMerken(fall)) }, [fall])
   const fallRef = useRef<Fall | null>(null)
   fallRef.current = fall
   const zielJson = JSON.stringify(fall ? { knoten: fall.ort.knoten, zufahrt: fall.ort.zufahrt, zufahrtspunkt: fall.ort.zufahrtspunkt ?? null } : null)
@@ -1166,14 +1183,49 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   const zufahrt = ziel?.zufahrt ?? null
   const [knotenWerkzeug, setKnotenWerkzeug] = useState<KnotenWerkzeug>(null)
   const [zufahrtErster, setZufahrtErster] = useState<P | null>(null)
+  const [zufahrtArt, setZufahrtArt] = useState<ZufahrtHerkunft>('senkrecht')
+  const [zufahrtGrad, setZufahrtGrad] = useState('90')
+  const [zufahrtR, setZufahrtR] = useState<P | null>(null)
+  const [vorschauDaten, setVorschauDaten] = useState<{ p: P; kontext?: ZufahrtKontext; fehler?: string } | null>(null)
+  // Separater, abbrechbarer Abruf nur für das aktive Setzwerkzeug. Der bisherige Fall bleibt bis «Übernehmen» erhalten.
+  useEffect(() => {
+    if (knotenWerkzeug !== 'zufahrt' || !zufahrtErster) { setVorschauDaten(null); return }
+    const p = zufahrtErster, ctrl = new AbortController()
+    setVorschauDaten({ p })
+    if (daten && av && dist(p, daten.ort) <= GRUND_OHNE_LADEN_M) {
+      setVorschauDaten({ p, kontext: zufahrtKontext(osmParsen(daten.osm as Parameters<typeof osmParsen>[0]), av) })
+    } else {
+      const [lat, lon] = wgs(p[0], p[1])
+      Promise.all([ladeOsmRoh(lat, lon, OSM_RADIUS_M, ctrl.signal), ladeAvRoh(p[0], p[1], AV_RADIUS_M, ctrl.signal)])
+        .then(([o, a]) => { if (!ctrl.signal.aborted) setVorschauDaten({ p, kontext: zufahrtKontext(osmParsen(o.daten as Parameters<typeof osmParsen>[0]), avParsen(a.daten)) }) })
+        .catch((e: unknown) => { if (!ctrl.signal.aborted) setVorschauDaten({ p, fehler: `Vorschau konnte nicht geladen werden: ${e instanceof Error ? e.message : String(e)}. Werkzeug erneut setzen.` }) })
+    }
+    return () => ctrl.abort()
+  }, [knotenWerkzeug, zufahrtErster, daten, av])
+  const vorschauAktuell = zufahrtErster && vorschauDaten && dist(zufahrtErster, vorschauDaten.p) < 0.01 ? vorschauDaten : null
+  const zufahrtProbe = useMemo(() => vorschauAktuell?.kontext && zufahrtErster
+    ? zufahrtEntwurf(vorschauAktuell.kontext, zufahrtErster, zufahrtArt, zufahrtGrad, zufahrtR) : null,
+    [vorschauAktuell, zufahrtErster, zufahrtArt, zufahrtGrad, zufahrtR])
+  const zufahrtPreview = zufahrtProbe && typeof zufahrtProbe !== 'string' ? zufahrtProbe : null
+
   const ladeNr = useRef(0)
   const [parkKat, setParkKat] = useState<ParkStand | null>(null)
   const [baumKat, setBaumKat] = useState<BaumStand | null>(null)
   const [vsigKat, setVsigKat] = useState<VsigStand | null>(null)
   // K0: amtliches Tempo für die Rechnung (nur geladene Linien des aktuellen Ladevorgangs)
   const vsigLinien = vsigKat?.linien ?? null, vsigMitte = vsigKat?.mitte ?? null
-  const tempoAmtlich = useMemo<TempoAmtlichDaten | null>(() => (vsigLinien && vsigMitte ? vsigRechnung(vsigLinien, vsigMitte, KATASTER_RADIUS_M) :
-    null), [vsigLinien, vsigMitte])
+  const pruefGebiet = useMemo(() => {
+    const p = daten?.ort
+    const g = 'daten' in bund.stand.gebiet ? bund.stand.gebiet.daten : null
+    return p ? zustaendigkeitAmOrt(p, g, av ?? []) : { amOrt: [], imAusschnitt: [], hinweis: null }
+  }, [daten, av, bund.stand.gebiet])
+  const zhAmOrt = istZuerichAmOrt(pruefGebiet.amOrt)
+  const tempoAmtlich = useMemo<TempoAmtlichDaten | null>(() => (daten && zhAmOrt && zh.daten
+    ? { linien: [], bereich: { mitte: zh.daten.mitte, radiusM: zh.daten.radiusM }, quelle: 'Stadt Zürich', zuerich: zh.daten, signalEntscheide: fall?.signalEntscheide,
+        zhStrassen: zhStrassen(osmParsen(daten.osm as Parameters<typeof osmParsen>[0]).wege) }
+    : daten && regional.rechnen ? { linien: [], bereich: { mitte: regional.rechnen.mitte, radiusM: regional.rechnen.radiusM }, quelle: 'amtliche regionale Quelle', regional: regional.rechnen, signalEntscheide: fall?.signalEntscheide, zhStrassen: zhStrassen(osmParsen(daten.osm as Parameters<typeof osmParsen>[0]).wege) }
+    : vsigLinien && vsigMitte ? vsigRechnung(vsigLinien, vsigMitte, KATASTER_RADIUS_M) :
+    fall?.signalEntscheide?.length ? { linien: [], bereich: null, quelle: 'bestätigte amtliche Quelle', signalEntscheide: fall.signalEntscheide } : null), [vsigLinien, vsigMitte, daten, zh.daten, zhAmOrt, regional.rechnen, fall?.signalEntscheide])
   const parkFelder = parkKat?.felder ?? null, parkAngabe = parkKat?.quelle.quellenangabe ?? ''
   const baeume = baumKat?.baeume ?? null, baumAngabe = baumKat?.quelle.quellenangabe ?? ''
   const fHind = fall?.hindernisse, fVorschl = fall?.vorschlaege, fPark = fall?.parkkataster !== false, fBaum = !!fall?.baumkataster
@@ -1195,7 +1247,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     [daten, ziel, eingaben, hindEingaben, hoehenVorgabe, tempoAmtlich, rechnen])
   // andere Zufahrt: andere Vortrittsstrasse und andere Achse, die Eingaben (E1, E2b) gelten nicht mehr
   const zAktuell = useRef<string | null>(null)              // gerechnete bzw. gewählte Zufahrt (unten gesetzt)
-  // Korrektur 31.10.2026 (Punkt 15): Arme mit sicherem Vortritt nur über den Schalter; nicht im Fall gespeichert
+  // Arme mit sicherem Vortritt nur über den Schalter; nicht im Fall gespeichert
   const [auchVortritt, setAuchVortritt] = useState(false)
   const zufahrtWaehlen = useCallback((z: string | null) => {
     const neu = z !== zAktuell.current && zAktuell.current !== null   // erste Wahl ohne bisherige Zufahrt: Eingaben (Regelung) bleiben
@@ -1254,7 +1306,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
       setKnoten(alle)
       setNamenAusschnitt(vereinigenNamen(st.cache))
       setzeQuelle('suche', { name: SUCHE_NAME, objekte: `${r.daten.length} Knoten und ${r.namen.length} benannte Strassenstücke im ` +
-        `Ausschnitt, ${alle.length} Knoten angezeigt (letzte ${st.cache.length} Ausschnitte)`, ms: r.ms, bytes: r.bytes, server: r.quelle })
+        `Ausschnitt, ${alle.length} Knoten angezeigt (letzte ${st.cache.length} Ausschnitte)`, ms: r.ms, bytes: r.bytes, server: r.quelle, datenstand: r.datenstand })
       suchHinweisNach(r.daten.length ? null : { text: 'Keine Knoten im Ausschnitt' })
     } catch (e) {
       if (ctrl.signal.aborted || istAbbruch(e)) return
@@ -1291,6 +1343,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   // fallNeu: mitgebrachte Eingaben (Fall-Datei, Grundstückzufahrt), sonst der gemerkte Fall bzw. ein leerer
   const laden = useCallback(async (wahl: Wahl, fallNeu: Fall | null = null): Promise<boolean> => {
     abbruchRef.current?.abort()
+    quellenMetadaten.current.neu()
     const ctrl = new AbortController()
     abbruchRef.current = ctrl
     umkreisVorrang.zu(ctrl)
@@ -1299,12 +1352,17 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     setRechnung(null); setAv(null); setDaten(null); setRechnet(false); setNochmals(null); setBerichtOffen(false)
     const nr = ++ladeNr.current
     setFall(null); setFallHinweis(null); setParkKat(null); setBaumKat(null); setVsigKat(null); setWerkzeug(null); setZeichnung([]); setBearbeiten(null)
+    bund.zurueck()
     setKnotenWerkzeug(null); setZufahrtErster(null); setHoehen(null); hoehenLaeuft.current = null; setHervor(null)
     const zp = typeof wahl === 'object' && 'zufahrtspunkt' in wahl ? wahl.zufahrtspunkt : null
     const fallSetzen = (lat: number, lon: number, kid: number | null) => {
       const erinnert = fallNeu ? null : zp ? fallErinnernZufahrt(zp) : kid !== null ? fallErinnern(kid) : null
-      setFall(fallNeu ?? erinnert ?? leererFall(lat, lon, kid, zp ? { p: zp, richtung: null } : null))
-      if (erinnert) setFallHinweis(`Eingaben, Hindernisse und Quellen aus dem Browser übernommen${erinnert.gespeichert ? ` (Stand ${new Date(erinnert.gespeichert)
+      const start = fallNeu ?? erinnert ?? leererFall(lat, lon, kid, zp ? { p: zp, richtung: null } : null)
+      setFall(start)
+      zh.zurueck()
+      regional.zurueck()
+      bund.starten(lat, lon, ctrl.signal)
+      if (erinnert) setFallHinweis(`Eingaben, Hindernisse und Quellenwahl aus dem Browser übernommen; Quellendaten werden neu geladen${erinnert.gespeichert ? ` (Stand ${new Date(erinnert.gespeichert)
         .toLocaleString('de-CH')})` : ''}.`)
     }
     nachladenFehler.current = null; setAvFehler(null)
@@ -1318,7 +1376,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
       throw err
     }
     const osmGeladen = <T extends Abruf<unknown>>(r: T) => {
-      setzeQuelle('osm', { name: OSM_NAME, ms: r.ms, bytes: r.bytes, server: r.quelle }); return r
+      setzeQuelle('osm', { name: OSM_NAME, datenstand: r.datenstand, ms: r.ms, bytes: r.bytes, server: r.quelle }); return r
     }
     // Ort bekannt (Knoten aus der Karte bzw. der Fall-Datei, Zufahrtspunkt): AV und OSM gleichzeitig
     let ort: [number, number] | null = zp ? wgs(zp[0], zp[1]) : typeof wahl === 'number' ? null : [(wahl as OsmKnoten).lat, (wahl as OsmKnoten).lon]
@@ -1347,7 +1405,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
       const lat = ort[0], lon = ort[1]
       const [ra, ro] = await Promise.all([
         ladeAvRoh(e, n, AV_RADIUS_M, ctrl.signal).then(r => { setzeQuelle('av', { name: AV_NAME,
-          objekte: `${r.daten.features?.length ?? 0} Flächen`, ms: r.ms, bytes: r.bytes, server: r.quelle }); return r }, quelleFehler('av', AV_NAME)),
+          objekte: `${r.daten.features?.length ?? 0} Flächen`, kantone: [...new Set((r.daten.features ?? []).map(f => String(f.properties?.Kanton ?? '')).filter(k => /^[A-Z]{2}$/.test(k)))], ms: r.ms, bytes: r.bytes, server: r.quelle }); return r }, quelleFehler('av', AV_NAME)),
         osm,
       ])
       if (ctrl.signal.aborted) return false
@@ -1387,15 +1445,15 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   // sonst übernimmt der neue Fall Hindernisse, verworfene Vorschläge und Quellen-Häkchen des bisherigen Falls.
   const zufahrtSetzen = useCallback((z: ZufahrtspunktEingabe) => {
     setKnotenWerkzeug(null); setZufahrtErster(null); setWerkzeug(null); setBearbeiten(null)
-    const zn: ZufahrtspunktEingabe = { p: cm(z.p), richtung: z.richtung ? [Math.round(z.richtung[0] * 1e4) / 1e4, Math.round(z.richtung[1] * 1e4) / 1e4] : null }
+    const zn: ZufahrtspunktEingabe = { p: cm(z.p), ...(z.herkunft ? { herkunft: z.herkunft } : {}), richtung: z.richtung ? [Math.round(z.richtung[0] * 1e8) / 1e8, Math.round(z.richtung[1] * 1e8) / 1e8] : null }
     const [lat, lon] = wgs(zn.p[0], zn.p[1])
     const erinnert = fallErinnernZufahrt(zn.p)
     let neu: Fall, hinweis: string | null = null
     if (erinnert) {
       neu = erinnert
       const alt = erinnert.ort.zufahrtspunkt?.richtung ?? null
-      if (JSON.stringify(alt) !== JSON.stringify(zn.richtung)) { neu.eingaben.haltelinie = null; neu.eingaben.D = null }
-      neu.ort.zufahrtspunkt = { p: erinnert.ort.zufahrtspunkt!.p, richtung: zn.richtung }
+      if (JSON.stringify(alt) !== JSON.stringify(zn.richtung) || erinnert.ort.zufahrtspunkt?.herkunft !== zn.herkunft) { neu.eingaben.haltelinie = null; neu.eingaben.D = null }
+      neu.ort.zufahrtspunkt = { ...zn, p: erinnert.ort.zufahrtspunkt!.p }
       hinweis = 'Eingaben und Hindernisse dieser Grundstückzufahrt aus dem Browser übernommen.'
     } else {
       neu = leererFall(lat, lon, null, zn)
@@ -1443,7 +1501,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     try {
       const [f, hinweise] = fallLesen(await datei.text())
       const text = `Fall «${datei.name}» geladen (${eingabenZahl(f)} Eingaben)` + (hinweise.length ? `; ${hinweise.length} ungültige Einträge ` +
-        `übergangen bzw. auf die Vorgabe gesetzt (${[...new Set(hinweise)].join('; ')}).` : '.')
+        `übergangen bzw. auf die automatische Ermittlung zurückgesetzt (${[...new Set(hinweise)].join('; ')}).` : '.')
       let ok: boolean
       if (f.ort.zufahrtspunkt) ok = await laden({ zufahrtspunkt: f.ort.zufahrtspunkt.p }, f)
       else if (f.ort.knoten !== null) {
@@ -1586,12 +1644,15 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     if (knotenWerkzeug === 'haltelinie') { setEingaben(e => ({ ...e, haltelinie: cm(p) })); setKnotenWerkzeug(null); return }
     if (knotenWerkzeug === 'd') { setEingaben(e => ({ ...e, D: cm(p) })); setKnotenWerkzeug(null); return }
     if (knotenWerkzeug !== 'zufahrt') return
-    if (!zufahrtErster) { setZufahrtErster(p); return }
-    const r = sub(p, zufahrtErster)
-    zufahrtSetzen({ p: zufahrtErster, richtung: Math.hypot(r[0], r[1]) < 1 ? null : r })
-  }, [knotenWerkzeug, zufahrtErster, setEingaben, zufahrtSetzen])
-  const zufahrtHilfe = knotenWerkzeug === 'zufahrt' && <ZufahrtHilfe erster={zufahrtErster}
-    senkrecht={() => { if (zufahrtErster) zufahrtSetzen({ p: zufahrtErster, richtung: null }) }}
+    if (!zufahrtErster) { setZufahrtArt('senkrecht'); setZufahrtGrad('90'); setZufahrtR(null); setZufahrtErster(cm(p)); return }
+    setZufahrtArt('gezeichnet'); setZufahrtR(sub(p, zufahrtErster))
+  }, [knotenWerkzeug, zufahrtErster, setEingaben])
+  const zufahrtHilfe = knotenWerkzeug === 'zufahrt' && <ZufahrtHilfe erster={zufahrtErster} entwurf={zufahrtPreview}
+    laden={!!zufahrtErster && !vorschauAktuell?.kontext && !vorschauAktuell?.fehler}
+    fehler={vorschauAktuell?.fehler ?? (typeof zufahrtProbe === 'string' ? zufahrtProbe : null)}
+    art={zufahrtArt} grad={zufahrtGrad} osm={!!(zufahrtErster && vorschauAktuell?.kontext && typeof zufahrtGeo(vorschauAktuell.kontext, { p: zufahrtErster, richtung: null, herkunft: 'osm' }) !== 'string')}
+    waehlen={setZufahrtArt} winkel={text => { setZufahrtArt('winkel'); setZufahrtGrad(text) }}
+    uebernehmen={() => { if (zufahrtPreview) zufahrtSetzen(zufahrtPreview.eingabe) }}
     abbrechen={() => { setKnotenWerkzeug(null); setZufahrtErster(null) }} />
 
   // ---------------------------------------------------------------- AV nach Bedarf nachladen (E1)
@@ -1611,7 +1672,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     setMeldung(`Die Zielpunkte reichen über den AV-Ausschnitt (±${d.avRadius} m) hinaus: AV wird mit ±${radius} m nachgeladen …`)
     ladeAvRoh(d.ort[0], d.ort[1], radius, ctrl.signal).then(r => {
       if (ctrl.signal.aborted) return
-      setzeQuelle('av', { name, objekte: `${r.daten.features?.length ?? 0} Flächen`, ms: r.ms, bytes: r.bytes, server: r.quelle })
+      setzeQuelle('av', { name, objekte: `${r.daten.features?.length ?? 0} Flächen`, kantone: [...new Set((r.daten.features ?? []).map(f => String(f.properties?.Kanton ?? '')).filter(k => /^[A-Z]{2}$/.test(k)))], ms: r.ms, bytes: r.bytes, server: r.quelle })
       setAv(avParsen(r.daten))
       setDaten({ ...d, av: r.daten, avRadius: radius })
     }, err => {
@@ -1651,7 +1712,19 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     Promise.all(linien.map(([k, l]) => ladeNeigung(l, ctrl.signal).then(r => [k, r] as const))).then(res => {
       if (ctrl.signal.aborted || hoehenLaeuft.current !== lauf) return
       const stand: HoehenVorgabe = Object.fromEntries(res.map(([k, [m]]) => [k, m]))
-      setHoehen({ sig, arme, vorschlag: z.zufahrt === null, stand })
+      const profilTitel = (k: keyof HoehenVorgabe): string => {
+        if (k === 'zufahrt') return `Zufahrt · ${e.zufahrtName}`
+        if (k === 'trottoir') return `Trottoir an der Zufahrt · ${e.zufahrtName}`
+        const r = e.richtungen.find(r => r.richtung === k)
+        return r ? `${lageText(r)} · ${r.strasse}` : `Fahrstreifen von ${k}`
+      }
+      const profile: Partial<Record<keyof HoehenVorgabe, HoehenProfil>> = Object.fromEntries(res.flatMap(([k, [, a]]) => typeof a === 'string' ? [] : [[k, {
+        id: `gel:${sig}:${arme}:${k}`, titel: profilTitel(k),
+        zweck: 'Geländehöhen entlang der für die Längsneigung verwendeten Achse. Keine Prüfung auf Verdeckung des Sichtfelds durch Gelände.',
+        linie: (JSON.parse(new URL(profilUrl(linien.find(([key]) => key === k)![1])).searchParams.get('geom')!) as { coordinates: P[] }).coordinates, punkte: a.daten,
+        quelle: '© swisstopo; Höhenprofil swissALTI3D/Kombinationsmodell', datenstand: a.datenstand, abgerufen: new Date().toISOString(),
+      }]]))
+      setHoehen({ sig, arme, vorschlag: z.zufahrt === null, stand, profile })
       const ok = res.filter(([, [, a]]) => typeof a !== 'string'), fehler = res.filter(([, [, a]]) => typeof a === 'string')
       const name = (k: string) => (k === 'zufahrt' ? 'Zufahrt' : k === 'trottoir' ? 'Trottoir' : `von ${k}`)
       const abrufe = ok.map(([, [, a]]) => a as Exclude<typeof a, string>)
@@ -1699,7 +1772,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   }, [laden])
 
   // gewählter Knoten immer dabei, auch wenn sein Ausschnitt aus dem Cache der Suche gefallen ist
-  // Korrektur 31.10.2026 (Punkte 12, 13, 16, 17): Gabelungen, Kreisel und Fahrbahnteilungen aus dem geladenen Umkreis ausblenden, LSA-Knoten kennzeichnen
+  // Gabelungen, Kreisel und Fahrbahnteilungen aus dem geladenen Umkreis ausblenden, LSA-Knoten kennzeichnen
   const [ausgeblendet, setAusgeblendet] = useState<Set<number>>(() => new Set())
   const [lsaIds, setLsaIds] = useState<Set<number>>(() => new Set())
   useEffect(() => {
@@ -1718,7 +1791,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     const k = knoten.filter(x => (!ausgeblendet.has(x.id) || x.id === gewaehltPunkt?.id) && !(kreiselMitte && x.id === gewaehlt?.id))
     return gewaehltPunkt && !k.some(x => x.id === gewaehltPunkt.id) ? [...k, gewaehltPunkt] : k
   }, [knoten, gewaehlt, gewaehltPunkt, kreiselMitte, ausgeblendet])
-  // Klick auf einen Arm in der Karte: gesperrte Arme (Punkte 11, 15) wie die Knöpfe nicht wählbar
+  // Klick auf einen Arm in der Karte: gesperrte Arme wie die Knöpfe nicht wählbar
   const zufahrtAusKarte = (key: string | null) => {
     const a = kn?.arme.find(x => x.key === key)
     if (a && a.key !== zGewaehlt && (keineZufahrt(a) || (kn?.mitVortritt?.includes(a.key) && !auchVortritt && !erg?.rechtsvortritt))) return
@@ -1733,22 +1806,40 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   // «Geladene Quellen» auf der Karte (quellenEbenen.ts, seit 01.11.2026): die gelesenen Objekte je Quelle, ohne neue Abfrage
   const osmGeparst = useMemo(() => (daten?.osm ? osmParsen(daten.osm as Parameters<typeof osmParsen>[0]) : null), [daten])
   const osmTags = useMemo(() => new Map((osmGeparst?.wege ?? []).map(w => [w.id, w.tags])), [osmGeparst])
+  useEffect(() => {
+    const g = 'daten' in bund.stand.gebiet ? bund.stand.gebiet.daten : null
+    const p = daten?.ort ?? g?.mitte, ctrl = abbruchRef.current
+    if (p && ctrl && !ctrl.signal.aborted && zhAmOrt)
+      zh.starten(p, ladeNr.current, ctrl.signal)
+    if (p && ctrl && !ctrl.signal.aborted) regional.starten(p, pruefGebiet.imAusschnitt, ladeNr.current, ctrl.signal, pruefGebiet.amOrt)
+    if (p) setzeQuelle('gebietZuordnung', { name: 'Örtliche Zuständigkeit',
+      ...(pruefGebiet.hinweis && !pruefGebiet.amOrt.length ? { fehler: pruefGebiet.hinweis } :
+        { objekte: `${pruefGebiet.amOrt.map(gemeindeText).join(' / ')}${pruefGebiet.hinweis ? `; ${pruefGebiet.hinweis}` : ''}` }) })
+  }, [bund.stand.gebiet, daten, av, zh.starten, regional.starten, pruefGebiet, zhAmOrt, setzeQuelle])
   const quellenEbenen = useMemo(() => {
     const e = rechnung?.ergebnis
     const profile: ProfilAnzeige[] = e ? [
       { key: 'links', linie: e.richtungen.find(r => r.richtung === 'links')?.profilLinie ?? [] },
       { key: 'rechts', linie: e.richtungen.find(r => r.richtung === 'rechts')?.profilLinie ?? [] },
       { key: 'zufahrt', linie: e.zufahrtProfil }, { key: 'trottoir', linie: e.trottoirProfil }] : []
-    return ebenenAusDaten({ osm: osmGeparst, vsig: vsigKat?.linien ?? null, park: parkKat?.felder ?? null, baeume: baumKat?.baeume ?? null,
-      av, profile, hoehen: hoehenVorgabe })
-  }, [osmGeparst, vsigKat, parkKat, baumKat, av, rechnung, hoehenVorgabe])
+    const d = ebenenAusDaten({ osm: osmGeparst, vsig: vsigKat?.linien ?? null, park: parkKat?.felder ?? null, baeume: baumKat?.baeume ?? null,
+      av, profile, parkQuelle: parkKat?.quelle.quellenangabe, baumQuelle: baumKat?.quelle.quellenangabe, hoehen: hoehenVorgabe, regional: regional.daten, zuerich: zh.daten, bav: 'daten' in bund.stand.bav ? bund.stand.bav.daten : null })
+    if (hoehenVorgabe && hoehen?.stand === hoehenVorgabe) d.gelaende = Object.values(hoehen.profile ?? {}).flatMap(p => p ? [{
+      id: p.id, linien: [p.linie], klasse: 'profil', text: `${p.titel}: ${p.zweck}`, hoehenprofil: p, quellenSchluessel: 'hoehen',
+    }] : [])
+    d.qualitaet = { ...Object.fromEntries((regional.daten?.teile ?? []).map(t => [`regional.${t.id}`, { datenstand: t.datenstand }])), zhTempo: quellen.zhTempo, zhZonen: quellen.zhZonen, av: quellen.av, parkfelder: quellen.parkkataster, baeume: quellen.baumkataster, steigung: quellen.hoehen,
+      vortritt: quellen.osm, lsa: quellen.osm, velofuss: quellen.osm, strassentyp: quellen.osm, tram: quellen.osm, gelaende: quellen.hoehen,
+      tempo: vsigKat?.linien?.some(l => l.vSig != null) ? quellen.vsig : quellen.osm }
+    d.metadaten = quellen
+    return ebenenBeschriften(d)
+  }, [osmGeparst, vsigKat, parkKat, baumKat, av, rechnung, hoehenVorgabe, hoehen, bund.stand.bav, quellen, zh.daten, regional.daten])
 
   const kn = rechnung?.knoten ?? null
   const erg = rechnung?.ergebnis ?? null
   const zGewaehlt = zufahrt ?? erg?.zufahrt ?? null     // gewählt (sofort), sonst die vorgeschlagene der Rechnung
   zAktuell.current = zGewaehlt
   const vortritt = erg?.vortritt ?? kn?.vortritt ?? null       // in der Rechnung verwendetes Paar, sonst nach OSM
-  const fehlerQuellen = Object.values(quellen).filter(q => q.fehler).length
+  const fehlerQuellen = Object.values({ ...quellen, ...hkQuellen }).filter(q => q.fehler).length
   const hervorRing = useMemo(() => (hervor ? erg?.richtungen.flatMap(r => [...r.verdeckerListe, ...(r.velo?.verdeckerListe ?? []),
     ...(r.ueberholfall?.verdeckerListe ?? [])]).find(t => t.id === hervor)?.ring ?? null : null),
     [hervor, erg])
@@ -1760,7 +1851,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     const rs = erg.richtungen, rv = !!erg.rechtsvortritt
     const h = erg.haltelinie
     const halte = h ? `${f1(Math.abs(h.abstand))} m ${h.abstand >= 0 ? 'hinter' : 'vor'} der Kante` : eingaben.haltelinie ? 'nicht gerechnet' : 'keine'
-    const zufahrtStand = [`Halte-/Wartelinie: ${halte}`, `D: ${erg.Dhand ? 'verschoben' : 'Vorgabe'}`,
+    const zufahrtStand = [`Halte-/Wartelinie: ${halte}`, `D: ${erg.Dhand ? 'verschoben' : 'berechnet'}`,
       ...(erg.trottoirueberfahrt ? ['Trottoirüberfahrt'] : erg.trottoir ? [`Trottoir: ${eingaben.trottoirFrei ? 'Bordkante' : 'Hinterkante'}`] : []),
       `Tempo ${rs.filter(r => !rv || !rvNichtGeprueft(r)).map(r => (r.status === 'keine_zufahrt' ? '–' : r.tempo)).join('/')}`].join(' · ')
     const zufahrtHand = eingaben.haltelinie !== null || eingaben.D !== null || eingaben.trottoirFrei || !!eingaben.trottoirueberfahrt ||
@@ -1789,7 +1880,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     <div className="app" style={{ '--panel-breite': `${panelBreite}px` } as CSSProperties}>
       <Karte quellenEbenen={quellenEbenen} osmTags={osmTags} mitte={START} av={av} kantone={kantone} knoten={sichtbar} strassennamen={namen} gewaehlt={gewaehltPunkt?.id ?? null}
         rechnung={rechnung} zufahrt={zufahrt} hindernisse={fall?.hindernisse ?? []} werkzeug={werkzeug} knotenWerkzeug={knotenWerkzeug}
-        zufahrtErster={zufahrtErster} zeichnung={zeichnung} bearbeiten={bearbeiten} onKnoten={knotenWaehlen} onZufahrt={zufahrtAusKarte}
+        zufahrtErster={zufahrtErster} zufahrtVorschau={knotenWerkzeug === 'zufahrt' ? zufahrtPreview : null}
+        onZufahrtRichtung={p => { if (knotenWerkzeug === 'zufahrt' && zufahrtErster) { setZufahrtArt('gezeichnet'); setZufahrtR(sub(p, zufahrtErster)) } }} zeichnung={zeichnung} bearbeiten={bearbeiten} onKnoten={knotenWaehlen} onZufahrt={zufahrtAusKarte}
         lsa={lsaIds}
         onKlick={klick} onKnotenKlick={knotenKlick} onD={p => setEingaben(e => ({ ...e, D: cm(p) }))}
         onDtrottoir={p => setEingaben(e => ({ ...e, Dtrottoir: cm(p) }))} onDoppelklick={doppelklick} onEcke={ecke}
@@ -1820,6 +1912,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
           <button className="zweit klein" onClick={() => setFallHinweis(null)}>ausblenden</button></p>}
         {!zp && zufahrtHilfe}
 
+        {speicherHinweis && <p className="hinweis" role="alert">{speicherHinweis}</p>}
         {meldung && <p className="hinweis">{meldung}
           {nochmals !== null && <>{' '}<button className="zweit klein" onClick={() => laden(nochmals.wahl, nochmals.fall)}>erneut laden</button></>}</p>}
         {avFehler && <p className="hinweis">{avFehler}{' '}<button className="zweit klein" onClick={() => {
@@ -1836,7 +1929,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
               <p>Die Zufahrt wird wie ein Arm gerechnet: F<sub>B</sub> wartet auf ihr, geprüft wird die Sicht entlang der Vortrittsstrasse
                 nach links und rechts.</p></Info>{erg?.zufahrtspunkt ?
               `, Richtung ${erg.zufahrtspunkt.gezeichnet ? 'gezeichnet' : erg.zufahrtspunkt.weg !== null ? `entlang des OSM-Wegs ${erg.zufahrtspunkt.weg} (service)` :
-                'senkrecht zum Rand'}` : ''}{kn?.grundstueck && vortritt ? `; vortrittsberechtigt: ${vortritt.map(key => {
+                'senkrecht zum Rand'}${erg.zufahrtspunkt.herkunft ? ` (${ZUFAHRT_HERKUNFT[erg.zufahrtspunkt.herkunft]})` : ''}${erg.zufahrtspunkt.winkel != null ? `, ${f1(erg.zufahrtspunkt.winkel)}° zur lokalen Strassenachse` : ''}` : ''}{kn?.grundstueck && vortritt ? `; vortrittsberechtigt: ${vortritt.map(key => {
               const a = kn.arme.find(x => x.key === key)!
               return armText(a)
             }).join(' und ')}` : ''}.</p>
@@ -1880,7 +1973,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
               <h3>{(eingaben.regelung ?? erg?.regelungVorgabe) === 'rechtsvortritt' ? <>Zu prüfender Arm<Info titel="Zu prüfender Arm">
                 <p>Rechtsvortritt: jeder Arm muss dem Arm rechts von ihm den Vortritt lassen. Geprüft wird die Sicht aus dem gewählten
                   Arm auf den Arm rechts davon; «von rechts» markiert diesen Arm.</p></Info></> : 'Zufahrt wählen (Arm ohne Vortritt)'}</h3>
-              {/* Korrektur 31.10.2026 (Punkte 11, 15): Arme ohne Zufahrt bzw. mit sicherem Vortritt ausgegraut */}
+              {/* Arme ohne Zufahrt bzw. mit sicherem Vortritt ausgegraut */}
               <div className="knopfzeile">
                 {nachNr(kn.arme).map(a => {
                   const keine = keineZufahrt(a), mitV = !!kn.mitVortritt?.includes(a.key) && !(erg?.rechtsvortritt)
@@ -1898,7 +1991,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
                 onChange={ev => setAuchVortritt(ev.target.checked)} /> auch Arme mit Vortritt wählen</label>}
               {(() => {
                 const z = kn.arme.find(a => a.key === zGewaehlt)
-                // kurz (Korrektur 31.10.2026, Punkt 7): Einzelheiten im Hinweis und in den Annahmen
+                // kurz: Einzelheiten im Hinweis und in den Annahmen
                 return z && !z.zufluss ? <p className="klein">Zufahrt {armText(z)}: Einbahn vom Knoten weg{z.veloZufluss ?
                   ', nur Velos gegen die Einbahn' : '; von hier fährt niemand an den Knoten heran, geprüft wird nichts'}.</p> : null
               })()}
@@ -1917,7 +2010,9 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
               <Block titel="Erforderliche Sichtweite" stand={kurz.erfStand} hand={kurz.erfHand} offen={offen.erforderlich}
                 setOffen={o => setOffen('erforderlich', o)}>
                 <ErforderlichBlock s={erg.strasse} eingaben={eingaben} setEingaben={setEingaben} richtungen={erg.richtungen}
-                  rv={!!erg.rechtsvortritt} ueber={erg.ueberholen ?? null} />
+                  rv={!!erg.rechtsvortritt} ueber={erg.ueberholen ?? null}
+                  bundTyp={<BundesFeld feld="typ" osmStand={quellen.osm?.datenstand} daten={regional.daten} ergebnis={erg} strassen={zhStrassen(osmGeparst?.wege ?? [])} eingaben={eingaben} setzen={setEingaben} />}
+                  bundOrtslage={<BundesFeld feld="innerorts" osmStand={quellen.osm?.datenstand} daten={regional.daten} ergebnis={erg} strassen={zhStrassen(osmGeparst?.wege ?? [])} eingaben={eingaben} setzen={setEingaben} />} />
               </Block>
               <Block titel="Veloverkehr" stand={kurz.veloStand} hand={kurz.veloHand} offen={offen.velo} setOffen={o => setOffen('velo', o)}>
                 <VeloAbschnitt e={erg} eingaben={eingaben} setEingaben={setEingaben} />
@@ -1955,6 +2050,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
               const la = links && kn ? kn.arme.find(x => x.key === links.arm) : undefined
               return <RvBlock rv={erg.rechtsvortritt} links={links} linksName={la ? armText(la) : links?.strasse ?? ''} />
             })()}
+            <p className="klein">Die farbigen Befundfelder oder die Fahrzeuge auf der Karte anklicken, um nur das Sichtfeld dieses Fahrzeugs ein- oder auszublenden. Die Ergebnisse bleiben vollständig. <MassWahl /> <SichtGesamtTaste /></p>
             <ul className="gesamtstatus">{erg.seiteOhneArm === 'links' && <OhneArm seite="links" />}{erg.richtungen.map(r => {
               const t = erg.trottoirPruefung?.richtungen.find(x => x.richtung === r.richtung) ?? null
               return <li key={r.richtung}>
@@ -1963,7 +2059,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
                 <span className="felder">{rvNichtGeprueft(r) && !r.velo && !t ?
                   <Feld s={{ feld: r.lage === 'gegenueber' ? 'nicht geprüft (kein Vortrittsverhältnis)' : 'nicht geprüft (Rechtsvortritt)',
                     kurz: '', farbe: GRAU }} /> :
-                  <><Feld s={autoStand(r)} />{ueberStand(r) && <Feld s={ueberStand(r)!} />}<Feld s={veloStand(r)} /><Feld s={trottoirStand(t)} /></>}</span></li>
+                  <><Feld s={autoStand(r)} id={richtungSichtId(erg, r)} art={r.status !== 'keine_zufahrt' ? 'auto' : undefined} />{ueberStand(r) && <Feld s={ueberStand(r)!} id={richtungSichtId(erg, r)} art="ueberholen" />}<Feld s={veloStand(r)} id={richtungSichtId(erg, r)} art={r.velo ? "velo" : undefined} /><Feld s={trottoirStand(t)} id={richtungSichtId(erg, r)} art={t ? "trottoir" : undefined} /></>}</span></li>
             })}{erg.seiteOhneArm === 'rechts' && <OhneArm seite="rechts" />}</ul>
             {erg.trottoirueberfahrt && <TueBlock t={erg.trottoirueberfahrt} />}
             <table className="zahlen kopf">
@@ -1975,8 +2071,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
                   'innerorts'}{!erg.rechtsvortritt && erg.ausserorts && erg.regelung === 'stop' ? ', Stop' : ''}), ab der {erg.nullpunktText}{erg.radwegRand && !erg.haltelinie ? ' (Ziffer 12: Radweg näher als 2,00 m)' : ''}</td></tr>
                 <tr><td>Beobachtungspunkt D</td><td>{erg.Dhand ? <><span className="warnung">von Hand</span>, {f2(erg.Dlage.laengs)} m hinter der{' '}
                   {erg.nullpunktText}, {f2(Math.abs(erg.Dlage.seitlich))} m {erg.Dlage.seitlich >= 0 ? 'links' : 'rechts'} der Achse</> :
-                  erg.zufahrtVelo ? `Auge des Velofahrers (${erg.zufahrtVelo.lageText})` :
-                  `Fahrersitz, ${f2(FAHRERSITZ_M)} m links der Achse des Zufahrtsstreifens`}</td></tr>
+                  erg.zufahrtVelo ? `Auge der velofahrenden Person (${erg.zufahrtVelo.lageText})` :
+                  `Fahrer*innensitz, ${f2(FAHRERSITZ_M)} m links der Achse des Zufahrtsstreifens`}</td></tr>
                 <tr><td>Einbiegewinkel</td><td>rund {Math.round(erg.einbiegewinkel)}°</td></tr>
               </tbody>
             </table>
@@ -1991,7 +2087,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
                 <ul className="annahmen">{erg.hinweise.map((h, i) => <li key={i}>{h}</li>)}</ul>
               </>}
               <h4>Annahmen</h4>
-              {/* Korrektur 31.10.2026 (Punkte 6, 7): je Thema ein Punkt, Begriffe als dezente Verweise; technische Herleitung ausklappbar */}
+              {/* je Thema ein Punkt, Begriffe als dezente Verweise; technische Herleitung ausklappbar */}
               {(() => { const gezeigt = new Set<string>()
                 return <ul className="annahmen">{(erg.annahmenThemen ?? erg.annahmen.map(text => ({ thema: text, titel: '', text }))).map(t =>
                   <li key={t.thema}>{t.titel && <b>{t.titel}: </b>}<BegriffText text={t.text} gezeigt={gezeigt} /></li>)}</ul> })()}
@@ -2019,7 +2115,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
 
         <details className="abschnitt">
           <summary><h2>Legende</h2></summary>
-          {/* Korrektur 31.10.2026 (Punkte 8 und 10): Alltagssprache, Farbnamen statt Code-Namen; Farben selbst unverändert */}
+          {/* Alltagssprache, Farbnamen statt Code-Namen; Farben selbst unverändert */}
           <ul className="legende">
             <li><span className="farbe rund" style={{ background: KNOTEN_FARBE }} />Knoten: Punkt, an dem sich die Strassen in OSM treffen
               (Lage aus OSM). Gemessen wird ab K.</li>
@@ -2031,7 +2127,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
             <li><span className="farbe gestrichelt" style={{ borderColor: ZUFAHRT_FARBE }} />Fahrlinie der Zufahrt (orange gestrichelt):
               darauf stehen das wartende Fahrzeug F<sub>B</sub> und D.</li>
             <li><span className="farbe rund" style={{ background: D_FARBE, border: `2px solid ${D_RAND_FARBE}` }} />D: Auge des wartenden
-              Lenkers (weisser Punkt). Auf der Karte verschiebbar; von Hand verschoben mit orangem Rand{' '}
+              Fahrer*innenauges (weisser Punkt). Auf der Karte verschiebbar; von Hand verschoben mit orangem Rand{' '}
               <span className="farbe rund" style={{ background: D_FARBE, border: `2px solid ${D_HAND_FARBE}` }} />.</li>
             <li><span className="farbe" style={{ background: HALTELINIE_FARBE, border: '2px solid #111827' }} />Halte- oder Wartelinie
               (weiss): ab ihrer Vorderkante wird B gemessen.{' '}<span className="farbe rund" style={{ background: ZUFAHRT_FARBE,
@@ -2057,7 +2153,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
             <li><span className="farbe" style={{ background: VELO_FARBE }} />Velo am Ende von A auf der Fahrlinie der Velos</li>
             <li><span className="farbe" style={{ background: TROTTOIR_FARBE }} />Sichtdreiecke Trottoir von D' (indigo; rot: verdeckt bis A),
               D' als indigofarbener Punkt mit dunklem Rand</li>
-            <li><span className="farbe rund" style={{ background: '#ffffff', border: `3px solid ${TROTTOIR_FARBE}` }} />Fussgänger am Ende von A
+            <li><span className="farbe rund" style={{ background: '#ffffff', border: `3px solid ${TROTTOIR_FARBE}` }} />Zufussgehende am Ende von A
               (Punkt mit Ring; Trottoirüberfahrt: auf der Gehlinie {f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt)</li>
             <li><span className="farbe" style={{ background: TROTTOIR_FARBE }} />Trottoirüberfahrt: breiter indigofarbener Strich auf der Fahrlinie
               der Zufahrt von der Bordkante bis zum hinteren Rand, dort eine gestrichelte Querlinie</li>
@@ -2080,7 +2176,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
           </ul>
         </details>
 
-        {/* Korrektur 31.10.2026 (Punkt 9, wie fgsCheck): Grundlagen und Quellen, Begriffe, Regeln; keine Normtabellen (lizenziert) */}
+        {/* Grundlagen und Quellen, Begriffe, Regeln; keine Normtabellen (lizenziert) */}
         <details className="abschnitt" id="abschnitt-grundlagen">
           <summary><h2>Grundlagen und Quellen</h2></summary>
           <h3>Rechnung und Sichtweiten</h3>
@@ -2101,22 +2197,26 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
           <RegelUebersicht />
         </details>
 
+        <AmtlicheSignale daten={regional.daten} wahl={fall?.signalEntscheide} setzen={xs => aendern(f => { f.signalEntscheide = xs; return f })}
+          ziele={kn && erg ? [{ knoten: kn.id, zufahrt: erg.zufahrt, p: kn.p, name: `Knoten ${kn.name}, Zufahrt ${erg.zufahrt}` }] : []} />
         <details className="abschnitt">
-          <summary><h2>Geladene Quellen{fehlerQuellen > 0 && <span className="fehler"> ({fehlerQuellen} Fehler)</span>}</h2></summary>
+          <summary><h2>Datenquellen und Ladezustand{fehlerQuellen > 0 && <span className="fehler"> ({fehlerQuellen} Fehler)</span>}</h2></summary>
+          <p className="klein">Beim Wiederöffnen werden die Datenquellen neu geladen. Angezeigt wird der jeweils verwendete
+            Datenstand; bestätigte Eingaben bleiben erhalten. Das Abrufdatum ist kein Datenstand.</p>
           <ul className="klein">
-            {Object.entries(quellen).map(([k, q]) => (
-              <li key={k}><b>{q.name}</b>: {q.fehler ? <span className="fehler">{q.fehler}</span> :
-                q.ms !== undefined ? `${q.objekte ? q.objekte + ', ' : ''}${Math.round(q.ms)} ms, ${Math.round((q.bytes ?? 0) / 1024)} kB${q.server ? `, ${q.server}` : ''}` : 'lädt …'}</li>
+            {quellenSortiert({...quellen,...hkQuellen}).map(([k, q]) => (
+              <li key={k}><b>{quellenThema(k, q.name)}</b> – {q.name}: {q.fehler ? <span className="fehler">{q.fehler}</span> :
+                q.ms !== undefined ? `${q.objekte ? q.objekte + ', ' : ''}${Math.round(q.ms)} ms, ${Math.round((q.bytes ?? 0) / 1024)} kB${q.server ? `, ${q.server}` : ''}` : q.objekte ?? 'lädt …'}<div>{quellenQualitaetText(q)}{q.zeit && <> · Abgerufen {new Date(q.zeit).toLocaleString('de-CH')}</>}</div></li>
             ))}
           </ul>
         </details>
         <Datenschutz />
         <Fusszeile />
       </aside>
-      {berichtOffen && fall && rechnung?.ergebnis && av && <Bericht fall={fall} rechnung={rechnung} av={av} kantone={kantone} quellen={quellen}
+      {berichtOffen && fall && rechnung?.ergebnis && av && <Bericht fall={fall} rechnung={rechnung} av={av} kantone={kantone} quellen={{...quellen,...hkQuellen}}
         aendern={aendern} schliessen={berichtSchliessen} />}
       {berichtOffen && fall && rechnung?.knoten?.kreisel?.sicht && <KreiselBericht fall={fall} kn={rechnung.knoten} kantone={kantone}
-        quellen={quellen} aendern={aendern} schliessen={berichtSchliessen} />}
+        quellen={{...quellen,...hkQuellen}} aendern={aendern} schliessen={berichtSchliessen} />}
     </div>
   )
 }

@@ -1,3 +1,6 @@
+import { zhTempoLesen, zhZonenLesen, zhUrl, zhMetadatenUrl, type ZuerichSnapshot } from './daten/anbieter/gemeinsam/zuerich'
+import zhTempoRoh from './daten/anbieter/gemeinsam/testdaten/zuerich/tempo.json'
+import zhZonenRoh from './daten/anbieter/gemeinsam/testdaten/zuerich/zonen.json'
 // Tests Fall-Datei (fall.ts, E2a): Hindernisse, verworfene Vorschläge und Quellen-Häkchen hin und zurück, Prüfung kaputter
 // Einträge, localStorage je Knoten. Vorlage: fgsCheck rechner/eingaben.test.ts (Fall-Datei).
 
@@ -363,5 +366,21 @@ describe('Fall-Datei K3: Fahrbeziehungen für β von Hand (Version 7, optional)'
       const [u, hu] = fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, kreiselBeziehungen: falsch } }))
       expect([u.eingaben.kreiselBeziehungen ?? null, hu]).toEqual([null, ['Eingabe «kreiselBeziehungen» ungültig, Vorgabe']])
     }
+  })
+})
+
+
+describe('E2: Zürcher Quellen in der Fall-Datei', () => {
+  it('speichert echte IST-Ausschnitte samt Datenstand; beschädigte Ableitung verwirft nur den Ausschnitt', () => {
+    const mitte: P = [2683050, 1247250]
+    const z: ZuerichSnapshot = { version: 1, mitte, radiusM: 200,
+      tempo: { objekte: zhTempoLesen(zhTempoRoh), datenstand: '2026-11-02', url: zhUrl('tempo', mitte), metadaten: zhMetadatenUrl('tempo'), abgerufen: '2026-11-02T07:00:00.000Z' },
+      zonen: { objekte: zhZonenLesen(zhZonenRoh), datenstand: '2026-11-01', url: zhUrl('zonen', mitte), metadaten: zhMetadatenUrl('zonen'), abgerufen: '2026-11-02T07:00:00.000Z' } }
+    const f = leererFall(47.37, 8.54, 1234); f.zuerich = z; f.quellen.zhTempo = 'Stadt Zürich'; f.quellen.zhZonen = 'Stadt Zürich'
+    const text = fallSchreiben(f), [g, h] = fallLesen(text)
+    expect(JSON.parse(text).version).toBe(FALL_VERSION); expect(h).toEqual([]); expect(g.zuerich).toEqual(z)
+    const kaputt = JSON.parse(text); kaputt.zuerich.tempo.objekte[0].tempo = 0
+    const [rest, hh] = fallLesen(JSON.stringify(kaputt)); expect(rest.ort.knoten).toBe(1234); expect(rest.zuerich).toBeUndefined()
+    expect(hh).toContain('Gespeicherte Zürcher Quellen ungültig, übergangen')
   })
 })

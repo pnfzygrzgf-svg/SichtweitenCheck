@@ -2,7 +2,7 @@
 //
 // Lage (Meter, x Ost, y Nord, Ursprung = OSM-Knoten 12): Hauptstrasse West–Ost, Fahrbahn y = −3 … +3, Tempo 30; Zufahrt von Süden,
 // Achse des Zufahrtsstreifens x = +1,25, Bordkante (Fahrbahnrand) y = −3. Phase Fahrbahn: B 3,00 m ab der Bordkante -> D (0,75; −6).
-// Phase Trottoir: D' = 3,00 m hinter dem hinteren Rand (Fahrersitz 0,50 m links), Gehlinie 0,50 m vor dem hinteren Trottoirrand.
+// Phase Trottoir: D' = 3,00 m hinter dem hinteren Rand (Fahrer*innensitz 0,50 m links), Gehlinie 0,50 m vor dem hinteren Trottoirrand.
 
 import { describe, expect, it } from 'vitest'
 import { wgs, dist, imPolygon, type P } from '../geo'
@@ -193,7 +193,7 @@ describe('K0: ohne Trottoir in der AV', () => {
 })
 
 describe('K0: Vortritt fest (VSS 40 242 Ziffer 12.3)', () => {
-  // Quartierstrasse Tempo 30 ohne Signal: ohne Modus Rechtsvortritt (Entscheid 17.10.2026), mit Modus Vortritt, B 3,00 m statt 5,00 m
+  // Quartierstrasse Tempo 30 ohne Signal: ohne Modus Rechtsvortritt, mit Modus Vortritt, B 3,00 m statt 5,00 m
   const quartier = osm({ highway: 'residential', maxspeed: '30' })
   it('Vorgabe ohne Signal: Vortritt statt Rechtsvortritt', () => {
     expect(rechne(quartier, [fahrbahn]).regelungVorgabe).toBe('rechtsvortritt')
@@ -417,15 +417,15 @@ describe('K0: D\' der Phase Trottoir von Hand (Dtrottoir)', () => {
     const t = e.trottoirueberfahrt!
     expect([t.DtrottoirQuelle, t.Dquelle]).toEqual(['hand', 'hand'])
     nahe(e.trottoirPruefung!.D, 0.75, -10); nahe(t.Dtrottoir, 0.75, -10); nahe(t.D, 0.75, -6.5)
-    nahe(e.trottoirPruefung!.Dachse, 1.25, -10)          // Fahrersitz 0,50 m links der Achse wie bei D
+    nahe(e.trottoirPruefung!.Dachse, 1.25, -10)          // Fahrer*innensitz 0,50 m links der Achse wie bei D
     expect([t.vorderkante, t.hinterkante]).toEqual([v.trottoirueberfahrt!.vorderkante, v.trottoirueberfahrt!.hinterkante])
     nahe(e.trottoirPruefung!.richtungen[0].K, 1.25, -4.5, 0.06)  // Gehlinie unverändert
     expect(e.hinweise.join(' | ')).not.toContain("D' von Hand")   // 4,98 m hinter dem hinteren Rand
     expect(e.annahmen.join(' | ')).toContain("Für die Sicht aufs Trottoir liegt das Auge D' von Hand 4,98 m hinter dem hinteren Rand der " +
-      'Überfahrt (Vorgabe 3,00 m, VSS 40 273 Ziffer 13.2, S. 8).')
+      'Überfahrt (berechnete Ausgangslage 3,00 m, VSS 40 273 Ziffer 13.2, S. 8).')
     // ohne D' von Hand: D' 3,00 m hinter dem hinteren Rand, mit Fundstelle
     expect(v.annahmen.join(' | ')).toContain("Für die Sicht aufs Trottoir liegt das Auge D' 3,00 m hinter dem hinteren Rand der Überfahrt, " +
-      'am Fahrersitz (VSS 40 273 Ziffer 13.2, S. 8).')
+      'am Fahrer*innensitz (VSS 40 273 Ziffer 13.2, S. 8).')
   })
   it('Hinweis unter 3,00 m hinter dem hinteren Rand bzw. weit weg; ohne Häkchen ohne Wirkung', () => {
     const n = rechne(osm(), av, { eingaben: eg({ ...TUE, Dtrottoir: lv(0.75, -6.5) }) })

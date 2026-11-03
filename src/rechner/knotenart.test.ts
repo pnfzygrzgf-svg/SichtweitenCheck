@@ -1,4 +1,4 @@
-// Tests Korrektur 31.10.2026, Punkte 11 bis 16 (synthetische Netze): Arme ohne Zufahrt, Gabelungen, LSA-Knoten, Beschriftung der Regelung,
+// Tests (synthetische Netze): Arme ohne Zufahrt, Gabelungen, LSA-Knoten, Beschriftung der Regelung,
 // Arme mit Vortritt, Kreisel. T-Knoten 12: Hauptstrasse West–Ost (Weg 1, von West nach Ost digitalisiert), Nebenstrasse nach Süden (Weg 2,
 // vom Knoten weg digitalisiert); Arme '1:1:-1' West, '1:1:1' Ost, '2:0:1' Süd.
 

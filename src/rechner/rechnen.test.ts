@@ -69,7 +69,7 @@ describe('Gesamtrechnung T-Knoten', () => {
     const r7 = rechneKnoten(osm({ maxspeed: '', 'zone:maxspeed': 'CH:30' }), [fahrbahn], { knoten: 12, zufahrt: null }).ergebnis!
     expect(r7.richtungen.map(x => [x.tempo, x.tempoAnnahme])).toEqual([[30, false], [30, false]])
   })
-  it('B innerorts 3,00 m vor dem nächstliegenden Rand, D am Fahrersitz 0,5 m links der Zufahrtsachse', () => {
+  it('B innerorts 3,00 m vor dem nächstliegenden Rand, D am Fahrer*innensitz 0,5 m links der Zufahrtsachse', () => {
     expect(e.B).toBe(3)
     expect(e.ausserorts).toBe(false)
     nahe(e.rand, 1.25, -3)
@@ -120,13 +120,13 @@ describe('Gesamtrechnung T-Knoten', () => {
     expect(r4.richtungen.find(x => x.richtung === 'links')!.status).not.toBe('keine_zufahrt')
     expect(r4.richtungen.find(x => x.richtung === 'rechts')!.status).toBe('keine_zufahrt')
   })
-  it('Annahmen in der Seite: B, D Fahrersitz, d, Strassentyp, Vortritt, nur Gebäude', () => {
+  it('Annahmen in der Seite: B, D Fahrer*innensitz, d, Strassentyp, Vortritt, nur Gebäude', () => {
     const t = e.annahmen.join(' | ')
     for (const s of ['Das wartende Fahrzeug steht 3,00 m hinter der Kante des Fahrstreifens mit Vortritt (Beobachtungsdistanz B innerorts',
-      'Das Auge des Lenkers (D) liegt 0,50 m links der Fahrlinie (Fahrersitz)', 'mit der Wagenmitte 1,50 m vom rechten Fahrbahnrand',
+      'Das Fahrer*innenauge (D) liegt 0,50 m links der Fahrlinie (Fahrer*innensitz)', 'mit der Wagenmitte 1,50 m vom rechten Fahrbahnrand',
       'massgebend ist der untere Wert der Tab. 1', 'Vortrittsregelung «Kein Vortritt (Signal 3.02)» angenommen',
       'Gebäude der amtlichen Vermessung (weitere Hindernisse sind keine']) expect(t).toContain(s)
-    // je Thema höchstens ein Punkt, in der Reihenfolge der Rechnung (Korrektur 31.10.2026)
+    // je Thema höchstens ein Punkt, in der Reihenfolge der Rechnung
     expect(e.annahmenThemen!.map(x => x.thema)).toEqual(['vortritt', 'wartend', 'verkehr', 'hindernisse'])
     expect(e.annahmen).toEqual(e.annahmenThemen!.map(x => `${x.titel}: ${x.text}`))
   })
@@ -304,7 +304,7 @@ describe('Block 5: Überholfall ausserorts', () => {
     nahe(l.ueberholfall!.K, 1.25, 1.5)
     expect(l.ueberholfall!.status).toBe('erfuellt')
     expect(e.ueberholen).toMatchObject({ ausserorts: true, vorgabe: true, gewaehlt: false, erlaubt: true, geprueft: true })
-    expect(e.annahmen.join(' | ')).toContain('Ausserorts ist hier Überholen erlaubt (Vorgabe: ohne overtaking=no in OSM: erlaubt angenommen): ' +
+    expect(e.annahmen.join(' | ')).toContain('Ausserorts ist hier Überholen erlaubt (aus Daten: ohne overtaking=no in OSM: erlaubt angenommen): ' +
       'die App prüft von links und von rechts zusätzlich')
     // Massnahmen: rechts nicht erfüllt nur wegen des Überholfalls; die Varianten rechnen ihn mit
     expect(e.massnahmen).not.toBeNull()
@@ -324,7 +324,7 @@ describe('Block 5: Überholfall ausserorts', () => {
     // von Hand: verboten bzw. trotz OSM erlaubt
     expect(rechne(land(), { ueberholen: false }).richtungen.every(r => !r.ueberholfall)).toBe(true)
     expect(rechne(land({ overtaking: 'no' }), { ueberholen: true }).richtungen.every(r => !!r.ueberholfall)).toBe(true)
-    // innerorts: keine Prüfung und keine Annahme (gilt dort nicht; Korrektur 31.10.2026)
+    // innerorts: keine Prüfung und keine Annahme (gilt dort nicht)
     const i = rechne(osm())
     expect(i.richtungen.every(r => !r.ueberholfall)).toBe(true)
     expect(i.annahmen.join(' | ')).not.toContain('Überholfall')

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { REGELN, WERKE, WERK_IDS, MIT_SEITE, THEMEN, HERKUNFT, WIRKUNG_TEXT, regelnJeWerk, regelGruppen, regelnVonWerk, regelnZaehlen } from './regeln'
 
-// Korrektur 31.10.2026 (Punkt 9c): Katalog der angewendeten Regeln
+// Katalog der angewendeten Regeln
 describe('Regeln', () => {
   it('jede Regel: eindeutige id, Werk, Fundstelle, Herkunft, Wirkung, Thema; Wert und Daten nur, wo es sie gibt', () => {
     expect(new Set(REGELN.map(r => r.id)).size).toBe(REGELN.length)

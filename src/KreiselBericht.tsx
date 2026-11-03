@@ -1,3 +1,7 @@
+import { swcSichtMasse } from './sichtMasse'
+import { MassBild, useSichtWahl, sichtZeigen, sichtBildText, kreiselSichtId } from './Sichtfelder'
+import { bavDatenstandText } from './daten/anbieter/gemeinsam/bav'
+import { quellenQualitaetText } from './daten/anbieter/gemeinsam/qualitaet'
 // ── Bericht am Kreisel (K4): Druckansicht mit Skizze (SVG in LV95, ohne Luftbild), Masse, Ablenkungswinkel, Sicht aus der gewählten
 //    Einfahrt (Ak, Velo, Sichtberme, Az als Vergleichswert), Annahmen, Hinweise und Quellen. Gleicher Druckrahmen wie Bericht.tsx; der
 //    vollständige Bericht mit Luftbild, Regeln und Begriffen folgt in K6. ──
@@ -27,6 +31,7 @@ const SKIZZE_M = 45
 
 /** Skizze des Kreisels in LV95 (Norden oben, Massstabsbalken 10 m) */
 function Skizze({ kn, fall }: { kn: KnotenInfo; fall: Fall }) {
+  const [sicht] = useSichtWahl()
   const k = kn.kreisel!, v = k.vermessung, s = k.sicht!, z = k.zufahrt!
   const m = v.mitte
   // Fahrzeuge wie auf der Karte: F_B bei D, F_A am Ende von Ak, Velo am Ende seiner Linie, Fahrzeug in der Zufahrt links am Ende von Az
@@ -45,7 +50,7 @@ function Skizze({ kn, fall }: { kn: KnotenInfo; fall: Fall }) {
     {t.dreieckVerdeckt.length > 2 && <path d={pfad(t.dreieckVerdeckt, true)} fill={VERDECKT_FARBE} fillOpacity={0.2} stroke="none" />}
   </>
   return (
-    <svg className="bericht-bild" viewBox={`0 0 ${2 * SKIZZE_M} ${2 * SKIZZE_M}`} role="img" aria-label="Skizze des Kreisels">
+    <figure><figcaption className="klein">{sichtBildText(sicht, ['auto', 'velo'])}</figcaption><svg className="bericht-bild" viewBox={`0 0 ${2 * SKIZZE_M} ${2 * SKIZZE_M}`} role="img" aria-label="Skizze des Kreisels">
       <defs>
         <pattern id="berme" patternUnits="userSpaceOnUse" width="1.2" height="1.2" patternTransform="rotate(45)">
           <line x1="0" y1="0" x2="0" y2="1.2" stroke="#b45309" strokeWidth="0.35" />
@@ -57,12 +62,12 @@ function Skizze({ kn, fall }: { kn: KnotenInfo; fall: Fall }) {
       {v.inselR > 0 && <path d={pfad(profilLinie(m, v.insel), true)} fill="#86efac" stroke="#15803d" strokeWidth={0.2} />}
       {s.durchsicht.map((r, i) => <path key={i} d={pfad(r, true)} fill="#15803d" fillOpacity={0.45} stroke="none" />)}
       {s.berme.flaechen.map((r, i) => <path key={i} d={pfad(r, true)} fill="url(#berme)" stroke="#b45309" strokeWidth={0.2} />)}
-      {teil(s.velo, VELO_FARBE)}
-      {teil(s.auto, FREI_FARBE)}
+      {sichtZeigen(sicht, 'velo', kreiselSichtId(kn.id, s.arm + '|Velo')) && teil(s.velo, VELO_FARBE)}
+      {sichtZeigen(sicht, 'auto', kreiselSichtId(kn.id, s.arm + '|Ak')) && teil(s.auto, FREI_FARBE)}
       {fall.hindernisse.map(h => { const r = hindernisRing(h); return r.length ? <path key={h.id} d={pfad(r, true)} fill="#7c3aed" fillOpacity={0.4} stroke="#7c3aed" strokeWidth={0.2} /> : null })}
       <polyline points={linie(profilLinie(m, v.fahrlinie))} fill="none" stroke="#0284c7" strokeWidth={0.2} strokeDasharray="0.6 0.8" />
       <polyline points={linie(z.vortrittLinie)} fill="none" stroke="#0284c7" strokeWidth={0.5} />
-      {s.az && <polyline points={linie(s.az.achse)} fill="none" stroke={STATUS_FARBE[s.az.status]} strokeWidth={0.4} strokeDasharray="1.5 0.8" />}
+      {s.az && sichtZeigen(sicht, 'auto', kreiselSichtId(kn.id, s.arm + '|Az')) && <polyline points={linie(s.az.achse)} fill="none" stroke={STATUS_FARBE[s.az.status]} strokeWidth={0.4} strokeDasharray="1.5 0.8" />}
       <polyline points={linie(z.achse)} fill="none" stroke={ZUFAHRT_FARBE} strokeWidth={0.5} />
       {fahrzeuge.map((f, i) => f.velo ? <g key={i}>{veloTeile(f.lage[0], f.lage[1]).map((t, j) => <path key={j} d={pfad(t, true)} fill={f.farbe}
         stroke="#ffffff" strokeWidth={0.05} />)}</g> : <g key={i}><path d={pfad(autoUmriss(f.lage[0], f.lage[1]), true)} fill={f.farbe} stroke={f.rand}
@@ -77,7 +82,8 @@ function Skizze({ kn, fall }: { kn: KnotenInfo; fall: Fall }) {
         <text x="0" y="-1.2" fontSize={1.6}>0</text><text x="10" y="-1.2" fontSize={1.6} textAnchor="middle">10 m</text></g>
       <text x={2 * SKIZZE_M - 3} y={5} fontSize={2.4} textAnchor="middle">N</text>
       <path d={`M${2 * SKIZZE_M - 3},6 l-1,3 l1,-0.8 l1,0.8 Z`} fill="#111827" />
-    </svg>
+      <MassBild masse={swcSichtMasse(null, kn)} wahl={sicht} xy={xy} skala={2 * SKIZZE_M / 1000} />
+    </svg></figure>
   )
 }
 
@@ -109,7 +115,7 @@ export default function KreiselBericht({ fall, kn, kantone, quellen, aendern, sc
     window.addEventListener('keydown', esc)
     return () => window.removeEventListener('keydown', esc)
   }, [schliessen])
-  const abruf = (q: string) => (quellen[q]?.zeit ? `, abgerufen ${datumIso(quellen[q].zeit)}` : '')
+  const abruf = (k: string) => (quellen[k]?.zeit ? `, abgerufen ${datumIso(quellen[k].zeit)}` : '') + `; ${quellenQualitaetText(quellen[k])}`
   const nr = (key: string) => k.arme.find(a => a.key === key)?.nr ?? '?'
   const zeile = (name: string, t: KreiselSichtTeil, noetig: string, az = false) => <tr key={name}><td>{name}</td><td>{noetig}</td>
     <td>{f1(t.vorhanden)} m{t.bisEnde ? ' (Linie frei)' : t.verdecker ? `, verdeckt durch ${t.verdecker.name}` : ''}</td>
@@ -151,7 +157,7 @@ export default function KreiselBericht({ fall, kn, kantone, quellen, aendern, sc
             <tr><td>Koordinaten der Mitte</td><td>LV95 E {tausender(kn.p[0])}, N {tausender(kn.p[1])} · WGS84 {lat.toFixed(6)}, {lon.toFixed(6)}</td></tr>
             <tr><td>Arme</td><td>{nachNr(k.arme).map(armText).join(', ')}<div className="klein">Nummern im Uhrzeigersinn ab Norden</div></td></tr>
             <tr><td>Einfahrt</td><td>{armText(arm)}<div className="klein">Fahrlinie: {z.lageQuelle}</div></td></tr>
-            <tr><td>Beobachtung</td><td>B {f2(z.B)} m hinter dem Rand der Kreiselfahrbahn (Wartelinie), D am Fahrersitz</td></tr>
+            <tr><td>Beobachtung</td><td>B {f2(z.B)} m hinter dem Rand der Kreiselfahrbahn (Wartelinie), D am Fahrer*innensitz</td></tr>
             <tr><td>Daten geladen</td><td>{datumIso(fall.quellen.geladen)}</td></tr>
           </tbody></table>
         </section>
@@ -216,6 +222,9 @@ export default function KreiselBericht({ fall, kn, kantone, quellen, aendern, sc
             <li>Kreisel, Arme, Velobypässe, Tram: © OpenStreetMap-Mitwirkende, ODbL{fall.quellen.osm ? ` (${fall.quellen.osm})` : ''}{abruf('osm')}</li>
             {fall.quellen.parkkataster && <li>Parkfelder: {fall.quellen.parkkataster}{abruf('parkkataster')}</li>}
             {fall.quellen.baumkataster && <li>Bäume: {fall.quellen.baumkataster}{abruf('baumkataster')}</li>}
+            {fall.amtlicheQuellen?.bav && <li>Haltestellen (nur Kartenquelle): {fall.quellen.bav}; {fall.amtlicheQuellen.bav.halte.length} Punkte,
+              abgerufen {fall.amtlicheQuellen.bav.abgerufen}; Datenstand {bavDatenstandText(fall.amtlicheQuellen.bav)} (Ebene); Vollständigkeit unbekannt.</li>}
+            {fall.quellen.gebiet && <li>Gebietsbestimmung: {fall.quellen.gebiet}{abruf('gebiet')}</li>}
             <li>Normen: VSS 40 263 (Kreisel), VSS 40 273 (Sichtverhältnisse); nur Fundstellen und Zahlenwerte, der Text ist im Original nachzulesen.</li>
           </ul>
         </section>

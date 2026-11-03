@@ -1,3 +1,12 @@
+import { swcSichtMasse, massBildPunkte } from './sichtMasse'
+import { ZUFAHRT_HERKUNFT } from './rechner/grundstueck'
+import { MassBild, useSichtWahl, sichtZeigen, sichtMassZeigen, richtungSichtId, sichtBildText, type SichtArt } from './Sichtfelder'
+import { bundBelegText } from './daten/anbieter/gemeinsam/bundBelege'
+import { signalText } from './daten/anbieter/gemeinsam/regionalSignale'
+import { regionalDienst } from './daten/anbieter/gemeinsam/regionalDienste'
+import { zhStandText } from './daten/anbieter/gemeinsam/zuerich'
+import { quellenQualitaetText } from './daten/anbieter/gemeinsam/qualitaet'
+import { bavDatenstandText } from './daten/anbieter/gemeinsam/bav'
 // ── Bericht (E4a): Druckansicht eines Falls, als PDF über den Druckdialog des Browsers ──
 //
 // Vorlage: Bericht.tsx des fgsCheck. Eigene Ansicht über der App (die Karte bleibt darunter bestehen), als Portal direkt im body,
@@ -58,7 +67,15 @@ function bildHindernisse(fall: Fall, e: Ergebnis): Hindernis[] {
 
 const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBereit }: { e: Ergebnis; kn: KnotenInfo | null; av: AvFlaeche[]
   hindernisse: Hindernis[]; onBereit: (s: 'laedt' | 'ok' | 'fehler') => void }) {
-  const box = useMemo(() => ausschnitt(berichtPunkte(e, kn)), [e, kn])
+  const [sicht] = useSichtWahl()
+  const masse = useMemo(() => swcSichtMasse(e, kn), [e, kn])
+  const box = useMemo(() => {
+    const punkte = berichtPunkte(e, kn)
+    let box = ausschnitt(punkte)
+    if (sicht.masse) for (let i = 0; i < 3; i++) box = ausschnitt([...punkte,
+      ...massBildPunkte(masse.filter(m => sichtMassZeigen(sicht, m)), box[2] - box[0])])
+    return box
+  }, [e, kn, masse, sicht])
   const wM = box[2] - box[0], hM = box[3] - box[1]
   const { breite: bw, hoehe: bh } = bildPixel(box)
   const { s, vh, xy } = svgAbbildung(box)
@@ -83,9 +100,9 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
   const flaechen = av.filter(f => (f.art === 'Strasse_Weg' || f.art === 'Gebaeude') && f.ringe[0] && imAusschnitt(f.ringe[0], box))
   const hind = hindernisse.map(h => ({ h, ring: hindernisRing(h) })).filter(x => x.ring.length >= 3 && imAusschnitt(x.ring, box))
   const treffer: VerdeckerEintrag[] = []
-  for (const r of e.richtungen) { treffer.push(...r.verdeckerListe); if (r.velo) treffer.push(...r.velo.verdeckerListe)
-    if (r.ueberholfall) treffer.push(...r.ueberholfall.verdeckerListe) }
-  for (const t of e.trottoirPruefung?.richtungen ?? []) treffer.push(...t.verdeckerListe)
+  for (const r of e.richtungen) { if (sichtZeigen(sicht, 'auto', richtungSichtId(e, r))) treffer.push(...r.verdeckerListe); if (r.velo && sichtZeigen(sicht, 'velo', richtungSichtId(e, r))) treffer.push(...r.velo.verdeckerListe)
+    if (r.ueberholfall && sichtZeigen(sicht, 'ueberholen', richtungSichtId(e, r))) treffer.push(...r.ueberholfall.verdeckerListe) }
+  for (const t of (e.trottoirPruefung?.richtungen ?? []).filter(t => sichtZeigen(sicht, 'trottoir', richtungSichtId(e, t)))) treffer.push(...t.verdeckerListe)
   const kreis = (p: P, r: number, fill: string, stroke = '#111827', w = 1.5) => {
     const [x, y] = xy(p)
     return <circle cx={x} cy={y} r={r} fill={fill} stroke={stroke} strokeWidth={w} />
@@ -105,7 +122,7 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
     <path d={pfad([autoScheibe(mitte, richtung)])} fill="#94a3b8" stroke="#94a3b8" strokeWidth={1} />
   </>
   const fb = fbLage(e.Dachse, add(e.Dachse, e.fbRichtung))
-  // Velo gegen die Einbahn auf der Zufahrt (E4): F_B als Velo, Velofahrer bei D
+  // Velo gegen die Einbahn auf der Zufahrt (E4): F_B als Velo, velofahrende Person bei D
   const fbVelo = e.zufahrtVelo ? fbVeloLage(e.Dachse, add(e.Dachse, e.fbRichtung)) : null
   const velo = (l: [P, P], key: string, fb = false) => veloTeile(l[0], l[1]).map((t, k) => <path key={key + k} d={pfad([t])}
     fill={fb ? FB_FARBE : k === 3 ? '#111827' : VELO_FARBE} stroke={fb ? '#ffffff' : VELO_FARBE} strokeWidth={fb ? 1.5 : 1} />)
@@ -123,20 +140,20 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
           {flaechen.map((f, i) => <path key={'av' + i} d={pfad(f.ringe)} fillRule="evenodd" fill={AV_FARBEN[f.art]}
             fillOpacity={f.art === 'Gebaeude' ? 0.35 : 0.18} stroke={AV_FARBEN[f.art]} strokeOpacity={0.6} strokeWidth={1} />)}
           {/* Sichtdreiecke Auto: frei grün durchgezogen, verdeckt rot gestrichelt */}
-          {e.richtungen.filter(r => r.status !== 'keine_zufahrt').map(r => <g key={'d' + r.richtung}>
+          {e.richtungen.filter(r => sichtZeigen(sicht, 'auto', richtungSichtId(e, r)) && r.status !== 'keine_zufahrt').map(r => <g key={'d' + r.richtung}>
             {r.dreieckFrei.length >= 3 && <path d={pfad([r.dreieckFrei])} fill={FREI_FARBE} fillOpacity={0.3} stroke={FREI_FARBE} strokeWidth={2} />}
             {r.dreieckVerdeckt.length >= 3 && <path d={pfad([r.dreieckVerdeckt])} fill={VERDECKT_FARBE} fillOpacity={0.3} stroke={VERDECKT_FARBE}
               strokeWidth={2} strokeDasharray={STRICH_VERDECKT} />}
           </g>)}
           {/* Überholfall (Block 5): zweites Sichtdreieck auf den Gegenfahrstreifen, schwach und fein gestrichelt */}
-          {e.richtungen.map(r => r.ueberholfall && <g key={'u' + r.richtung}>
+          {e.richtungen.map(r => sichtZeigen(sicht, 'ueberholen', richtungSichtId(e, r)) && r.ueberholfall && <g key={'u' + r.richtung}>
             {r.ueberholfall.dreieckFrei.length >= 3 && <path d={pfad([r.ueberholfall.dreieckFrei])} fill={FREI_FARBE} fillOpacity={0.1}
               stroke={FREI_FARBE} strokeWidth={1.5} strokeDasharray="3 5" />}
             {r.ueberholfall.dreieckVerdeckt.length >= 3 && <path d={pfad([r.ueberholfall.dreieckVerdeckt])} fill={VERDECKT_FARBE} fillOpacity={0.12}
               stroke={VERDECKT_FARBE} strokeWidth={1.5} strokeDasharray="3 5" />}
           </g>)}
           {/* Trottoir: Bernstein, verdeckt rot gestrichelt */}
-          {(e.trottoirPruefung?.richtungen ?? []).map(t => <g key={'t' + t.richtung}>
+          {(e.trottoirPruefung?.richtungen ?? []).filter(t => sichtZeigen(sicht, 'trottoir', richtungSichtId(e, t))).map(t => <g key={'t' + t.richtung}>
             {t.dreieckFrei.length >= 3 && <path d={pfad([t.dreieckFrei])} fill={TROTTOIR_FARBE} fillOpacity={0.3} stroke={TROTTOIR_FARBE} strokeWidth={2} />}
             {t.dreieckVerdeckt.length >= 3 && <path d={pfad([t.dreieckVerdeckt])} fill={VERDECKT_FARBE} fillOpacity={0.3} stroke={VERDECKT_FARBE}
               strokeWidth={2} strokeDasharray={STRICH_VERDECKT} />}
@@ -152,7 +169,7 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
           {treffer.map((t, i) => <path key={'v' + i} d={pfad([t.ring])} fill="none" stroke={t.wirkung === 'voll' ? '#7f1d1d' : TREFFER_FARBE[t.wirkung]}
             strokeWidth={3} strokeDasharray={t.wirkung === 'hinweis' ? '6 4' : undefined} />)}
           {/* Velo: Petrol gestrichelt, verdeckt rot gestrichelt; Veloachse */}
-          {e.richtungen.map(r => r.velo && <g key={'velo' + r.richtung}>
+          {e.richtungen.map(r => sichtZeigen(sicht, 'velo', richtungSichtId(e, r)) && r.velo && <g key={'velo' + r.richtung}>
             {r.velo.dreieckFrei.length >= 3 && <path d={pfad([r.velo.dreieckFrei])} fill={VELO_FARBE} fillOpacity={0.08} stroke={VELO_FARBE}
               strokeWidth={2.5} strokeDasharray={STRICH_VELO} />}
             {r.velo.dreieckVerdeckt.length >= 3 && <path d={pfad([r.velo.dreieckVerdeckt])} fill={VERDECKT_FARBE} fillOpacity={0.12}
@@ -160,7 +177,7 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
             <polyline points={linie(r.velo.achse)} fill="none" stroke={VELO_FARBE} strokeWidth={2} strokeDasharray="4 5" />
           </g>)}
           {/* Rechtsvortritt, schmale Zufahrt (Abb. 5, Konstruktion nach bfu BM.021 Abb. 4): Pfad und Fächer der Sichtlinien von D */}
-          {m && <g>
+          {m && sichtZeigen(sicht, 'auto', richtungSichtId(e, { richtung: 'rechts' })) && <g>
             <polyline points={linie(m.pfad)} fill="none" stroke="#111827" strokeWidth={1.5} strokeDasharray="8 3 2 3" />
             {m.linien.filter(l => l.frei).map((l, i) => <polyline key={'pf' + i} points={linie([m.D, l.p])}
               fill="none" stroke="#64748b" strokeOpacity={0.45} strokeWidth={1} />)}
@@ -169,7 +186,7 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
           </g>}
           {/* Zufahrtsachse, Fahrstreifenachsen mit K und Ende von A */}
           <polyline points={linie(e.zufahrtAchse)} fill="none" stroke={ZUFAHRT_FARBE} strokeWidth={3} strokeDasharray="8 6" />
-          {e.richtungen.filter(r => r.status !== 'keine_zufahrt').map(r => <g key={'a' + r.richtung}>
+          {e.richtungen.filter(r => sichtZeigen(sicht, 'auto', richtungSichtId(e, r)) && r.status !== 'keine_zufahrt').map(r => <g key={'a' + r.richtung}>
             <polyline points={linie(r.achse)} fill="none" stroke="#111827" strokeWidth={4} strokeOpacity={0.6} />
             <polyline points={linie(r.achse)} fill="none" stroke="#ffffff" strokeWidth={2} strokeDasharray="8 6" />
           </g>)}
@@ -177,7 +194,7 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
             <polyline points={linie(e.haltelinie.quer)} fill="none" stroke="#111827" strokeWidth={8} />
             <polyline points={linie(e.haltelinie.quer)} fill="none" stroke="#ffffff" strokeWidth={5} />
           </>}
-          {/* Fahrzeuge: FB auf der Zufahrt, FA am Ende von A, Velo am Ende von A Velo, Fussgänger am Ende von A Trottoir */}
+          {/* Fahrzeuge: FB auf der Zufahrt, FA am Ende von A, Velo am Ende von A Velo, Zufussgehende am Ende von A Trottoir */}
           {fbVelo ? velo(fbVelo, 'fb', true) : auto(fb[0], fb[1], FB_FARBE, '#ffffff')}
           {e.richtungen.filter(r => r.status !== 'keine_zufahrt' || r.velo).map(r => {
             const mfz = r.status !== 'keine_zufahrt'
@@ -189,9 +206,9 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
               {vl && velo(vl, 'v')}
               {mfz && kreis(r.K, 5, '#ffffff')}
               {mfz && beschriftung(r.K, 'K', 7, 18, 16)}
-              {mfz && iA > 0 && kreis(r.sichtpunkte[iA], 5, STATUS_FARBE[r.status])}
-              {mfz && iA > 0 && beschriftungA(r.sichtpunkte[iA], `${lageKurz(r)}: A ${r.massgebend} m`)}
-              {!mfz && vl && beschriftungA(vl[0], `${lageKurz(r)}: nur Velo, A ${v!.A} m`)}
+              {mfz && sichtZeigen(sicht, 'auto', richtungSichtId(e, r)) && iA > 0 && kreis(r.sichtpunkte[iA], 5, STATUS_FARBE[r.status])}
+              {mfz && sicht.masse && sichtZeigen(sicht, 'auto', richtungSichtId(e, r)) && iA > 0 && beschriftungA(r.sichtpunkte[iA], `${lageKurz(r)}: A ${r.massgebend} m`)}
+              {!mfz && vl && sicht.masse && sichtZeigen(sicht, 'velo', richtungSichtId(e, r)) && beschriftungA(vl[0], `${lageKurz(r)}: nur Velo, A ${v!.A} m`)}
             </g>
           })}
           {(e.trottoirPruefung?.richtungen ?? []).map(t => {
@@ -226,9 +243,14 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
             <text x={0} y={24} fontSize={18} fontWeight={700} textAnchor="middle" {...halo}>N</text>
           </g>
           <text x={VB - 8} y={vh - 8} fontSize={13} textAnchor="end" {...halo} strokeWidth={4}>© swisstopo · AV geodienste.ch · © OpenStreetMap-Mitwirkende</text>
+          <MassBild masse={masse} wahl={sicht} xy={pt} />
         </svg>
       </div>
       <figcaption className="klein">
+        {sichtBildText(sicht, (['auto', 'velo', 'trottoir', 'ueberholen'] as SichtArt[]).filter(a =>
+          a === 'auto' ? e.richtungen.some(r => r.status !== 'keine_zufahrt') || !!m : a === 'velo' ? e.richtungen.some(r => r.velo) :
+          a === 'trottoir' ? !!e.trottoirPruefung : e.richtungen.some(r => r.ueberholfall)))}{' '}
+
         {status === 'laedt' && <span className="nicht-drucken">Luftbild wird geladen … </span>}
         {(status === 'fehler' || status === 'zeit') && <span className="warnung">Luftbild nicht geladen: Kartenbild ohne Hintergrund. </span>}
         {(status === 'fehler' || status === 'zeit') && <span className="nicht-drucken">
@@ -236,16 +258,16 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
           <button className="zweit klein" onClick={() => setVersuch(v => v + 1)}>erneut versuchen</button>{' '}</span>}
         Ausschnitt {Math.round(wM)} × {Math.round(hM)} m, Norden oben (LV95). Grau: Fahrbahn und Gebäude (AV). Sichtdreiecke Motorfahrzeuge
         von D bis A: grün durchgezogen frei, rot gestrichelt verdeckt; Velo blaugrün gestrichelt (Veloachse fein gestrichelt, Velo am Ende von
-        A); Trottoir indigo von D' (Fussgänger als Ring am Ende von A). Weiss gestrichelt: Fahrstreifenachsen ab K, beschriftet am Ende
+        A); Trottoir indigo von D' (Zufussgehende als Ring am Ende von A). Weiss gestrichelt: Fahrstreifenachsen ab K, beschriftet am Ende
         von A (Velo verdeckt: rot fein gestrichelt, Trottoir verdeckt: rot gestrichelt); orange gestrichelt: {e.zufahrtVelo ? 'Achse des Velogegenverkehrs auf der Zufahrt' : 'Zufahrtsachse'};{' '}
-        {e.zufahrtVelo ? <>dunkles Velo: F<sub>B</sub> als Velo (Velo gegen die Einbahn auf der Zufahrt, Velofahrer bei D)</> : <>dunkles Fahrzeug F<sub>B</sub> auf der
+        {e.zufahrtVelo ? <>dunkles Velo: F<sub>B</sub> als Velo (Velo gegen die Einbahn auf der Zufahrt, velofahrende Person bei D)</> : <>dunkles Fahrzeug F<sub>B</sub> auf der
         Zufahrt</>}, helles F<sub>A</sub> mit der Front bei A
         (Personenwagen, nur Darstellung). Farbige Flächen: Hindernisse (blau Parkfeld Auto, blaugrün Velo, pink Motorrad, braun Baum, orange
         Hecke und Mauer, violett Zaun, dunkelbraun übriges Hindernis); Rand dunkelrot: Verdecker im Sichtdreieck bis A, gelb: Palisade, violett gestrichelt: nur Hinweis.
         {e.haltelinie && <> Weisse Querlinie: Halte- oder Wartelinie (Vorderkante).</>}
         {e.richtungen.some(r => r.ueberholfall) && <> Überholfall (ausserorts, Ziffer 6): schwaches, fein gestricheltes Sichtdreieck auf den
           Gegenfahrstreifen.</>}
-        {' '}D: weisser Punkt mit dunklem Rand {e.zufahrtVelo ? 'beim Velofahrer' : 'am Fahrersitz'} von F<sub>B</sub>{e.Dhand ? ', oranger Rand: von Hand' : ''}.
+        {' '}D: weisser Punkt mit dunklem Rand {e.zufahrtVelo ? 'bei der velofahrenden Person' : 'am Fahrer*innensitz'} von F<sub>B</sub>{e.Dhand ? ', oranger Rand: von Hand' : ''}.
         {kn && <> Nummern: Arme im Uhrzeigersinn ab Norden{kn.grundstueck ? ', Z = Grundstückzufahrt (am Zufahrtspunkt)' : ''}; grün die
           gewählte Zufahrt.</>}
         {m && <> Rechtsvortritt, schmale Zufahrt (Abb. 5, Konstruktion nach bfu BM.021 Abb. 4): Sichtlinien von D zu den Punkten alle{' '}
@@ -273,7 +295,7 @@ function ErgebnisTabelle({ e }: { e: Ergebnis }) {
           <tr className="bericht-zwischen"><td colSpan={rs.length + 1}><b>Motorfahrzeuge</b> (VSS 40 273 Tab. 1){e.trottoirueberfahrt ?
             ' – Trottoirüberfahrt, Phase Fahrbahn (ab der Bordkante)' : ''}</td></tr>
           {zeile('Tempo', auto(r => <>{r.tempo} km/h<div className="klein">{r.tempoArt ? `von Hand: ${TEMPO_ART_TEXT[r.tempoArt]}` +
-            `${r.tempoBegruendung ? ` («${r.tempoBegruendung}»)` : ''}; Vorgabe ${r.tempoVorgabe} km/h (${r.tempoVorgabeQuelle})` :
+            `${r.tempoBegruendung ? ` («${r.tempoBegruendung}»)` : ''}; ${r.tempoVorgabeQuelle.startsWith('Annahme') ? 'Annahme' : 'Datenwert'}: ${r.tempoVorgabe} km/h (${r.tempoVorgabeQuelle})` :
             `${r.tempoQuelle}${r.tempoAnnahme ? ' (Annahme)' : ''}`}</div></>))}
           {zeile('Längsneigung i', auto(r => <>{r.neigungUnbekannt ? 'unbekannt' : `${fi(r.neigung)} %`}<div className="klein">{r.neigungQuelle}</div></>))}
           {zeile('A nach Strassentyp', auto(r => <>{r.typWert} m<div className="klein">{r.typText}; Tab. 1 {r.erforderlichUnten} bis {r.erforderlichOben} m</div></>))}
@@ -294,7 +316,7 @@ function ErgebnisTabelle({ e }: { e: Ergebnis }) {
         <tr className="bericht-zwischen"><td colSpan={rs.length + 1}><b>Veloverkehr</b> (Tab. 3){e.trottoirueberfahrt ?
           ' – Phase Fahrbahn' : ''}</td></tr>
         {zeile('Veloführung', r => <>{VELOFUEHRUNG_TEXT[r.veloFuehrung]}<div className="klein">{r.veloGewaehlt ?
-          `von Hand; Vorgabe ${VELOFUEHRUNG_TEXT[r.veloVorgabe]} (${r.veloVorgabeQuelle})` : r.veloVorgabeQuelle}</div></>)}
+          `von Hand; aus Daten: ${VELOFUEHRUNG_TEXT[r.veloVorgabe]} (${r.veloVorgabeQuelle})` : r.veloVorgabeQuelle}</div></>)}
         {zeile('A Velo', r => r.velo ? <><b>{r.velo.A} m</b><div className="klein">{r.velo.text}; {r.velo.tempo} km/h, i {r.velo.neigungUnbekannt ?
           'unbekannt' : `${fi(r.velo.neigung)} %`}
           {r.velo.ebike ? '; schnelle E-Bikes verboten' : ''}; {r.velo.lageText}</div></> : leer('keine Prüfung'), 'A Velo')}
@@ -312,7 +334,7 @@ function ErgebnisTabelle({ e }: { e: Ergebnis }) {
           {zeile('A vorhanden Trottoir', r => { const t = tr(r); return t ? <b>{vorhandenText(t.vorhanden, t.bisEnde)}</b> : leer('–') }, 'vT')}
           {zeile('Status Trottoir', r => { const t = tr(r); return t ? <b>{statusMarke(t.status)} {STATUS_TEXT_TEIL[t.status]}</b> : leer('–') }, 'sT')}
           {zeile('Vergleich bfu', r => { const t = tr(r); if (!t) return leer('–'); const b = bfuTrottoir(t.neigung, t.neigungUnbekannt)
-            return <>Fussgänger, fäG, Kinder auf dem Velo {b.fuss} m; zugelassene Velos {b.velo} m<div className="klein">{b.text};
+            return <>Zufussgehende, fäG, Kinder auf dem Velo {b.fuss} m; zugelassene Velos {b.velo} m<div className="klein">{b.text};
               Vergleichswerte, ohne Wirkung (massgebend VSS 40 273 Tab. 2)</div></> }, 'bT')}
         </> : <tr><td>Trottoir</td><td colSpan={rs.length}>{leer(`keine Prüfung (${e.trottoirGrund || 'kein Trottoir an der Zufahrt nach AV'})`)}</td></tr>}
         <tr className="bericht-gesamt"><td><b>Gesamtstatus</b></td>{rs.map(r => <td key={r.richtung}><b>{statusMarke(r.gesamt, !!r.rv)} {gesamtText(r)}</b></td>)}</tr>
@@ -332,7 +354,7 @@ function RvBerichtBlock({ e }: { e: Ergebnis }) {
       <table className="bericht-zahlen"><tbody>
         <tr><td>Geprüft</td><td>{a.armName} gegen den Arm rechts: {a.rechtsName}</td></tr>
         <tr><td>Tempo, B</td><td>Norm: {rv.tempo} km/h (Ziffer 15, S. 10), B {f2(rv.B)} m (Abb. 4)</td></tr>
-        <tr><td>Wahrnehmbarkeit</td><td>{WAHRNEHMBARKEIT_TEXT[rv.wahrnehmbarkeit]} ({rv.wahrnehmbarkeitGewaehlt ? 'von Hand' : 'Vorgabe, Annahme'}; Ziffer 18){rv.markierung ? '; besondere Markierung «Rechtsvortritt» vorhanden (VSS 40 851)' : ''}</td></tr>
+        <tr><td>Wahrnehmbarkeit</td><td>{WAHRNEHMBARKEIT_TEXT[rv.wahrnehmbarkeit]} ({rv.wahrnehmbarkeitGewaehlt ? 'von Hand' : 'Annahme der App'}; Ziffer 18){rv.markierung ? '; besondere Markierung «Rechtsvortritt» vorhanden (VSS 40 851)' : ''}</td></tr>
         {a.status === 'keine' ? <tr><td>Status</td><td><b>{statusMarke('keine')} {a.nurVelo ? 'keine Prüfung nach Abb. 6, nur Velos von rechts' :
           'keine Prüfung'}</b>: {a.grund}{a.nurVelo ? ' (Ergebnis in der Tabelle, Veloverkehr von rechts)' : ''}</td></tr> : <>
           <tr><td>Sichtweite vorhanden</td><td><b>{vorhandenText(a.vorhanden, a.bisEnde)}</b> ({RV_A_M} m anzustreben, {RV_A_MIN_M} m Minimum bei
@@ -342,7 +364,7 @@ function RvBerichtBlock({ e }: { e: Ergebnis }) {
           {m && <tr><td>Sichtfeld Abb. 5</td><td>{m.frei ? 'frei' : 'nicht frei'}: {m.sichtbar} von {m.linien.length} Sichtlinien frei
             ({Math.round(m.anteil * 100)} %){m.erste ? `; erste verdeckte bei ${f1(m.erste.s)} m Pfadlänge ab D (${f1(m.erste.sRechts)} m auf ` +
             `dem rechten Arm; ${m.erste.verdecker})` : ''}<div className="klein">Konstruktion nach bfu BM.021 Kap. 3.2.2, Abb. 4: Pfad von{' '}
-            {ENG_LAENGE_M} m ab D über den Schnitt der Achsen, Punkte alle {ENG_SCHRITT_M} m (Annahmen: Beobachter und Pfadbeginn in D).</div></td></tr>}
+            {ENG_LAENGE_M} m ab D über den Schnitt der Achsen, Punkte alle {ENG_SCHRITT_M} m (Annahmen: beobachtende Person und Pfadbeginn in D).</div></td></tr>}
           <tr><td>Status</td><td><b>{statusMarke(a.status)} {RV_STATUS_TEXT[a.status]}</b>{m && !m.frei ? ' · Sichtfeld nach Abb. 5 nicht frei' : ''}</td></tr>
         </>}
       </tbody></table>
@@ -355,7 +377,7 @@ function RvBerichtBlock({ e }: { e: Ergebnis }) {
             <td>{x.zustand ? ZUSTAND_TEXT[x.zustand] : '–'}</td>
             <td><b>{statusMarke(x.status)} {RV_STATUS_TEXT[x.status]}</b>{x.status === 'keine' ? ` (${x.grund})` : x.sichtfeld && !x.sichtfeld.frei ? ' · Abb. 5' : ''}</td></tr>)}</tbody>
         </table>
-        <p className="klein">Nur Motorfahrzeuge nach Abb. 6 bzw. Abb. 5; der gewählte Arm mit seinen Eingaben, die übrigen mit den Vorgaben.</p>
+        <p className="klein">Nur Motorfahrzeuge nach Abb. 6 bzw. Abb. 5; der gewählte Arm mit seinen Eingaben, die übrigen mit den Daten und Annahmen der App.</p>
       </>}
     </section>
   )
@@ -426,8 +448,10 @@ export function eingabenListe(fall: Fall, e: Ergebnis): string[] {
   const rName = (r: Richtung) => { const x = e.richtungen.find(y => y.richtung === r); return `${x ? lageText(x) : `Verkehr von ${r}`}${x ? `, ${x.strasse}` : ''}` }
   if (fall.ort.zufahrt !== null) aus.push(`Zufahrt gewählt: ${e.zufahrtName}`)
   if (e.zufahrtspunkt?.gezeichnet) aus.push('Richtung der Grundstückzufahrt gezeichnet')
-  if (g.regelung !== null) aus.push(`Regelung für die gewählte Zufahrt: ${REGELUNG_TEXT[g.regelung]} (Vorgabe ${REGELUNG_TEXT[e.regelungVorgabe]}, ${e.regelungQuelle})`)
-  if (g.typ !== null) aus.push(`Strassentyp: ${STRASSENTYP_TEXT[g.typ]} (Vorgabe ${STRASSENTYP_TEXT[e.strasse.typVorgabe]}, ${e.strasse.typQuelle})`)
+  if (g.regelung !== null) aus.push(`Regelung für die gewählte Zufahrt: ${REGELUNG_TEXT[g.regelung]} (automatisch ermittelt: ${REGELUNG_TEXT[e.regelungVorgabe]}, ${e.regelungQuelle})`)
+  for (const k of ['typ','innerorts'] as const) { const b=g.bundesbelege?.[k]; if(b && b.wert===g[k]) aus.push(bundBelegText(b)) }
+  if (g.innerorts != null) aus.push(`Ortslage: ${g.innerorts ? 'innerorts' : 'ausserorts'} (bestätigt)`)
+  if (g.typ !== null) aus.push(`Strassentyp: ${STRASSENTYP_TEXT[g.typ]} (aus OSM abgeleitet: ${STRASSENTYP_TEXT[e.strasse.typVorgabe]}, ${e.strasse.typQuelle})`)
   if (g.fahrstreifen !== null) aus.push(`${UNGUNST_TEXT.fahrstreifen}: ${g.fahrstreifen ? 'ja' : 'nein'}`)
   if (g.neigungGross !== null) aus.push(`${UNGUNST_TEXT.neigung}: ${g.neigungGross ? 'ja' : 'nein'}`)
   if (g.schwerverkehr) aus.push(`${UNGUNST_TEXT.schwerverkehr}: ja (von Hand, unabhängig vom Anteil)`)
@@ -436,7 +460,7 @@ export function eingabenListe(fall: Fall, e: Ergebnis): string[] {
   for (const r of ['links', 'rechts'] as Richtung[]) {
     const n = g.neigung[r]
     if (n !== null) { const x = e.richtungen.find(y => y.richtung === r)
-      aus.push(`Längsneigung ${rName(r)}: ${fi(n)} %${x ? ` (Vorgabe ${x.neigungVorgabeUnbekannt ? '' : `${fi(x.neigungVorgabe)} %, `}` +
+      aus.push(`Längsneigung ${rName(r)}: ${fi(n)} %${x ? ` (Höhenmodell: ${x.neigungVorgabeUnbekannt ? '' : `${fi(x.neigungVorgabe)} %, `}` +
         `${x.neigungVorgabeQuelle})` : ''}`) }
     const t = g.tempo[r]
     if (t) aus.push(`Tempo ${rName(r)}: ${t.wert} km/h, ${TEMPO_ART_TEXT[t.art]}${t.begruendung ? `, Begründung «${t.begruendung}»` : ''}`)
@@ -537,7 +561,7 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
     window.addEventListener('keydown', esc)
     return () => window.removeEventListener('keydown', esc)
   }, [schliessen])
-  const abruf = (k: string) => (quellen[k]?.zeit ? `, abgerufen ${datumIso(quellen[k].zeit)}` : '')
+  const abruf = (k: string) => (quellen[k]?.zeit ? `, abgerufen ${datumIso(quellen[k].zeit)}` : '') + `; ${quellenQualitaetText(quellen[k])}`
   const rv = !!e.rechtsvortritt
   const hindernisse = useMemo(() => bildHindernisse(fall, e), [fall, e])
   // Begriffe, die im Bericht vorkommen (Annahmen, Hinweise, Herleitung)
@@ -578,18 +602,18 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
             <tr><td>Koordinaten</td><td>LV95 E {tausender(ort[0])}, N {tausender(ort[1])} · WGS84 {lat.toFixed(6)}, {lon.toFixed(6)}</td></tr>
             <tr><td>{fall.ort.zufahrtspunkt ? 'Grundstückzufahrt' : 'OSM-Knoten'}</td><td>{fall.ort.zufahrtspunkt ?
               `Zufahrtspunkt am Fahrbahnrand (LV95), Richtung ${e.zufahrtspunkt?.gezeichnet ? 'gezeichnet' : e.zufahrtspunkt?.weg != null ?
-                `entlang des OSM-Wegs ${e.zufahrtspunkt.weg}` : 'senkrecht zum Rand'}; Vortrittsstrasse ${e.zufahrtspunkt?.strasse ?? '–'}` :
+                `entlang des OSM-Wegs ${e.zufahrtspunkt.weg}` : 'senkrecht zum Rand'}${e.zufahrtspunkt?.herkunft ? ` (${ZUFAHRT_HERKUNFT[e.zufahrtspunkt.herkunft]})` : ''}${e.zufahrtspunkt?.winkel != null ? `, ${f1(e.zufahrtspunkt.winkel)}° zur lokalen Strassenachse` : ''}; Vortrittsstrasse ${e.zufahrtspunkt?.strasse ?? '–'}` :
               `Knoten ${fall.ort.knoten ?? kn?.id ?? '–'}${kn ? `, ${kn.arme.length} Arme` : ''}`}</td></tr>
             {kn && <tr><td>Arme</td><td>{nachNr(kn.arme).map(armText).join(', ')}<div className="klein">Nummern im Uhrzeigersinn ab Norden wie
               auf der Karte{kn.grundstueck ? ', Z = Grundstückzufahrt' : ''}</div></td></tr>}
             <tr><td>Zufahrt</td><td>{e.zufahrtName}{fall.ort.zufahrt === null && !fall.ort.zufahrtspunkt ? ' (Vorschlag der App)' : ''}
               {e.zufahrtVelo && <div className="klein">nur Velos gegen die Einbahn (Einzelheiten unter Annahmen und Hinweise)</div>}</td></tr>
-            <tr><td>Regelung für die gewählte Zufahrt</td><td>{REGELUNG_TEXT[e.regelung]} ({e.regelungGewaehlt ? 'von Hand' : `Vorgabe: ${e.regelungQuelle}`})</td></tr>
+            <tr><td>Regelung für die gewählte Zufahrt</td><td>{REGELUNG_TEXT[e.regelung]} ({e.regelungGewaehlt ? 'von Hand' : `automatisch ermittelt: ${e.regelungQuelle}`})</td></tr>
             <tr><td>Strassentyp</td><td>{rv ? 'gilt beim Rechtsvortritt nicht (Teil E)' : `${STRASSENTYP_TEXT[e.strasse.typ]} (${e.strasse.typGewaehlt ?
-              'von Hand' : `Vorgabe aus ${e.strasse.typQuelle}, Annahme`})`}</td></tr>
+              'von Hand' : `Annahme aus ${e.strasse.typQuelle}`})`}</td></tr>
             <tr><td>Beobachtung</td><td>B {f2(e.B)} m ({rv ? 'Rechtsvortritt, Abb. 4' : e.ausserorts ? 'ausserorts' : 'innerorts'}) ab der{' '}
-              {e.nullpunktText}; D {e.Dhand ? 'von Hand' : e.zufahrtVelo ? 'beim Velofahrer' :
-                `am Fahrersitz, ${f2(FAHRERSITZ_M)} m links der Achse`}; Einbiegewinkel rund
+              {e.nullpunktText}; D {e.Dhand ? 'von Hand' : e.zufahrtVelo ? 'bei der velofahrenden Person' :
+                `am Fahrer*innensitz, ${f2(FAHRERSITZ_M)} m links der Achse`}; Einbiegewinkel rund
               {' '}{Math.round(e.einbiegewinkel)}°</td></tr>
             {e.trottoirueberfahrt && <tr><td>Trottoirüberfahrt</td><td>Breite {f2(e.trottoirueberfahrt.breite)} m
               ({TUE_BREITE_KURZ[e.trottoirueberfahrt.breiteQuelle]}), hinterer Rand {f2(e.trottoirueberfahrt.laenge)} m hinter der Bordkante;{' '}
@@ -629,7 +653,7 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
         <section className="bericht-block">
           <h2>Eingaben von Hand</h2>
           {eingaben.length ? <ul className="klein">{eingaben.map((x, i) => <li key={i}>{x}</li>)}</ul> :
-            <p className="klein">Keine. Ergebnis allein aus den geladenen Daten und den Vorgaben.</p>}
+            <p className="klein">Keine. Ergebnis aus den geladenen Daten, Rechenregeln und ausgewiesenen Annahmen.</p>}
           <p className="klein">Die Eingaben lassen sich in der App mit «Fall speichern» als Fall-Datei (JSON) sichern und mit «Fall laden»
             wiederherstellen.</p>
           <h3>Annahmen</h3>
@@ -646,17 +670,23 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
           <h2>Quellen</h2>
           <ul className="klein">
             <li>Luftbild: {LUFTBILD_QUELLE}{flugjahr ? `, Flugjahr ${flugjahr}` : ''} ({bild === 'ok' ? `Kartenbild: wms.geo.admin.ch, abgerufen ${datum(heute)}` :
-              'Kartenbild ohne Luftbild (nicht geladen)'})</li>
+              'Kartenbild ohne Luftbild (nicht geladen)'}){flugjahr ? '' : '; Datenstand unbekannt'}; Vollständigkeit unbekannt</li>
             <li>Höhenmodell: {fall.quellen.hoehen ?? 'swissALTI3D (swisstopo), nicht geladen'}{abruf('hoehen')}</li>
             <li>Bodenbedeckung (Fahrbahn, Trottoir, Gebäude): {fall.quellen.av ?? `Amtliche Vermessung, Kanton ${kantone.join(', ') || '–'}, geodienste.ch`}{abruf('av')}</li>
             <li>Strassennetz, Tempo, Veloführung: © OpenStreetMap-Mitwirkende, ODbL{fall.quellen.osm ? ` (${fall.quellen.osm})` : ''}{abruf('osm')}</li>
             {fall.quellen.parkkataster && <li>Parkfelder: {fall.quellen.parkkataster}{abruf('parkkataster')}</li>}
             {fall.quellen.baumkataster && <li>Bäume: {fall.quellen.baumkataster}{abruf('baumkataster')}</li>}
             {fall.quellen.vsig && <li>Tempo: {fall.quellen.vsig} (Geoportal Stadt Bern, vor OSM){abruf('vsig')}</li>}
+            {fall.amtlicheQuellen?.bav && <li>Haltestellen (nur Kartenquelle): {fall.quellen.bav}; {fall.amtlicheQuellen.bav.halte.length} Punkte,
+              abgerufen {fall.amtlicheQuellen.bav.abgerufen}; Datenstand {bavDatenstandText(fall.amtlicheQuellen.bav)} (Ebene); Vollständigkeit unbekannt.</li>}
+            {(fall.signalEntscheide ?? []).map((x,i) => <li key={`signal:${i}`}>{signalText(x)}</li>)}
+            {(fall.regional?.teile ?? []).map(t => <li key={t.id}>{regionalDienst(t.id)?.name}: {t.objekte.length} Objekte; Datenstand {t.datenstand}, abgerufen {t.abgerufen}; {regionalDienst(t.id)?.lizenz}; Vollständigkeit unbekannt.</li>)}
+            {(['tempo', 'zonen'] as const).map(k => { const z = fall.zuerich?.[k]; return z ? <li key={k}>Stadt Zürich, {k === 'tempo' ? 'signalisierte Geschwindigkeiten' : 'Verkehrszonen'}: {z.objekte.length} Objekte; Datenstand {zhStandText(z)}, abgerufen {z.abgerufen}; CC0; Vollständigkeit unbekannt.</li> : null })}
+            {fall.quellen.gebiet && <li>Gebietsbestimmung: {fall.quellen.gebiet}{abruf('gebiet')}</li>}
           </ul>
         </section>
 
-        {/* Korrektur 31.10.2026 (Punkt 9): Werke und die im Fall angewendeten Regeln (regeln.ts), ohne Normtabellen; Herkunft je Werk und
+        {/* Werke und die im Fall angewendeten Regeln (regeln.ts), ohne Normtabellen; Herkunft je Werk und
             Vermerk «nur Hinweis» (Überarbeitung 31.10.2026) */}
         <section className="bericht-block">
           <h2>Werke und angewendete Regeln</h2>
