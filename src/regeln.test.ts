@@ -18,7 +18,7 @@ describe('Regeln', () => {
       expect(`${r.titel} ${r.prueft} ${r.werte ?? ''} ${r.daten ?? ''}`, r.id).not.toContain('ß')
     }
   })
-  // Überarbeitung 31.10.2026 (Nutzer): Alltagssprache ohne Code-Wörter, «Kein Vortritt» statt «Vortritt» für das Signal, Daten in Worten
+  // Alltagssprache ohne Code-Wörter, «Kein Vortritt» statt «Vortritt» für das Signal, Daten in Worten
   it('Texte ohne Code-Wörter und Selbstreferenz; Daten beginnen nicht mit einem OSM-Tag', () => {
     const verboten = [/Achse/, /Zielpunkt/, /Querschnitt/, /Rückfallebene/, /Sehne/, /Stütze/, /[a-z]+=[a-z]/, /[A-Z_]{4,}/, /wie «Vortritt»/,
       /\bOSM\b/]

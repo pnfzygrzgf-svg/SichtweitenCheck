@@ -132,7 +132,7 @@ describe('K1: Arme am Kreisel', () => {
     expect(ka.map(a => [a.name, a.getrennt, a.ein !== null, a.aus !== null])).toEqual([['B', false, false, true], ['', false, false, true],
       ['A', false, true, false]])
   })
-  it('Weg mit Gegenverkehr und zusätzliche Einfahrt derselben Strasse in derselben Richtung: ein Arm (Befund Dalmazibrücke Bern)', () => {
+  it('Weg mit Gegenverkehr und zusätzliche Einfahrt derselben Strasse in derselben Richtung: ein Arm (Beispiel Dalmazibrücke Bern)', () => {
     const o = daten([ring(R), arm(2, R, 90, 'Nordstrasse'), arm(3, R, 0, 'Oststrasse'),
       arm(4, R, 230, 'Südweststrasse'), weg(5, [[41, ...pol(R + 25, 230)], ringPunkt(R, 250)], { highway: 'residential', name: 'Südweststrasse', oneway: 'yes' })])
     const ka = nachNr(knoten(o, av).kreisel!.arme)
@@ -433,7 +433,7 @@ describe('K2 und K3: Einfahrt, K, D, Ablenkungswinkel', () => {
     expect(b.tempoGrund).toBe('ohne gültige Konstruktion des Ablenkungswinkels 40 km/h (Annahme)')
     const an = knoten(o, av, ringId(0), 'klein', null, { ...ab, [alle[0]]: true }).kreisel!.beta
     expect([an.massgebend, an.tempo]).toEqual([alle[0], 30])
-    expect(knoten(o, av, ringId(0), 'mini').kreisel!.beta.tempoGrund).toBe('Minikreisel: fest 30 km/h, ohne Ablenkungswinkel (Annahme, Entscheid E1)')
+    expect(knoten(o, av, ringId(0), 'mini').kreisel!.beta.tempoGrund).toBe('Minikreisel: fest 30 km/h, ohne Ablenkungswinkel (Annahme)')
     const ohne = knoten(o, fahrbahn(aussen, 0, [90, 0, 270, 180]), ringId(0), 'klein').kreisel!.beta
     expect(ohne.beziehungen.filter(x => x.vorgabe).every(x => x.gueltig && x.fall === 2)).toBe(true)   // Innenring 5,50 m innerhalb
   })
@@ -448,7 +448,7 @@ describe('K2 und K3: Einfahrt, K, D, Ablenkungswinkel', () => {
   })
 })
 
-describe('Velobypass (Nutzerbefund 01.11.2026)', () => {
+describe('Velobypass', () => {
   it('Umkreis-Abfrage: Fuss- und Radwege mit bicycle=designated bzw. yes', () => {
     expect(overpassAbfrage(46.9, 7.4, 150)).toContain('["highway"~"^(path|footway)$"]["bicycle"~"^(designated|yes)$"]')
   })

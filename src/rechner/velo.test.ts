@@ -66,7 +66,7 @@ describe('E3b: Tab. 3 (Veloverkehr)', () => {
     expect([-5, -2, 0, 3].map(i => veloSichtweite(30, i, true).A)).toEqual([30, 25, 25, 20])   // bis 30 km/h ohne Wirkung
     expect(veloSichtweite(50, 1, true)).toMatchObject({ ebike: true, text: 'Tab. 3, über 30 km/h, schnelle E-Bikes verboten, bergwärts (Spalte > 0 %)' })
   })
-  it('Neigung unbekannt (Entscheid 31.10.2026): Spalte ≤ −4, unabhängig von i; E-Bikes verboten: talwärts 35 m', () => {
+  it('Neigung unbekannt: Spalte ≤ −4, unabhängig von i; E-Bikes verboten: talwärts 35 m', () => {
     expect([30, 31, 50].map(t => veloSichtweite(t, 0, false, true).A)).toEqual([30, 55, 55])
     expect(veloSichtweite(50, 3, false, true)).toMatchObject({ A: 55, spalte: 0,
       text: 'Tab. 3, über 30 km/h, Spalte ≤ −4 % (Neigung unbekannt: strengster Wert)' })
@@ -82,7 +82,7 @@ describe('E3b: Tab. 2 (Trottoir)', () => {
     expect([-7, -5, -3, 0, 4].map(i => trottoirSichtweite(i).A)).toEqual([30, 20, 20, 15, 15])
     expect(TAB2).toEqual([30, 20, 20, 15])
   })
-  it('Neigung unbekannt (Entscheid 31.10.2026): Spalte ≤ −6, 30 m', () => {
+  it('Neigung unbekannt: Spalte ≤ −6, 30 m', () => {
     expect(trottoirSichtweite(4, true)).toEqual({ A: 30, spalte: 0, text: 'Tab. 2, Spalte ≤ −6 % (Neigung unbekannt: strengster Wert)' })
     expect(trottoirSichtweite(4).A).toBe(15)
   })
@@ -154,7 +154,7 @@ describe('E3b: Veloachse und Strahlensatz am T-Knoten', () => {
   })
 })
 
-describe('E3b: Prüfrunde, Massnahmen-Varianten der Veloachse', () => {
+describe('E3b: Massnahmen-Varianten der Veloachse', () => {
   // Parkfeld von Hand y −3 … −0,3 (2,7 m breit, breiter als der Abzug 1,90 m): die Veloachse (y −0,6 neben dem Parkstreifen)
   // läuft hindurch; es zählt für die Velo-Sicht nicht, auch nicht in den Varianten der Massnahmen.
   const pf: Hindernis = { id: 'pf', art: 'parkfeld', klasse: 'auto', quelle: 'hand', name: 'Parkfeld breit',
@@ -214,12 +214,12 @@ describe('E3b: Radweg (Ziffer 12, Abb. 2)', () => {
     nahe(e.D, 0.75, -6)
     expect(e.radwegRand).toBeNull()
   })
-  it('Prüfrunde: Ziffer 12 hängt an der Lage des Radwegs, nicht an der Veloführung (Mischverkehr gewählt: B trotzdem ab y −5,5, Hinweis)', () => {
+  it('Ziffer 12 hängt an der Lage des Radwegs, nicht an der Veloführung (Mischverkehr gewählt: B trotzdem ab y −5,5, Hinweis)', () => {
     const e = rechne(osm({}, [radweg]), [fahrbahn], { eingaben: eg({ velo: { links: 'misch', rechts: 'kein' } }) })
     nahe(e.D, 0.75, -8.5)
     expect(e.hinweise.join(' ')).toContain('obwohl nach links «Mischverkehr» gilt')
   })
-  it('Prüfrunde: Radweg endet vor der Zufahrt (x ≤ −6): keine Verlängerung, B ab der Kante, Hinweis', () => {
+  it('Radweg endet vor der Zufahrt (x ≤ −6): keine Verlängerung, B ab der Kante, Hinweis', () => {
     const kurz = weg(50, [[51, -200, -4.5], [52, -6, -4.5]], { highway: 'cycleway' })
     const e = rechne(osm({}, [kurz]), [fahrbahn])
     nahe(e.D, 0.75, -6)
@@ -277,7 +277,7 @@ describe('E3b: Trottoir (Ziffer 13.2, Tab. 2)', () => {
     expect(l.neigungQuelle).toContain('Trottoirachse')
     expect([l.neigungUnbekannt, r.neigungUnbekannt]).toEqual([false, false])
   })
-  it('Neigung des Trottoirs unbekannt (Entscheid 31.10.2026): nach dem Laden ohne Messung Spalte ≤ −6 -> 30 m; lädt: 0 % -> 15 m', () => {
+  it('Neigung des Trottoirs unbekannt: nach dem Laden ohne Messung Spalte ≤ −6 -> 30 m; lädt: 0 % -> 15 m', () => {
     // Höhenmodell geladen, Trottoir-Profil fehlt bzw. Dienst-Fehler: strengster Wert der Tab. 2
     for (const hoehen of [{}, { trottoir: neigungMessung(new Error('HTTP 500')) }]) {
       const e = rechne(osm(), [fbT, neben, trottoir], { hoehen })
@@ -286,7 +286,7 @@ describe('E3b: Trottoir (Ziffer 13.2, Tab. 2)', () => {
       expect(l.text).toBe('Tab. 2, Spalte ≤ −6 % (Neigung unbekannt: strengster Wert)')
       expect(l.neigungQuelle).toContain('unbekannt, strengster Wert')
       expect(e.annahmen.join(' | ')).toContain('Längsneigung des Trottoirs in Gehrichtung auf die Zufahrt zu unbekannt (kein Höhenprofil): ' +
-        'strengster Wert der Tab. 2 (Spalte ≤ −6 %) angenommen (Entscheid 31.10.2026)')
+        'strengster Wert der Tab. 2 (Spalte ≤ −6 %) angenommen')
     }
     // Höhenmodell lädt noch: bisheriges Verhalten (vorerst 0 %)
     const n = rechne(osm(), [fbT, neben, trottoir])

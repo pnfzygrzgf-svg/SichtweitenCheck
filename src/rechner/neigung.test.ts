@@ -133,13 +133,13 @@ describe('E3a: Neigung in der Rechnung', () => {
     expect(l.neigungQuelle).toBe('swissALTI3D (swisstopo) nicht verfügbar: unbekannt, strengster Wert')
     expect(l.hinweise).toContain('Höhenmodell nicht verfügbar (HTTP 500): Längsneigung unbekannt, strengster Wert angenommen; von Hand eingeben.')
     expect(e.annahmen.join(' | ')).toContain('Längsneigung von links unbekannt (kein Höhenprofil): strengster Wert der Tab. 3 (Spalte ≤ −4 %) ' +
-      'bzw. Anhaltesichtweite (VSS 40 090b Abb. 2) bei −12 % angenommen; Neigung von Hand eingeben, um das zu verfeinern (Entscheid 31.10.2026).')
+      'bzw. Anhaltesichtweite (VSS 40 090b Abb. 2) bei −12 % angenommen; Neigung von Hand eingeben, um das zu verfeinern.')
     expect(e.annahmen.some(a => a.includes('0 % (eben'))).toBe(false)
     expect(seite(rechne(null), 'links').neigungQuelle).toBe('Höhenmodell lädt: vorerst 0 %')
-    // Profile geladen, aber für links keines geholt (Befund 17.10.2026: sonst wartete der Druck ewig): unbekannt, kein «lädt»
+    // Profile geladen, aber für links keines geholt (sonst wartete der Druck ewig): unbekannt, kein «lädt»
     expect(seite(rechne({ rechts: gemessen(3) }), 'links').neigungQuelle).toBe('ohne Profil: unbekannt, strengster Wert')
   })
-  it('Neigung unbekannt nach dem Laden (Entscheid 31.10.2026): Anhaltesichtweite bei −12 % angewendet, Tab. 3 Spalte ≤ −4', () => {
+  it('Neigung unbekannt nach dem Laden: Anhaltesichtweite bei −12 % angewendet, Tab. 3 Spalte ≤ −4', () => {
     // ES 50 km/h: Abb. 2 bei −12 % 57 m > 50 m; Velo über 30 km/h 55 m; «grosse Längsneigung» bleibt aus
     const fehler = neigungMessung(new Error('HTTP 500'))
     for (const hoehen of [{}, { links: fehler, rechts: fehler }]) {

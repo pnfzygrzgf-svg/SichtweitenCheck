@@ -279,7 +279,7 @@ function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false, u
               mindestens {PROFIL_MIN_M} m); von Hand überschreibbar. Die Anhaltesichtweite gilt ab |i| über {NEIGUNG_EBEN_PROZENT} % als
               Untergrenze (die unteren Werte der Tab. 1 gelten für i ≤ ±{NEIGUNG_EBEN_PROZENT} %, VSS 40 273 Ziffer 13.1).</p>
             <p>Ohne Messung (kein Höhenprofil, zu kurz, Dienst-Fehler) ist die Neigung unbekannt: die App nimmt den strengsten Wert der
-              Tab. 3 (Spalte ≤ −4 %) und die Anhaltesichtweite bei {fi(ANHALTESICHT_I_MIN)} % (Entscheid 31.10.2026); eine Neigung von
+              Tab. 3 (Spalte ≤ −4 %) und die Anhaltesichtweite bei {fi(ANHALTESICHT_I_MIN)} %; eine Neigung von
               Hand verfeinert das. Solange das Höhenmodell lädt, vorerst 0 %.</p>
             <ul>{richtungen.map(r => <li key={r.richtung}>{lageText(r)}: {eingaben.neigung[r.richtung] !== null ?
               `von Hand; Höhenmodell: ${neigungVorgabeKurz(r)} (${r.neigungVorgabeQuelle})` : `automatisch ermittelt: ${r.neigungQuelle}`}</li>)}</ul></Info></td><td>
@@ -825,7 +825,7 @@ function TempoZeile({ r, wert, setzen }: { r: RichtungErgebnis; wert: TempoEinga
           aria-label={`Tempo ${name}: Begründung`} value={text} onChange={e => setText(e.target.value)} onBlur={uebernehmen} onKeyDown={enter} /></>}
       {wert && !ok && <span className="fehler klein"> ganze Zahl von {TEMPO_MIN} bis {TEMPO_MAX} eingeben (gilt weiter: {wert.wert} km/h)</span>}
       {wert ? <div className="klein">(<Hand />; {r.tempoVorgabeQuelle.startsWith('Annahme') ? 'Annahme' : 'Datenwert'} {r.tempoVorgabe} km/h)</div> :
-        <>{' '}<span className={r.tempoAnnahme ? 'klein warnung' : 'klein'}>({kurzQuelle(r.tempoVorgabeQuelle)})</span></>}
+        <>{' '}<span className={r.tempoAnnahme ? 'klein warnung' : 'klein'}>({kurzQuelle(r.tempoVorgabeQuelle)}{r.tempoOsmVergleich ? `; ${r.tempoOsmVergleich}` : ''})</span></>}
     </div>
   )
 }
@@ -1662,7 +1662,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   const nachladenFehler = useRef<string | null>(null)     // Daten (datenKey), bei denen das Nachladen scheiterte (kein zweiter Versuch)
   useEffect(() => {
     const e = rechnung?.ergebnis, d = daten, ctrl = abbruchRef.current
-    // e.avRadius: Rechnung zu diesen Daten (eine ältere eines anderen Orts verwirft rechnen() über die Auftragsnummer)
+    // e.avRadius: Rechnung zu diesen Daten (eine ältere eines anderen Orts verwirft rechnen über die Auftragsnummer)
     if (!e || !d || !ctrl || ctrl.signal.aborted || e.avRadius !== d.avRadius) return
     const radius = avNachladen(e.avBedarf, d.avRadius)
     if (radius === null || nachLaedt.current || nachladenFehler.current === datenKey(d)) return

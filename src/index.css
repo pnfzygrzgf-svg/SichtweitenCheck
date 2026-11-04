@@ -94,7 +94,7 @@ select { max-width: 100%; }
   .karte-hoehe:hover { filter: none; background: #f4f4f4; }
   .leaflet-left { margin-left: env(safe-area-inset-left); }
   /* Quellenangabe einzeilig, Platz für den Massstab links lassen; Tippen klappt sie auf (Karte.tsx). Vorher zweizeilig über dem
-     unteren Kartenrand (Nutzerbefund 28.10.2026) */
+     unteren Kartenrand */
   .leaflet-control-attribution { max-width: calc(100vw - 90px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     font-size: 10px; cursor: pointer; }
   .leaflet-control-attribution.offen { white-space: normal; }

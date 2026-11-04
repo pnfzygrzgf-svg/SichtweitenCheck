@@ -73,7 +73,7 @@ const ARM_KARTE_M = 22
 /** Zeichenwerkzeuge (E2a) */
 export type Werkzeug = null | 'parkfeld' | 'laengs' | 'baum' | 'hecke' | 'mauer' | 'zaun' | 'flaeche'
 /** Werkzeuge zum Knoten (E2b): Haltelinie (ein Klick), Grundstückzufahrt (Punkt am Rand, optional zweiter Klick für die Richtung) */
-export type KnotenWerkzeug = null | 'haltelinie' | 'zufahrt' | 'd'      // 'd': Beobachtungspunkt D mit Klick setzen (E4, Befund 17.10.)
+export type KnotenWerkzeug = null | 'haltelinie' | 'zufahrt' | 'd'      // 'd': Beobachtungspunkt D mit Klick setzen (E4)
 /** Haltelinie (weiss mit dunklem Rand) und Zufahrtspunkt (Grundstückzufahrt) */
 export const HALTELINIE_FARBE = '#ffffff'
 export const ZUFAHRTSPUNKT_FARBE = '#f59e0b'

@@ -331,7 +331,7 @@ describe('K0: kurze Hinweise nur, wenn sie zutreffen (VSS 40 242 Ziffern 14.1, 1
   })
 })
 
-describe('K0: Gehlinie vor dem hinteren Rand der Überfahrt, Abstand D\' – Gehlinie 3,50 m (Review fgsCheck 23.10.2026)', () => {
+describe('K0: Gehlinie vor dem hinteren Rand der Überfahrt, Abstand D\' – Gehlinie 3,50 m', () => {
   const abstandDG = (e: Ergebnis) => e.trottoirPruefung!.richtungen.map(r => e.trottoirPruefung!.D[1] - r.K[1])
   it('breite Trottoirs 5,6 / 7,4 m (wie Winkelriedstrasse): Breite 3,50, Gehlinie beidseits y −6, D\' y −9,5', () => {
     const l = flaeche('Trottoir', [lv(-200, -8.6), lv(-2.5, -8.6), lv(-2.5, -3), lv(-200, -3)])
@@ -372,7 +372,7 @@ describe('K0: Gehlinie vor dem hinteren Rand der Überfahrt, Abstand D\' – Geh
   })
 })
 
-describe('K0: Hauptstrasse mit Knick am Knoten (Review 2 von bb84cfd): Gehlinie nie auf der Fahrbahn', () => {
+describe('K0: Hauptstrasse mit Knick am Knoten: Gehlinie nie auf der Fahrbahn', () => {
   // Arm Ost gerade (y = 0), Arm West um 15° nach Süden abgeknickt: u = (−cos 15°; −sin 15°), Seite der Zufahrt n = (sin 15°; −cos 15°).
   // Fahrbahn je Arm 6 m (±3 m), Trottoir je Arm 3 … 5 m auf der Seite der Zufahrt. Erwartung: Gehlinie je Arm 4,5 m neben seiner Achse
   // (1,50 m hinter seinem Fahrbahnrand), kein Zielpunkt ab 5 m auf der Fahrbahn der Hauptstrasse, D' auf der Achse mindestens 3,50 m hinter der Gehlinie

@@ -3,8 +3,8 @@
 // Katalog aller Regeln, die die App anwendet: was geprüft wird (eigene Worte, Alltagssprache für Planerinnen und Planer ohne
 // Code-Kenntnis), Werk, Fundstelle (Ziffer UND gedruckte Seite), Wert (falls es einen gibt), Datenquelle in Worten (falls nötig),
 // Herkunft und Wirkung. Grundlage: Sichtprüfungsliste Sichtpruefung_beide_Rechner_2026-10-30.csv (Zeilen «SichtweitenCheck» und
-// «beide»), nachgeführt auf den Code-Stand vom 31.10.2026. Überarbeitung 31.10.2026 (Nutzer): «art» ersetzt durch «herkunft» (am Werk,
-// damit sie nicht je Regel falsch gesetzt werden kann) und «wirkung» (fliesst in die Rechnung ein bzw. nur Hinweis, je Regel nach dem
+// «beide»), nachgeführt auf den Code-Stand vom 31.10.2026. «herkunft» steht am Werk,
+// damit sie nicht je Regel falsch gesetzt werden kann, dazu «wirkung» (fliesst in die Rechnung ein bzw. nur Hinweis, je Regel nach dem
 // Code); Texte ohne Code-Wörter, Wert und Daten nur, wo es sie gibt. Lizenzierte Normen (VSS) und die bfu-Fachdokumentation: keine
 // Sätze aus dem Werk, nur Ziffern, Seiten, Tabellen- und Abbildungsnummern, Zahlenwerte. Die App zeigt keine Normtabellen.
 //
@@ -549,7 +549,7 @@ const EINTRAEGE: readonly RegelEintrag[] = [
     prueft: 'Führt höchstens ein Arm zum Punkt hin, muss dort niemand warten. Die App bietet ihn nicht als Knoten an.',
     werte: 'höchstens ein Arm mit Verkehr zum Punkt (Velos gegen die Einbahn mitgezählt)',
     daten: 'OpenStreetMap (Einbahnen, Velos gegen die Einbahn)' },
-  { id: 'A-Fahrbahnteilung', werk: 'ANNAHME', ordnung: 1.15, fundstelle: 'Annahme (Entscheid 31.10.2026)',
+  { id: 'A-Fahrbahnteilung', werk: 'ANNAHME', ordnung: 1.15, fundstelle: 'Annahme',
     titel: 'Fahrbahnteilungen sind keine Knoten', wirkung: 'rechnet mit', thema: 'knoten', gilt: () => false,
     prueft: 'Teilt sich eine Fahrbahn in zwei Einbahnen, ohne dass sich die Fahrströme kreuzen, muss dort niemand warten. Die App bietet ' +
       'den Punkt nicht als Knoten an.',
@@ -557,13 +557,13 @@ const EINTRAEGE: readonly RegelEintrag[] = [
       `auseinander, ohne Velos gegen die wegführende Einbahn; führt eine Einbahn innert ${TEILUNG_KREISEL_M} m in einen Kreisel, gehört ` +
       'der Punkt zur Kreiselzufahrt',
     daten: 'OpenStreetMap (Einbahnen, Velos gegen die Einbahn, Kreisel)' },
-  { id: 'A-Zusammenfuehrung', werk: 'ANNAHME', ordnung: 1.155, fundstelle: 'Annahme (Entscheid 31.10.2026)',
+  { id: 'A-Zusammenfuehrung', werk: 'ANNAHME', ordnung: 1.155, fundstelle: 'Annahme',
     titel: 'Zusammenführungen rechnet die App vorerst nicht', wirkung: 'rechnet mit', thema: 'knoten', gilt: () => false,
     prueft: 'Laufen zwei Einbahnen spitz zusammen und fädelt der Verkehr ein, passt das Sichtmodell der App nicht: man schaut über die ' +
       'Schulter zurück. Die App meldet solche Stellen und rechnet nicht; das Einfädeln ist vor Ort zu prüfen.',
     werte: `drei Arme: zwei Einbahnen zum Punkt, höchstens ${TEILUNG_WINKEL_GRAD}° auseinander, und eine Einbahn weg, ohne Velos gegen sie`,
     daten: 'OpenStreetMap (Einbahnen, Velos gegen die Einbahn)' },
-  { id: 'A-Teilung', werk: 'ANNAHME', ordnung: 1.16, fundstelle: 'Annahme (Entscheid 31.10.2026)',
+  { id: 'A-Teilung', werk: 'ANNAHME', ordnung: 1.16, fundstelle: 'Annahme',
     titel: 'Arm teilt sich in zwei Einbahnen', wirkung: 'rechnet mit', thema: 'motorfahrzeuge',
     gilt: e => e.annahmen.some(x => x.includes('in zwei Einbahnen. Ab dort folgt')),
     prueft: 'Teilt sich die Fahrbahn eines Arms in eine Einbahn zum Knoten und eine vom Knoten weg, folgt die Fahrlinie ab der Teilung ' +
@@ -577,7 +577,7 @@ const EINTRAEGE: readonly RegelEintrag[] = [
       'keinen Rechtsvortritt an und lässt die Massnahme «Lichtsignalanlage» weg.',
     werte: 'Lichtsignal am Knotenpunkt oder bis 30 m auf einem Arm',
     daten: 'OpenStreetMap (Lichtsignale; highway=traffic_signals)' },
-  { id: 'A-Armende', werk: 'ANNAHME', ordnung: 1.3, fundstelle: 'Annahme (Entscheid 31.10.2026)', titel: 'Strasse über das Datenende hinaus',
+  { id: 'A-Armende', werk: 'ANNAHME', ordnung: 1.3, fundstelle: 'Annahme', titel: 'Strasse über das Datenende hinaus',
     wirkung: 'rechnet mit', thema: 'knoten', gilt: e => hinweis(e, 'nimmt die App die Fahrlinie gerade an'),
     prueft: 'Endet eine Strasse mit Vortritt in den Daten kurz nach dem Knoten, verlängert die App ihre Fahrlinie gerade und weist darauf ' +
       'hin. Die Sicht dort ist vor Ort zu prüfen.',
@@ -661,53 +661,53 @@ const EINTRAEGE: readonly RegelEintrag[] = [
     werte: `Personenwagen ${m(PW_LAENGE_M, 1)} × ${m(PW_BREITE_M, 1)} m, Fahrer*innenauge ${m(LENKER_VOR_FRONT_M, 1)} m hinter der Front; Velo ` +
       `${m(VELO_LAENGE_M, 1)} × ${m(VELO_BREITE_M, 1)} m` },
   // ── Projektentscheide ──
-  { id: 'E-1510a', werk: 'ENTSCHEID', ordnung: 1, fundstelle: 'Entscheid 15.10.2026', titel: 'Zwischenwert für Hauptverkehrsstrassen',
+  { id: 'E-1510a', werk: 'ENTSCHEID', ordnung: 1, fundstelle: 'Festlegung des Projekts', titel: 'Zwischenwert für Hauptverkehrsstrassen',
     wirkung: 'rechnet mit', thema: 'motorfahrzeuge', gilt: e => nichtRv(e) && e.strasse.typ === 'hvs',
     prueft: 'Für Hauptverkehrsstrassen nennt die Norm einen Bereich. Die App nimmt die Mitte zwischen unterem und oberem Wert.',
     werte: 'Mittel von unterem und oberem Wert, auf ganze Meter aufgerundet' },
-  { id: 'E-1510b', werk: 'ENTSCHEID', ordnung: 2, fundstelle: 'Entscheid 15.10.2026', titel: 'Anhaltesichtweite an die Tabelle angeglichen',
+  { id: 'E-1510b', werk: 'ENTSCHEID', ordnung: 2, fundstelle: 'Festlegung des Projekts', titel: 'Anhaltesichtweite an die Tabelle angeglichen',
     wirkung: 'rechnet mit', thema: 'neigung', gilt: e => e.richtungen.some(r => r.anhalteAngewendet && r.status !== 'keine_zufahrt'),
     prueft: 'Aus dem Diagramm der Anhaltesichtweite zählt nur, um wie viel die Neigung die Strecke verlängert. Bei 0 % trifft es den ' +
       'unteren Wert für Motorfahrzeuge.' },
-  { id: 'E-1610a', werk: 'ENTSCHEID', ordnung: 3, fundstelle: 'Entscheid 16.10.2026 (Entscheid 1)', titel: 'Ergebnis je Richtung',
+  { id: 'E-1610a', werk: 'ENTSCHEID', ordnung: 3, fundstelle: 'Festlegung des Projekts', titel: 'Ergebnis je Richtung',
     wirkung: 'rechnet mit', thema: 'motorfahrzeuge',
     prueft: 'Das Ergebnis einer Richtung ist das schlechteste ihrer Teile: Motorfahrzeuge, Überholfall, Velos und Trottoir.' },
-  { id: 'E-1610b', werk: 'ENTSCHEID', ordnung: 4, fundstelle: 'Entscheid 16.10.2026 (Entscheid 2)', titel: 'Baumreihe verdeckt ab 5 m',
+  { id: 'E-1610b', werk: 'ENTSCHEID', ordnung: 4, fundstelle: 'Festlegung des Projekts', titel: 'Baumreihe verdeckt ab 5 m',
     wirkung: 'rechnet mit', thema: 'hindernisse', gilt: e => e.richtungen.some(r => !!r.palisade),
     prueft: 'Die Norm nennt kein Mass, ab wann eine Baumreihe die Sicht verdeckt. Die App nimmt eine Fahrzeuglänge.',
     werte: `${m(PALISADE_MIN_M, 1)} m am Stück verdeckt` },
-  { id: 'E-1710', werk: 'ENTSCHEID', ordnung: 5, fundstelle: 'Entscheid 17.10.2026', titel: 'Vorgabe der Vortrittsregelung',
+  { id: 'E-1710', werk: 'ENTSCHEID', ordnung: 5, fundstelle: 'Festlegung des Projekts', titel: 'Vorgabe der Vortrittsregelung',
     wirkung: 'rechnet mit', thema: 'knoten', gilt: e => !e.regelungGewaehlt,
     prueft: 'Ohne deine Wahl nimmt die App die Vortrittsregelung aus OpenStreetMap; du kannst sie im Panel ändern.',
     werte: 'Signal geht vor; Quartierstrasse mit Tempo bis 30 km/h: Rechtsvortritt; sonst «Kein Vortritt»',
     daten: 'OpenStreetMap (Signale, Strassenklasse, Tempo)' },
-  { id: 'E-1710b', werk: 'ENTSCHEID', ordnung: 6, fundstelle: 'Entscheid 17.10.2026', titel: 'Rechtsvortritt: von rechts nur Velos',
+  { id: 'E-1710b', werk: 'ENTSCHEID', ordnung: 6, fundstelle: 'Festlegung des Projekts', titel: 'Rechtsvortritt: von rechts nur Velos',
     wirkung: 'rechnet mit', thema: 'rechtsvortritt', gilt: e => !!e.rechtsvortritt?.arm.nurVelo,
     prueft: 'Kommen beim Rechtsvortritt von rechts nur Velos, prüft die App die Sicht auf sie mit den Werten für Velos.',
     werte: 'VSS 40 273 Tab. 3 mit dem Tempo der Strasse statt Abb. 6',
     daten: 'OpenStreetMap (Velos gegen die Einbahn)' },
-  { id: 'E-3110a', werk: 'ENTSCHEID', ordnung: 7, fundstelle: 'Entscheid 31.10.2026', titel: 'Neigung unbekannt: strengster Wert',
+  { id: 'E-3110a', werk: 'ENTSCHEID', ordnung: 7, fundstelle: 'Festlegung des Projekts', titel: 'Neigung unbekannt: strengster Wert',
     wirkung: 'rechnet mit', thema: 'neigung',
     gilt: e => e.richtungen.some(r => r.neigungUnbekannt) || !!e.trottoirPruefung?.richtungen.some(t => t.neigungUnbekannt),
     prueft: 'Gibt es kein brauchbares Höhenprofil und keine Eingabe, rechnet die App auf der sicheren Seite mit dem strengsten Wert.',
     werte: `Velos: Spalte ≤ −4 %; Trottoir: Spalte ≤ −6 %; Anhaltesichtweite bei ${proz(ANHALTESICHT_I_MIN)}`,
     daten: 'Höhenmodell swissALTI3D' },
-  { id: 'E-3110b', werk: 'ENTSCHEID', ordnung: 8, fundstelle: 'Entscheid 31.10.2026', titel: 'Gestrichelte Kurven im Diagramm',
+  { id: 'E-3110b', werk: 'ENTSCHEID', ordnung: 8, fundstelle: 'Festlegung des Projekts', titel: 'Gestrichelte Kurven im Diagramm',
     wirkung: 'nur Hinweis', thema: 'neigung', gilt: e => e.richtungen.some(r => r.anhalteAngewendet && r.status !== 'keine_zufahrt'),
     prueft: 'Wo die Kurve der Anhaltesichtweite nur gestrichelt ist, rechnet die App mit dem abgelesenen Wert, bezeichnet ihn aber als ' +
       'unsicher.' },
-  { id: 'E-3110d', werk: 'ENTSCHEID', ordnung: 10, fundstelle: 'Entscheid 31.10.2026', titel: 'Nur Zufahrten mit Wartepflicht wählbar',
+  { id: 'E-3110d', werk: 'ENTSCHEID', ordnung: 10, fundstelle: 'Festlegung des Projekts', titel: 'Nur Zufahrten mit Wartepflicht wählbar',
     wirkung: 'rechnet mit', thema: 'knoten',
     prueft: 'Arme, aus denen niemand zum Knoten fährt oder die sicher Vortritt haben, bietet die App nicht als Zufahrt an.',
     werte: 'Einbahn vom Knoten weg ohne Velos: keine Zufahrt; Arme der Strasse mit Vortritt bei Signal oder Hauptstrasse nur über den ' +
       'Schalter',
     daten: 'OpenStreetMap (Einbahnen, Signale, Hauptstrasse; priority_road)' },
-  { id: 'E-3110e', werk: 'ENTSCHEID', ordnung: 11, fundstelle: 'Entscheid 31.10.2026', titel: 'Signal zählt nur mit Verkehr zum Knoten',
+  { id: 'E-3110e', werk: 'ENTSCHEID', ordnung: 11, fundstelle: 'Festlegung des Projekts', titel: 'Signal zählt nur mit Verkehr zum Knoten',
     wirkung: 'rechnet mit', thema: 'knoten',
     prueft: 'Ein Stop- oder Kein-Vortritt-Signal ordnet die App nur einem Arm zu, auf dem Verkehr zum Knoten fährt. Steht es auf einer ' +
       'Einbahn vom Knoten weg, gehört es zum nächsten Knoten.',
     daten: 'OpenStreetMap (Signale, Einbahnen)' },
-  { id: 'E-3110c', werk: 'ENTSCHEID', ordnung: 9, fundstelle: 'Entscheid 31.10.2026', titel: 'Fahrlinien folgen der Fahrbahn',
+  { id: 'E-3110c', werk: 'ENTSCHEID', ordnung: 9, fundstelle: 'Festlegung des Projekts', titel: 'Fahrlinien folgen der Fahrbahn',
     wirkung: 'rechnet mit', thema: 'motorfahrzeuge',
     prueft: 'Die Fahrlinien folgen dem Fahrbahnrand Stelle für Stelle, auch in Kurven und bei wechselnder Breite.',
     daten: 'amtliche Vermessung (Fahrbahn)' },

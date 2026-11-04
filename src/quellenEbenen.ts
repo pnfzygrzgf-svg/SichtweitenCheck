@@ -12,7 +12,7 @@ import { type QuellenQualitaet } from './daten/anbieter/gemeinsam/qualitaet'
 // Was die Rechnung aus abrufbaren Quellen liest (Tempo, Vortritt, Lichtsignal, Höhenprofile, Rad- und Fusswege, Kataster, AV, Strassentyp,
 // Tram), ist je Quelle einzeln einblendbar (Fenster «Geladene Quellen» unten links, verschiebbar). Gezeigt werden die beim Laden
 // gelesenen Objekte (keine neue Abfrage); das Menü zeigt nur Quellen mit Daten. Gleiche Farbstufen wie die beiden anderen Rechner;
-// Punkte der Quellen sind Quadrate mit Zeichen, Linien haben einen dunklen Rand (Form statt Farbe allein, Nutzerbefund 01.11.2026),
+// Punkte der Quellen sind Quadrate mit Zeichen, Linien haben einen dunklen Rand (Form statt Farbe allein),
 // die Objekte der Prüfung (Knoten, Arme, Sichtdreiecke) bleiben, wie sie sind. Geometrie in LV95 (P). Nur Daten, keine Regeln.
 
 import { lv95, type P } from './geo'

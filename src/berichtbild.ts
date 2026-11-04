@@ -20,7 +20,7 @@ export type Box = [number, number, number, number]
 export const RAND_M = 5               // Rand um die Geometrien
 export const MIN_M = 40               // kleinste Kantenlänge (Breite) des Ausschnitts
 /** Seitenverhältnis Höhe/Breite: höchstens 0,7 (Bild rund 130 mm hoch auf 186 mm Breite: passt mit Kopf, Ort und Bildunterschrift
- *  auf Seite 1, A4 hoch; Prüfrunde E4a), mindestens so flach */
+ *  auf Seite 1, A4 hoch), mindestens so flach */
 export const VERH_MIN = 0.55
 export const VERH_MAX = 0.7
 export const BILD_PX_MIN = 1200       // Breite des WMS-Bilds mindestens (rund 164 dpi auf 186 mm)

@@ -119,7 +119,7 @@ export default function KreiselBlock({ kn, setTyp, zufahrt, zufahrtWaehlen, setB
               Mittelinsel: Mitte der Fahrbahn rechts davon; benachbarte OSM-Wege, auch Radwege, begrenzen den Querschnitt; ist er zu breit
               oder fehlt er, gilt ein anderer Abstand; ohne Querschnitt {f2(FAHRSTREIFEN_ANNAHME_M)} m breite Fahrstreifen; Annahmen).</p>
             <p><b>Fahrlinie mit Vortritt:</b> je Richtung in der Mitte zwischen Aussenrand und Innenring bzw. Insel, im Gegenuhrzeigersinn
-              von links auf die Einfahrt (Entscheid E2). K ist ihr Schnitt mit der Fahrlinie der Einfahrt.</p>
+              von links auf die Einfahrt. K ist ihr Schnitt mit der Fahrlinie der Einfahrt.</p>
             <p><b>D:</b> B = {f2(z.B)} m hinter dem Rand der Kreiselfahrbahn (Wartelinie) auf der Fahrlinie der Einfahrt, am Fahrer*innensitz
               {' '}{f2(FAHRERSITZ_M)} m links davon (Annahme, wie am Knoten).</p></Info></td><td className="klein">{z.lageQuelle}</td></tr>
           <tr><td>D</td><td>B {f2(z.B)} m hinter der Wartelinie <span className="klein">({z.bGrund})</span></td></tr>

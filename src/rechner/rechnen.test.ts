@@ -162,15 +162,15 @@ describe('E1: erforderliche Sichtweite an einer Hauptverkehrsstrasse', () => {
     const t = e.annahmen.join(' | ')
     expect(t).toContain('Die Vortrittsstrasse gilt als Hauptverkehrsstrasse oder wichtige Verbindungsstrasse (nach OSM highway=tertiary; ' +
       'im Panel änderbar)')
-    expect(t).toContain('der Zwischenwert der Tab. 1 (VSS 40 273, S. 8; Mittel von unterem und oberem Wert, aufgerundet; Entscheid ' +
-      '15.10.2026 – die Norm nennt nur einen Bereich)')
+    expect(t).toContain('der Zwischenwert der Tab. 1 (VSS 40 273, S. 8; Mittel von unterem und oberem Wert, aufgerundet; ' +
+      'Projektentscheid, die Norm nennt nur einen Bereich)')
     // Strassentyp aus OSM als Annahme der App, tertiary auf der sicheren Seite: technische Herleitung
     expect(e.herleitung!.join(' | ')).toContain('trunk, primary, secondary, tertiary und deren links gelten als Hauptverkehrsstrasse ' +
       '(tertiary damit auf der sicheren Seite)')
     // eben: Anhaltesichtweite nicht angewendet, darum nicht genannt
     expect(t).not.toContain('Anhaltesichtweite')
     expect(seite(e, 'links').typText).toBe('Zwischenwert, Hauptverkehrsstrasse (Mittel von unterem und oberem Wert, aufgerundet; ' +
-      'Entscheid 15.10.2026 – die Norm nennt nur einen Bereich)')
+      'Projektentscheid, die Norm nennt nur einen Bereich)')
     expect(t).toContain('Längsneigung von links und von rechts 0 % (eben')
   })
   it('Strassentyp von Hand ES: unterer Wert 50 m, Annahme zum Strassentyp entfällt', () => {
