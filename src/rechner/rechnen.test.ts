@@ -122,10 +122,10 @@ describe('Gesamtrechnung T-Knoten', () => {
   })
   it('Annahmen in der Seite: B, D Fahrer*innensitz, d, Strassentyp, Vortritt, nur Gebäude', () => {
     const t = e.annahmen.join(' | ')
-    for (const s of ['Das wartende Fahrzeug steht 3,00 m hinter der Kante des Fahrstreifens mit Vortritt (Beobachtungsdistanz B innerorts',
-      'Das Fahrer*innenauge (D) liegt 0,50 m links der Fahrlinie (Fahrer*innensitz)', 'mit der Wagenmitte 1,50 m vom rechten Fahrbahnrand',
-      'massgebend ist der untere Wert der Tab. 1', 'Vortrittsregelung «Kein Vortritt (Signal 3.02)» angenommen',
-      'Gebäude der amtlichen Vermessung (weitere Hindernisse sind keine']) expect(t).toContain(s)
+    for (const s of ['Das Fahrzeug steht 3,00 m hinter der Kante des Fahrstreifens mit Vortritt (B innerorts',
+      'das Auge D 0,50 m links der Fahrlinie', 'Fahrzeuge fahren 1,50 m vom rechten Rand',
+      'massgebend ist der untere Wert der Tab. 1', 'Kein Vortritt (Signal 3.02) angenommen',
+      'Gebäude der amtlichen Vermessung (keine weiteren']) expect(t).toContain(s)
     // je Thema höchstens ein Punkt, in der Reihenfolge der Rechnung
     expect(e.annahmenThemen!.map(x => x.thema)).toEqual(['vortritt', 'wartend', 'verkehr', 'hindernisse'])
     expect(e.annahmen).toEqual(e.annahmenThemen!.map(x => `${x.titel}: ${x.text}`))
@@ -160,9 +160,8 @@ describe('E1: erforderliche Sichtweite an einer Hauptverkehrsstrasse', () => {
     expect(seite(e, 'links').dreieckVerdeckt.length).toBeGreaterThan(0)
     expect(seite(e, 'rechts').status).toBe('erfuellt')            // frei bis 105 m ≥ 70 m
     const t = e.annahmen.join(' | ')
-    expect(t).toContain('Die Vortrittsstrasse gilt als Hauptverkehrsstrasse oder wichtige Verbindungsstrasse (nach OSM highway=tertiary; ' +
-      'im Panel änderbar)')
-    expect(t).toContain('der Zwischenwert der Tab. 1 (VSS 40 273, S. 8; Mittel von unterem und oberem Wert, aufgerundet; ' +
+    expect(t).toContain('Die Vortrittsstrasse gilt als Hauptverkehrsstrasse oder wichtige Verbindungsstrasse (nach OSM highway=tertiary)')
+    expect(t).toContain('der Zwischenwert der Tab. 1 (S. 8; Mittel von unterem und oberem Wert, aufgerundet; ' +
       'Projektentscheid, die Norm nennt nur einen Bereich)')
     // Strassentyp aus OSM als Annahme der App, tertiary auf der sicheren Seite: technische Herleitung
     expect(e.herleitung!.join(' | ')).toContain('trunk, primary, secondary, tertiary und deren links gelten als Hauptverkehrsstrasse ' +
@@ -190,7 +189,7 @@ describe('E1: erforderliche Sichtweite an einer Hauptverkehrsstrasse', () => {
     expect(e.annahmen.some(a => a.includes('Längsneigung'))).toBe(false)
     // Anhaltesichtweite angewendet (links −6 %): kurz genannt, Einzelheiten in der Herleitung
     expect(e.annahmen.join(' | ')).toContain('zählt zusätzlich die Anhaltesichtweite nach VSS 40 090b (Abb. 2, S. 5')
-    expect(e.herleitung!.join(' | ')).toContain('Untergrenze erst über ±2 % (VSS 40 273 Ziffer 13.1)')
+    expect(e.herleitung!.join(' | ')).toContain('Untergrenze erst über ±2 % (Ziffer 13.1)')
   })
   it('HVS mit Neigung ±6 %: Vorgabe «grosse Längsneigung» hebt auf den oberen Wert 70 m; Häkchen von Hand weg: 60 m', () => {
     const e = rechne(hvs(), eg({ neigung: { links: -6, rechts: 6 } }))
@@ -314,7 +313,7 @@ describe('Block 5: Überholfall ausserorts', () => {
     const v = rechne(land({ overtaking: 'no' }))
     expect(v.richtungen.map(r => r.ueberholfall ?? null)).toEqual([null, null])
     expect(v.annahmen.join(' | ')).toContain('Überholfall nicht geprüft (von links: Überholen verboten (OSM overtaking=no); von rechts: ' +
-      'Überholen verboten (OSM overtaking=no); VSS 40 273 Ziffer 6, S. 4).')
+      'Überholen verboten (OSM overtaking=no); Ziffer 6, S. 4).')
     expect(seite(v, 'rechts').gesamt).toBe('massgebend')
     // Arm West (sd −1): Verkehr zum Knoten in Wegrichtung -> overtaking:forward; Arm Ost -> overtaking:backward
     const f = rechne(land({ 'overtaking:forward': 'no' }))
@@ -366,7 +365,7 @@ describe('Block 5: Hinweise ohne Statuswirkung', () => {
     const e = rechne(o)
     expect(Math.round(e.einbiegewinkel) < 45 || Math.round(e.einbiegewinkel) > 135).toBe(true)
     expect(e.hinweise.find(h => h.startsWith('Einbiegewinkel'))).toBe(`Einbiegewinkel rund ${Math.round(e.einbiegewinkel)}°: deutlich von 90° ` +
-      'abweichend, nach VSS 40 273 Ziffer 10 (S. 7) grundsätzlich zu vermeiden; spitze Winkel für Lastwagen besonders problematisch ' +
+      'abweichend, nach Ziffer 10 (S. 7) grundsätzlich zu vermeiden; spitze Winkel für Lastwagen besonders problematisch ' +
       '(Annahme der Grenze 45°/135°).')
   })
 })

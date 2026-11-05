@@ -34,12 +34,14 @@ import { zuerichSnapshotLesen, type ZuerichSnapshot } from './daten/anbieter/gem
 // Schlüssel «von>nach» der Kreiselarme); ort.zufahrt am Kreisel = Schlüssel des Kreiselarms der Einfahrt.
 // Version 8 (K4, 01.11.2026): am Kreisel im Auszug des Ergebnisses ergebnis.kreisel (Typ, Masse, β, Tempo, Ak, Velo, Sichtberme, Az);
 // richtungen ist dort leer. Eingaben wie Version 7; Version 1 bis 7 werden weiter gelesen.
+// Lage von Hand (05.11.2026, Felder optional, ältere Leser übergehen sie): eingaben.halteRichtung (Richtung längs der Halte- oder
+// Wartelinie, haltelinie ist dann ihre Mitte), eingaben.fbRichtung (Fahrtrichtung von F_B), eingaben.zufahrtVersatz (Zufahrtsachse seitlich von Hand), eingaben.veloHand (Veloachse je Richtung seitlich von Hand, m), eingaben.faHand (je Richtung { mitte, richtung }).
 
 import type { P } from './geo'
 import { amtlicheQuellenLesen } from './daten/anbieter/gemeinsam/speicher'
 import type { Hindernis, ParkKlasse } from './rechner/hindernisse'
 import { KEINE_ALLE_EINGABEN, REGELUNGEN, TEMPO_ARTEN, TEMPO_MIN, TEMPO_MAX, TUE_BREITE_MIN, TUE_BREITE_MAX, type Eingaben, type Regelung, type Richtung,
-  type TempoArt, type TempoEingabe, type ZufahrtspunktEingabe, type Ergebnis, type KreiselTyp, type KreiselInfo } from './rechner/typen'
+  type TempoArt, type TempoEingabe, type ZufahrtspunktEingabe, type Ergebnis, type KreiselTyp, type KreiselInfo, type FahrzeugLageHand } from './rechner/typen'
 import { zufahrtspunktKey } from './rechner/grundstueck'
 import { VELOFUEHRUNGEN, type Velofuehrung } from './rechner/velo'
 import { WAHRNEHMBARKEITEN, type Wahrnehmbarkeit } from './rechner/rechtsvortritt'
@@ -190,6 +192,17 @@ export function eingabenPruefen(x: unknown, hinweise: string[], version = FALL_V
   feld('haltelinie', oderNull(istLv95), v => { e.haltelinie = v })
   feld('D', oderNull(istLv95), v => { e.D = v })
   feld('Dtrottoir', oderNull(istLv95), v => { e.Dtrottoir = v })
+  const istRichtung = (v: unknown): v is P => istP(v) && Math.hypot(v[0], v[1]) > 0.5 && Math.hypot(v[0], v[1]) < 1.5
+  const istFahrzeug = (v: unknown): v is FahrzeugLageHand => istObjekt(v) && istLv95(v.mitte) && istRichtung(v.richtung)
+  feld('halteRichtung', oderNull(istRichtung), v => { e.halteRichtung = v })
+  feld('fbRichtung', oderNull(istRichtung), v => { e.fbRichtung = v })
+  feld('veloHand', oderNull((v): v is Record<Richtung, number | null> => istObjekt(v) &&
+    (['links', 'rechts'] as const).every(r => v[r] === undefined || v[r] === null || (typeof v[r] === 'number' && Number.isFinite(v[r]) && Math.abs(v[r] as number) <= 10))),
+    v => { e.veloHand = v ? { links: v.links ?? null, rechts: v.rechts ?? null } : undefined })
+  feld('zufahrtVersatz', oderNull((v): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 30), v => { e.zufahrtVersatz = v })
+  feld('faHand', oderNull((v): v is Record<Richtung, FahrzeugLageHand | null> => istObjekt(v) &&
+    (['links', 'rechts'] as const).every(r => v[r] === undefined || v[r] === null || istFahrzeug(v[r]))),
+    v => { e.faHand = v ? { links: v.links ?? null, rechts: v.rechts ?? null } : undefined })
   feld('trottoirFrei', bool, v => { e.trottoirFrei = v })
   if (x.tempo !== undefined) {
     if (!istObjekt(x.tempo)) falsch('tempo')
@@ -381,7 +394,8 @@ export function eingabenGesetzt(e: Eingaben): number {
     e.tempo.links !== null, e.tempo.rechts !== null, (e.velo?.links ?? null) !== null, (e.velo?.rechts ?? null) !== null,
     !!e.ebikeVerboten, (e.wahrnehmbarkeit ?? null) !== null, !!e.alleArme, !!e.markierungRv, !!e.trottoirueberfahrt, (e.Dtrottoir ?? null) !== null,
     (e.trottoirueberfahrt?.breite ?? null) !== null, (e.kreiselTyp ?? null) !== null,
-    Object.keys(e.kreiselBeziehungen ?? {}).length > 0].filter(x => x).length
+    Object.keys(e.kreiselBeziehungen ?? {}).length > 0, (e.halteRichtung ?? null) !== null, (e.fbRichtung ?? null) !== null, (e.zufahrtVersatz ?? null) !== null, (e.veloHand?.links ?? null) !== null, (e.veloHand?.rechts ?? null) !== null,
+    (e.faHand?.links ?? null) !== null, (e.faHand?.rechts ?? null) !== null].filter(x => x).length
 }
 
 /** Anzahl Eingaben (E1/E2b, Hindernisse, verworfene Vorschläge bzw. Parkfelder, Baumkataster zugeschaltet, Parkfelder abgeschaltet) */

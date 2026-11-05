@@ -263,6 +263,12 @@ html.startseite, html.startseite body, html.startseite #root { height: auto; min
 /* E2b: D zum Ziehen (von Hand: oranger Rand), Zufahrtspunkt einer Grundstückzufahrt */
 .d-punkt { background: #ffffff; border: 2px solid #111827; border-radius: 50%; cursor: move; box-shadow: 0 0 2px #000; }
 .d-punkt.hand { border-color: #f59e0b; border-width: 3px; }
+/* Griffe zum Verschieben und Drehen von Fahrzeugen und der Halte- oder Wartelinie */
+/* mit .leaflet-marker-icon, sonst gewinnt dessen display: block und das Symbol sitzt nicht in der Mitte */
+.leaflet-marker-icon.kartengriff { display: flex; align-items: center; justify-content: center; box-sizing: border-box; background: #f59e0b; border: 3px solid #ffffff;
+  border-radius: 50%; box-shadow: 0 0 0 2px #111827, 0 2px 6px rgba(0, 0, 0, 0.6); color: #111827; cursor: move; }
+.kartengriff svg { display: block; flex: none; pointer-events: none; }
+.kartengriff.drehen { cursor: grab; }
 /* K0: D' der Phase Trottoir (Trottoirüberfahrt) zum Ziehen, Bernstein wie die Trottoir-Sichtdreiecke */
 .d-punkt.dstrich { background: #4f46e5; }
 /* Beschriftung «D» rechts neben dem Punkt, wie die Strassennamen weiss mit dunklem Schatten */

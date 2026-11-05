@@ -46,7 +46,7 @@ import { HALTELINIE_MIN_M, type Massnahme, type Uebernahme } from './rechner/mas
 import { AV_RADIUS_M, OSM_RADIUS_M, KATASTER_RADIUS_M, avNachladen, REGELUNG_TEXT, TEMPO_ART_TEXT, LSA_TEXT, RV_TEMPO_TEXT } from './rechner/rechnen'
 import { zufahrtspunktKey, zufahrtspunktLesen } from './rechner/grundstueck'
 import { armText, nachNr, keineZufahrt } from './rechner/knoten'
-import { lageText, lageNach } from './rechner/lage'
+import { lageText, lageNach, lageKurz } from './rechner/lage'
 import { TAB1, ZIEL_FAKTOR, STRASSENTYP_TEXT, UNGUNST_TEXT, NEIGUNG_GROSS_PROZENT, NEIGUNG_EBEN_PROZENT, SCHWERVERKEHR_PROZENT,
   UNGUNST_MASSE_TEXT, ZWISCHENWERT_TEXT, neigungLesen, type Strassentyp, type Ungunst } from './rechner/sichtweite'
 import { ANHALTESICHT_STUFEN, ANHALTESICHT_I_MIN } from './rechner/anhaltesicht'
@@ -139,6 +139,8 @@ const zpSig = (z: ZufahrtspunktEingabe | null) => (z ? `${zufahrtspunktKey(z.p)}
 const HOEHEN_NAME = 'Höhenmodell (swisstopo, swissALTI3D, Profile)'
 /** LV95 auf cm (Eingaben von der Karte) */
 const cm = (p: P): P => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]
+/** Richtung auf vier Stellen (Fall-Datei) */
+const vektor = (r: P): P => [Math.round(r[0] * 1e4) / 1e4, Math.round(r[1] * 1e4) / 1e4]
 
 /** Eingabefeld Längsneigung [%]; übernimmt den Wert 300 ms nach dem letzten Tastendruck (nicht jede Taste eine Rechnung).
  *  wert null = Vorgabe (aus dem Höhenmodell, E3a): das Feld zeigt die Vorgabe; eine Eingabe gilt als «von Hand». Vorgabe
@@ -357,7 +359,7 @@ const SichtHerleitung = ({ t, faktorText }: { t: Pick<SichtTeil, 'bisEnde' | 'sM
 </>
 
 /** Spalte eines Teils (Auto, Velo, Trottoir): vier Zeilen, die Herleitung im Info-Zeichen */
-function TeilSpalte({ name, farbe, zusatz, stand, A, Aquelle, t, herleitung, leer }: { name: string; farbe?: string; zusatz?: string
+function TeilSpalte({ name, farbe, zusatz, stand, A, Aquelle, t, herleitung, leer, marke }: { name: string; farbe?: string; zusatz?: string; marke?: string
   stand: TeilStand; A?: number; Aquelle?: string; t?: { vorhanden: number; bisEnde: boolean; verdecker: { art: string; name: string } | null }
   herleitung: React.ReactNode; leer?: string }) {
   return (
@@ -367,7 +369,7 @@ function TeilSpalte({ name, farbe, zusatz, stand, A, Aquelle, t, herleitung, lee
       {leer || !t ? <p className="klein">{leer ?? stand.kurz}</p> : <dl>
         <dt>Sichtweite erforderlich</dt><dd><b>{A} m</b> <span className="klein">({Aquelle})</span></dd>
         <dt>Sichtweite vorhanden</dt><dd><b>{vorhandenText(t)}</b></dd>
-        <dt>Status</dt><dd><b style={{ color: stand.farbe }}>{stand.kurz}</b></dd>
+        <dt>Status</dt><dd><b style={{ color: stand.farbe }}>{stand.kurz}</b>{marke && <span className="klein"> ({marke})</span>}</dd>
         <dt>Verdeckt durch</dt><dd>{t.verdecker ? verdeckerKurz(t.verdecker) : '–'}</dd>
       </dl>}
     </div>
@@ -396,7 +398,7 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false,
           title={richtungStreetViewTitel(lageText(r).toLowerCase(), r.strasse)}>Street View ↗</a></>}</h3>
       {warn.map(w => <p key={w} className="klein warnung">{w}</p>)}
       <div className={mitTrottoir && u ? 'teile vier' : mitTrottoir || u ? 'teile drei' : 'teile'}>
-        <TeilSpalte name="Auto" stand={auto} A={r.massgebend} Aquelle={autoA} t={r}
+        <TeilSpalte name="Auto" stand={auto} A={r.massgebend} Aquelle={autoA} t={r} marke={r.statusZusatz.filter(z => z.endsWith(' von Hand')).join(', ') || undefined}
           leer={r.status === 'keine_zufahrt' ? (nichtGeprueft ? 'nicht geprüft (Rechtsvortritt)' : 'keine Autos (Einbahn vom Knoten weg)') : undefined}
           herleitung={<>
             <p>A: erforderliche Sichtweite ab dem Kreuzungspunkt K entlang der Fahrstreifenachse (Knotensichtweite, VSS 40 273 Abb. 1).</p>
@@ -437,6 +439,7 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false,
             {u.hinweise.length > 0 && <><p>Hinweise:</p><ul>{u.hinweise.map((h, i) => <li key={i}>{h}</li>)}</ul></>}
           </>} />}
         <TeilSpalte name="Velo" farbe={VELO_FARBE} zusatz={r.veloGegen ? 'gegen die Einbahn' : undefined} stand={veloStand(r)}
+          marke={[...(r.statusZusatz.includes('Zufahrt von Hand') ? ['Zufahrt von Hand'] : []), ...(v?.veloHand ? ['Veloachse von Hand'] : [])].join(', ') || undefined}
           A={v?.A} Aquelle="Tab. 3" t={v ?? undefined} leer={v ? undefined : nichtGeprueft ? 'nicht geprüft (Rechtsvortritt)' : 'kein Veloverkehr'}
           herleitung={<>
             <p>Veloverkehr (Tab. 3{r.veloGegen ? ', Velo gegen die Einbahn' : ''}): {VELOFUEHRUNG_TEXT[r.veloFuehrung]} ({r.veloGewaehlt ?
@@ -949,8 +952,11 @@ function TueBlock({ t }: { t: TueErgebnis }) {
 }
 
 /** Block «Zufahrt» (Schritt 3, E2b): Haltelinie, D, Trottoir, Tempo je Richtung; die Vortrittsregelung steht in Schritt 2 */
-function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }: { e: Ergebnis; eingaben: Eingaben
-  setEingaben: (f: (x: Eingaben) => Eingaben) => void; werkzeug: KnotenWerkzeug; werkzeugWaehlen: (w: KnotenWerkzeug) => void }) {
+function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen, fahrzeuge, setFahrzeuge, halteLage, setHalteLage }: { e: Ergebnis; eingaben: Eingaben
+  setEingaben: (f: (x: Eingaben) => Eingaben) => void; werkzeug: KnotenWerkzeug; werkzeugWaehlen: (w: KnotenWerkzeug) => void
+  fahrzeuge: boolean; setFahrzeuge: (an: boolean) => void; halteLage: boolean; setHalteLage: (an: boolean) => void }) {
+  const faHand = e.richtungen.filter(r => r.faHand)
+  const veloHand = e.richtungen.filter(r => r.velo?.veloHand)
   const halteAktiv = werkzeug === 'haltelinie'
   const dAktiv = werkzeug === 'd'
   return (
@@ -960,13 +966,21 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
             <p>Bei «Stop» die Haltelinie (SSV Markierung 6.10), bei «Kein Vortritt» die Wartelinie (SSV Markierung 6.13). B gilt ab ihrem
               vorderen Rand, der Vorderkante (VSS 40 273 Ziffer 5, S. 4). Liegt sie vor der Kante bzw. Trottoirhinterkante (vorverlegt), ist
               das eine Ausnahme nach Ziffer 14: nur an bestehenden Knoten und Zufahrten.</p>
-            <p>Setzen: Vorderkante (Seite zur Vortrittsstrasse) nahe der Zufahrtsachse anklicken; die App lotet den Punkt auf die Achse.</p></Info></td><td>
+            <p>Setzen: Vorderkante (Seite zur Vortrittsstrasse) nahe der Zufahrtsachse anklicken; die App lotet den Punkt auf die Achse.</p>
+            <p>«Lage anpassen»: auf der Karte an den Griffen verschieben (✥) und drehen (↻). Jede Änderung gilt beim Loslassen, «Fertig» blendet
+              die Griffe aus. B gilt dann ab dem Schnitt der Linie mit der Zufahrtsachse (Annahme).</p></Info></td><td>
             {e.haltelinie ? <>{f2(Math.abs(e.haltelinie.abstand))} m {e.haltelinie.abstand >= 0 ? 'hinter' : 'vor'} der Kante{' '}
-              <span className="klein">(<Hand />{e.haltelinie.vorverlegt && <span className="warnung">, vorverlegt</span>})</span>{' '}</> :
+              <span className="klein">(<Hand />{e.haltelinie.hand && e.haltelinie.winkel >= 1 && `, ${Math.round(e.haltelinie.winkel)}° schräg`}
+                {e.haltelinie.vorverlegt && <span className="warnung">, vorverlegt</span>})</span>{' '}</> :
               eingaben.haltelinie ? <span className="warnung">gesetzt, aber nicht gerechnet (siehe Hinweise) </span> : <>keine{' '}</>}
             <button className={halteAktiv ? 'aktiv klein' : 'zweit klein'} onClick={() => werkzeugWaehlen(halteAktiv ? null : 'haltelinie')}>
               {eingaben.haltelinie ? 'neu setzen' : 'Halte- oder Wartelinie setzen'}</button>
-            {eingaben.haltelinie && <>{' '}<button className="zweit klein" onClick={() => setEingaben(x => ({ ...x, haltelinie: null }))}>entfernen</button></>}
+            {e.haltelinie && <>{' '}<button className={halteLage ? 'aktiv klein' : 'zweit klein'} onClick={() => { if (halteAktiv) werkzeugWaehlen(null); setHalteLage(!halteLage) }}>Lage anpassen</button></>}
+            {eingaben.haltelinie && <>{' '}<button className="zweit klein" onClick={() => { setHalteLage(false); setEingaben(x => ({ ...x, haltelinie: null, halteRichtung: null })) }}>entfernen</button></>}
+            {eingaben.halteRichtung && <>{' '}<button className="zweit klein" onClick={() => setEingaben(x => ({ ...x, halteRichtung: null }))}>quer zur Achse</button></>}
+            {halteLage && e.haltelinie && <div className="werkzeughilfe"><b>Lage anpassen:</b> auf der Karte am Griff ✥ verschieben und am Griff ↻
+              drehen. Jede Änderung gilt beim Loslassen.{' '}
+              <button className="zweit klein" onClick={() => setHalteLage(false)}>Fertig</button></div>}
             {halteAktiv && <div className="werkzeughilfe"><b>Halte- oder Wartelinie:</b> Vorderkante (vorderer Rand, Seite zur
               Vortrittsstrasse) nahe der Zufahrtsachse anklicken; die App lotet den Punkt auf die Achse.{' '}
               <button className="zweit klein" onClick={() => werkzeugWaehlen(null)}>Abbrechen</button></div>}
@@ -986,6 +1000,30 @@ function KnotenAbschnitt({ e, eingaben, setEingaben, werkzeug, werkzeugWaehlen }
               ziehen); D gilt dann von Hand, F<sub>B</sub> folgt.{' '}
               <button className="zweit klein" onClick={() => werkzeugWaehlen(null)}>Abbrechen</button></div>}
             {dWarnungen(e).map(w => <div key={w} className="klein warnung">{w}</div>)}
+          </td></tr>
+          <tr><td>Fahrzeuge<Info titel="Fahrzeuge anpassen">
+            <p>F<sub>B</sub> dreht um D: Das ändert nur die Darstellung, die Sicht rechnet ab D.</p>
+            <p>F<sub>B</sub> am Griff ✥ seitlich verschieben, zum Beispiel wenn die App eine Sperrfläche nicht kennt: Die ganze Zufahrtsachse wandert
+              parallel mit, D, K und der Nullpunkt folgen, B bleibt. Das Ergebnis ist mit «Zufahrt von Hand» markiert. Den Punkt D ziehen setzt
+              dagegen nur D von Hand, die Achse bleibt.</p>
+            <p>F<sub>A</sub> lässt sich frei verschieben und drehen, zum Beispiel wenn die App den Fahrbahnrand falsch erkannt hat. Der seitliche
+              Versatz zählt: Die Fahrlinie läuft dann parallel durch das Fahrzeug, Status, Sichtdreieck und K rechnen darauf, die erforderliche
+              Sichtweite bleibt. Das Ergebnis ist mit «Fahrlinie von Hand» markiert. Längs verschieben und drehen ändert nur die Darstellung und
+              die Sichtlinie von D auf die Front.</p>
+            <p>Das Velo mit Vortritt lässt sich am Griff ✥ seitlich verschieben, zum Beispiel wenn es wegen eines Parkfelds anders fährt: Die
+              Veloachse wird parallel versetzt, die Velo-Prüfung rechnet darauf, markiert mit «Veloachse von Hand».</p></Info></td><td>
+            {e.fbHand || e.zufahrtVersatz || faHand.length || veloHand.length ? <>{[e.zufahrtVersatz ? <>F<sub>B</sub> {f2(Math.abs(e.zufahrtVersatz))} m nach {e.zufahrtVersatz > 0 ? 'links' : 'rechts'} versetzt</> : null,
+              e.fbHand ? <>F<sub>B</sub> gedreht</> : null,
+              ...veloHand.map(r => <>Velo {lageKurz(r)}: {f2(r.velo!.randAbstand)} m vom Rand statt {f2(r.velo!.veloHand!.randVorgabe)} m</>), ...faHand.map(r => <>F<sub>A</sub> {lageKurz(r)}: {r.fahrlinieHand &&
+                `${f2(r.randAbstand)} m vom Rand statt ${f2(r.fahrlinieHand.randVorgabe)} m, `}Sicht{' '}
+              {r.faHand!.verdecker ? <span className="warnung">verdeckt durch {r.faHand!.verdecker}</span> : 'frei'}</>)].filter(x => x)
+              .map((x, i) => <span key={i}>{i > 0 && ', '}{x}</span>)} <span className="klein">(<Hand />)</span>{' '}</> : <>berechnet{' '}</>}
+            <button className={fahrzeuge ? 'aktiv klein' : 'zweit klein'} onClick={() => setFahrzeuge(!fahrzeuge)}>Fahrzeuge anpassen</button>
+            {(e.fbHand || e.zufahrtVersatz || faHand.length > 0 || veloHand.length > 0) && <>{' '}<button className="zweit klein" onClick={() => setEingaben(x => ({ ...x, fbRichtung: null, zufahrtVersatz: null, veloHand: { links: null, rechts: null },
+              faHand: { links: null, rechts: null } }))}>zurücksetzen</button></>}
+            {fahrzeuge && <div className="werkzeughilfe"><b>Fahrzeuge anpassen:</b> auf der Karte am Griff ✥ verschieben und am Griff ↻ drehen. F<sub>B</sub> verschiebt
+              sich seitlich mit der ganzen Zufahrtsachse, B bleibt. Jede Änderung gilt beim Loslassen.{' '}
+              <button className="zweit klein" onClick={() => setFahrzeuge(false)}>Fertig</button></div>}
           </td></tr>
           <tr><td>Trottoirüberfahrt<Info titel="Trottoirüberfahrt (VSS 40 242)">
             <p>Häkchen, wenn über diese Einmündung eine Trottoirüberfahrt führt bzw. geplant ist. Dann gilt kein Rechtsvortritt (die Zufahrt
@@ -1182,6 +1220,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   const setEingaben = useCallback((f: (e: Eingaben) => Eingaben) => aendern(x => { x.eingaben = f(x.eingaben); return x }), [aendern])
   const zufahrt = ziel?.zufahrt ?? null
   const [knotenWerkzeug, setKnotenWerkzeug] = useState<KnotenWerkzeug>(null)
+  const [fahrzeugeBearbeiten, setFahrzeugeBearbeiten] = useState(false)
+  const [halteBearbeiten, setHalteBearbeiten] = useState(false)
   const [zufahrtErster, setZufahrtErster] = useState<P | null>(null)
   const [zufahrtArt, setZufahrtArt] = useState<ZufahrtHerkunft>('senkrecht')
   const [zufahrtGrad, setZufahrtGrad] = useState('90')
@@ -1353,7 +1393,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     const nr = ++ladeNr.current
     setFall(null); setFallHinweis(null); setParkKat(null); setBaumKat(null); setVsigKat(null); setWerkzeug(null); setZeichnung([]); setBearbeiten(null)
     bund.zurueck()
-    setKnotenWerkzeug(null); setZufahrtErster(null); setHoehen(null); hoehenLaeuft.current = null; setHervor(null)
+    setKnotenWerkzeug(null); setFahrzeugeBearbeiten(false); setHalteBearbeiten(false); setZufahrtErster(null); setHoehen(null); hoehenLaeuft.current = null; setHervor(null)
     const zp = typeof wahl === 'object' && 'zufahrtspunkt' in wahl ? wahl.zufahrtspunkt : null
     const fallSetzen = (lat: number, lon: number, kid: number | null) => {
       const erinnert = fallNeu ? null : zp ? fallErinnernZufahrt(zp) : kid !== null ? fallErinnern(kid) : null
@@ -1444,7 +1484,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   // Neuer Fall mit dem Zufahrtspunkt als Schlüssel; nahe der geladenen Daten ohne neues Laden. Gemerkter Fall des Punkts geht vor;
   // sonst übernimmt der neue Fall Hindernisse, verworfene Vorschläge und Quellen-Häkchen des bisherigen Falls.
   const zufahrtSetzen = useCallback((z: ZufahrtspunktEingabe) => {
-    setKnotenWerkzeug(null); setZufahrtErster(null); setWerkzeug(null); setBearbeiten(null)
+    setKnotenWerkzeug(null); setFahrzeugeBearbeiten(false); setHalteBearbeiten(false); setZufahrtErster(null); setWerkzeug(null); setBearbeiten(null)
     const zn: ZufahrtspunktEingabe = { p: cm(z.p), ...(z.herkunft ? { herkunft: z.herkunft } : {}), richtung: z.richtung ? [Math.round(z.richtung[0] * 1e8) / 1e8, Math.round(z.richtung[1] * 1e8) / 1e8] : null }
     const [lat, lon] = wgs(zn.p[0], zn.p[1])
     const erinnert = fallErinnernZufahrt(zn.p)
@@ -1452,7 +1492,9 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     if (erinnert) {
       neu = erinnert
       const alt = erinnert.ort.zufahrtspunkt?.richtung ?? null
-      if (JSON.stringify(alt) !== JSON.stringify(zn.richtung) || erinnert.ort.zufahrtspunkt?.herkunft !== zn.herkunft) { neu.eingaben.haltelinie = null; neu.eingaben.D = null }
+      if (JSON.stringify(alt) !== JSON.stringify(zn.richtung) || erinnert.ort.zufahrtspunkt?.herkunft !== zn.herkunft) {
+        neu.eingaben.haltelinie = null; neu.eingaben.halteRichtung = null; neu.eingaben.D = null; neu.eingaben.fbRichtung = null; neu.eingaben.zufahrtVersatz = null; neu.eingaben.veloHand = { links: null, rechts: null }; neu.eingaben.faHand = { links: null, rechts: null }
+      }
       neu.ort.zufahrtspunkt = { ...zn, p: erinnert.ort.zufahrtspunkt!.p }
       hinweis = 'Eingaben und Hindernisse dieser Grundstückzufahrt aus dem Browser übernommen.'
     } else {
@@ -1475,7 +1517,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     const [lat, lon] = gewaehlt?.id === daten.nid ? [gewaehlt.lat, gewaehlt.lon] : wgs(daten.ort[0], daten.ort[1])
     const erinnert = fallErinnern(daten.nid)
     zAktuell.current = null
-    setKnotenWerkzeug(null); setZufahrtErster(null); setBearbeiten(null)
+    setKnotenWerkzeug(null); setFahrzeugeBearbeiten(false); setHalteBearbeiten(false); setZufahrtErster(null); setBearbeiten(null)
     setFall(erinnert ?? leererFall(lat, lon, daten.nid))
     setFallHinweis(erinnert ? 'Eingaben, Hindernisse und Quellen des Knotens aus dem Browser übernommen.' : null)
     ortInUrl({ knoten: daten.nid })
@@ -1641,7 +1683,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     setWerkzeug(null); setZeichnung([]); zeichnungRef.current = []; setBearbeiten(null); setZufahrtErster(null); setKnotenWerkzeug(w)
   }
   const knotenKlick = useCallback((p: P) => {
-    if (knotenWerkzeug === 'haltelinie') { setEingaben(e => ({ ...e, haltelinie: cm(p) })); setKnotenWerkzeug(null); return }
+    // nach dem Setzen gleich die Griffe zeigen: verschieben und drehen ist der nächste Schritt
+    if (knotenWerkzeug === 'haltelinie') { setEingaben(e => ({ ...e, haltelinie: cm(p), halteRichtung: null })); setKnotenWerkzeug(null); setHalteBearbeiten(true); return }
     if (knotenWerkzeug === 'd') { setEingaben(e => ({ ...e, D: cm(p) })); setKnotenWerkzeug(null); return }
     if (knotenWerkzeug !== 'zufahrt') return
     if (!zufahrtErster) { setZufahrtArt('senkrecht'); setZufahrtGrad('90'); setZufahrtR(null); setZufahrtErster(cm(p)); return }
@@ -1752,7 +1795,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   const [hervor, setHervor] = useState<string | null>(null)
   const uebernehmen = useCallback((u: Uebernahme) => {
     // Haltelinie ungerundet: genau die gerechnete Lage (cm könnte ein knappes «reicht» kippen)
-    setEingaben(e => u.art === 'haltelinie' ? { ...e, haltelinie: u.p } : u.art === 'stop' ? { ...e, regelung: 'stop' } :
+    setEingaben(e => u.art === 'haltelinie' ? { ...e, haltelinie: u.p, halteRichtung: null } : u.art === 'stop' ? { ...e, regelung: 'stop' } :
       { ...e, tempo: { ...e.tempo, [u.richtung]: { art: 'signalisiert', wert: u.wert, begruendung: 'Massnahme Tempo senken (VSS 40 273 Ziffer 14)' } } })
   }, [setEingaben])
   const setSpiegel = useCallback((k: string, an: boolean) => aendern(f => {
@@ -1855,7 +1898,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
       ...(erg.trottoirueberfahrt ? ['Trottoirüberfahrt'] : erg.trottoir ? [`Trottoir: ${eingaben.trottoirFrei ? 'Bordkante' : 'Hinterkante'}`] : []),
       `Tempo ${rs.filter(r => !rv || !rvNichtGeprueft(r)).map(r => (r.status === 'keine_zufahrt' ? '–' : r.tempo)).join('/')}`].join(' · ')
     const zufahrtHand = eingaben.haltelinie !== null || eingaben.D !== null || eingaben.trottoirFrei || !!eingaben.trottoirueberfahrt ||
-      !!eingaben.Dtrottoir ||
+      !!eingaben.Dtrottoir || !!eingaben.fbRichtung || !!eingaben.zufahrtVersatz || !!eingaben.veloHand?.links || !!eingaben.veloHand?.rechts || !!eingaben.faHand?.links || !!eingaben.faHand?.rechts ||
       (!rv && (eingaben.tempo.links !== null || eingaben.tempo.rechts !== null))
     const neigung = `i ${rs.map(r => fi(eingaben.neigung[r.richtung] ?? r.neigungVorgabe)).join(' / ')} %`
     const ungunst = erg.strasse.ungunst.fahrstreifen || erg.strasse.ungunst.neigung || erg.strasse.ungunst.schwerverkehr
@@ -1884,6 +1927,13 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
         onZufahrtRichtung={p => { if (knotenWerkzeug === 'zufahrt' && zufahrtErster) { setZufahrtArt('gezeichnet'); setZufahrtR(sub(p, zufahrtErster)) } }} zeichnung={zeichnung} bearbeiten={bearbeiten} onKnoten={knotenWaehlen} onZufahrt={zufahrtAusKarte}
         lsa={lsaIds}
         onKlick={klick} onKnotenKlick={knotenKlick} onD={p => setEingaben(e => ({ ...e, D: cm(p) }))}
+        fahrzeugeBearbeiten={fahrzeugeBearbeiten} halteBearbeiten={halteBearbeiten} onFbRichtung={r => setEingaben(e => ({ ...e, fbRichtung: vektor(r) }))}
+        onFbVersatz={v => { const x = Math.round(v * 100) / 100; setEingaben(e => ({ ...e, D: null, zufahrtVersatz: Math.abs(x) < 0.05 ? null : x })) }}
+        onVeloHand={(r, v) => { const x = Math.round(v * 100) / 100; setEingaben(e => ({ ...e, veloHand: { links: e.veloHand?.links ?? null, rechts: e.veloHand?.rechts ?? null,
+          [r]: Math.abs(x) < 0.05 ? null : x } })) }}
+        onFaHand={(r, l) => setEingaben(e => ({ ...e, faHand: { links: e.faHand?.links ?? null, rechts: e.faHand?.rechts ?? null,
+          [r]: { mitte: cm(l.mitte), richtung: vektor(l.richtung) } } }))}
+        onHaltelinie={(m, r) => setEingaben(e => ({ ...e, haltelinie: cm(m), halteRichtung: vektor(r) }))}
         onDtrottoir={p => setEingaben(e => ({ ...e, Dtrottoir: cm(p) }))} onDoppelklick={doppelklick} onEcke={ecke}
         onHindernis={id => setBearbeiten(b => (b === id ? null : id))} onAusschnitt={ausschnitt} hinweis={suchHinweis} kartenRef={kartenRef}
         hervor={hervorRing} />
@@ -2005,7 +2055,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
             <h2>3 Eingaben</h2>
             {erg && kurz && <>
               <Block titel="Zufahrt" stand={kurz.zufahrtStand} hand={kurz.zufahrtHand} offen={offen.zufahrt} setOffen={o => setOffen('zufahrt', o)}>
-                <KnotenAbschnitt e={erg} eingaben={eingaben} setEingaben={setEingaben} werkzeug={knotenWerkzeug} werkzeugWaehlen={knotenWerkzeugWaehlen} />
+                <KnotenAbschnitt e={erg} eingaben={eingaben} setEingaben={setEingaben} werkzeug={knotenWerkzeug} werkzeugWaehlen={knotenWerkzeugWaehlen}
+                  fahrzeuge={fahrzeugeBearbeiten} setFahrzeuge={setFahrzeugeBearbeiten} halteLage={halteBearbeiten} setHalteLage={setHalteBearbeiten} />
               </Block>
               <Block titel="Erforderliche Sichtweite" stand={kurz.erfStand} hand={kurz.erfHand} offen={offen.erforderlich}
                 setOffen={o => setOffen('erforderlich', o)}>
@@ -2084,6 +2135,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
               setOffen={o => setOffen('hinweise', o)}>
               {erg.hinweise.length > 0 && <>
                 <h4>Hinweise</h4>
+                <p className="klein">Ziffern, Tabellen, Abbildungen und Seiten ohne Normnummer: VSS 40 273 (2024).</p>
                 <ul className="annahmen">{erg.hinweise.map((h, i) => <li key={i}>{h}</li>)}</ul>
               </>}
               <h4>Annahmen</h4>

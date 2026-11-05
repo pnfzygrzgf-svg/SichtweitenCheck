@@ -30,7 +30,7 @@ import { armText, nachNr } from './rechner/knoten'
 import { lageKurz, lageText } from './rechner/lage'
 import type { AvFlaeche } from './daten/av'
 import { hindernisRing, type Hindernis } from './rechner/hindernisse'
-import { autoUmriss, autoScheibe, fbLage, fbVeloLage, faLage, veloTeile, veloLage } from './rechner/fahrzeug'
+import { autoUmriss, autoScheibe, fbLage, fbVeloLage, faAnzeige, veloTeile, veloLage } from './rechner/fahrzeug'
 import { wgs, add, dist, type P } from './geo'
 import { wmsBildUrl, ladeFlugjahr, LUFTBILD_QUELLE } from './daten/luftbild'
 import { NR_GEWAEHLT_FARBE, AV_FARBEN, STATUS_FARBE, FREI_FARBE, VERDECKT_FARBE, D_FARBE, D_RAND_FARBE, D_HAND_FARBE, ZUFAHRT_FARBE, FB_FARBE, FA_FARBE, VELO_FARBE, TROTTOIR_FARBE,
@@ -121,9 +121,10 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
     <path d={pfad([autoUmriss(mitte, richtung)])} fill={farbe} stroke={rand} strokeWidth={1.5} />
     <path d={pfad([autoScheibe(mitte, richtung)])} fill="#94a3b8" stroke="#94a3b8" strokeWidth={1} />
   </>
-  const fb = fbLage(e.Dachse, add(e.Dachse, e.fbRichtung))
+  const fbA = e.fbDachse ?? e.Dachse
+  const fb = fbLage(fbA, add(fbA, e.fbRichtung))
   // Velo gegen die Einbahn auf der Zufahrt (E4): F_B als Velo, velofahrende Person bei D
-  const fbVelo = e.zufahrtVelo ? fbVeloLage(e.Dachse, add(e.Dachse, e.fbRichtung)) : null
+  const fbVelo = e.zufahrtVelo ? fbVeloLage(fbA, add(fbA, e.fbRichtung)) : null
   const velo = (l: [P, P], key: string, fb = false) => veloTeile(l[0], l[1]).map((t, k) => <path key={key + k} d={pfad([t])}
     fill={fb ? FB_FARBE : k === 3 ? '#111827' : VELO_FARBE} stroke={fb ? '#ffffff' : VELO_FARBE} strokeWidth={fb ? 1.5 : 1} />)
   const m = e.rechtsvortritt?.arm.sichtfeld
@@ -199,7 +200,7 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
           {e.richtungen.filter(r => r.status !== 'keine_zufahrt' || r.velo).map(r => {
             const mfz = r.status !== 'keine_zufahrt'
             const iA = Math.min(r.massgebend, r.sichtpunkte.length - 1)
-            const fa = mfz ? faLage(r.sichtpunkte, iA) : null
+            const fa = mfz ? faAnzeige(r.faHand, r.sichtpunkte, iA) : null
             const v = r.velo, vl = v ? veloLage(v.sichtpunkte, Math.min(v.A, v.sichtpunkte.length - 1)) : null
             return <g key={'f' + r.richtung}>
               {fa && auto(fa[0], fa[1], FA_FARBE, '#111827')}
@@ -321,7 +322,8 @@ function ErgebnisTabelle({ e }: { e: Ergebnis }) {
           'unbekannt' : `${fi(r.velo.neigung)} %`}
           {r.velo.ebike ? '; schnelle E-Bikes verboten' : ''}; {r.velo.lageText}</div></> : leer('keine Prüfung'), 'A Velo')}
         {zeile('A vorhanden Velo', r => r.velo ? <b>{vorhandenText(r.velo.vorhanden, r.velo.bisEnde)}</b> : leer('–'), 'vV')}
-        {zeile('Status Velo', r => r.velo ? <b>{statusMarke(r.velo.status)} {STATUS_TEXT_TEIL[r.velo.status]}</b> : leer('–'), 'sV')}
+        {zeile('Status Velo', r => r.velo ? <><b>{statusMarke(r.velo.status)} {STATUS_TEXT_TEIL[r.velo.status]}</b>{r.velo.veloHand &&
+          <div className="klein">Veloachse von Hand</div>}</> : leer('–'), 'sV')}
         {zeile('Vergleich bfu', r => { if (!r.velo) return leer('–'); const b = bfuVelo(r.velo.neigung, r.velo.neigungUnbekannt)
           return <>{b.A} m<div className="klein">{b.text}; Vergleichswert, ohne Wirkung (massgebend VSS 40 273 Tab. 3)</div></> }, 'bV')}
         <tr className="bericht-zwischen"><td colSpan={rs.length + 1}><b>Trottoir</b> (Tab. 2, von D'){e.trottoirueberfahrt ?
@@ -468,11 +470,18 @@ export function eingabenListe(fall: Fall, e: Ergebnis): string[] {
     if (v) aus.push(`Veloführung ${rName(r)}: ${VELOFUEHRUNG_TEXT[v]}`)
   }
   if (e.haltelinie) aus.push(`Halte- oder Wartelinie: Vorderkante ${f2(Math.abs(e.haltelinie.abstand))} m ${e.haltelinie.abstand >= 0 ? 'hinter' : 'vor'} der ` +
-    `Kante${e.haltelinie.vorverlegt ? ' (vorverlegt)' : ''}`)
+    `Kante${e.haltelinie.vorverlegt ? ' (vorverlegt)' : ''}${e.haltelinie.hand ? `, Lage von Hand${e.haltelinie.winkel >= 1 ? `, ${Math.round(e.haltelinie.winkel)}° schräg` : ''}` : ''}`)
   else if (g.haltelinie) aus.push('Halte- oder Wartelinie gesetzt, aber nicht gerechnet (siehe Hinweise)')
   if (g.Dtrottoir && e.trottoirueberfahrt) aus.push(`Beobachtungspunkt D' der Phase Trottoir von Hand`)
   if (e.Dhand) aus.push(`Beobachtungspunkt D von Hand: ${f2(e.Dlage.laengs)} m hinter der ${e.nullpunktText}, ${f2(Math.abs(e.Dlage.seitlich))} m ` +
     `${e.Dlage.seitlich >= 0 ? 'links' : 'rechts'} der Achse`)
+  if (e.zufahrtVersatz) aus.push(`Zufahrtsachse von Hand ${f2(Math.abs(e.zufahrtVersatz))} m nach ${e.zufahrtVersatz > 0 ? 'links' : 'rechts'} versetzt: D, K und der Nullpunkt folgen`)
+  if (e.fbHand) aus.push('Fahrzeug FB von Hand gedreht (nur Darstellung)')
+  for (const r of e.richtungen) if (r.velo?.veloHand) aus.push(`Veloachse ${rName(r.richtung)} von Hand: ${f2(r.velo.randAbstand)} m statt ` +
+    `${f2(r.velo.veloHand.randVorgabe)} m vom rechten Fahrbahnrand, die Velo-Prüfung rechnet auf dieser Linie`)
+  for (const r of e.richtungen) if (r.faHand) aus.push(`Fahrzeug FA ${rName(r.richtung)} von Hand: ${r.fahrlinieHand ? `Fahrlinie ${f2(r.randAbstand)} m statt ${f2(r.fahrlinieHand.randVorgabe)} m ` +
+    'vom rechten Fahrbahnrand, die Prüfung rechnet auf dieser Linie' : 'seitlich auf der berechneten Fahrlinie'}; Front ${f1(r.faHand.abstandK)} m ab K, ` +
+    `Sicht von D ${r.faHand.verdecker ? `verdeckt durch ${r.faHand.verdecker}` : 'frei'}`)
   if (g.trottoirFrei) aus.push('Trottoir ohne Hindernisse: FB wartet an der Bordkante (Ziffer 13.1)')
   if (g.trottoirueberfahrt) aus.push(`Trottoirüberfahrt über diese Einmündung (VSS 40 242)${g.trottoirueberfahrt.breite !== null ?
     `, Breite von Hand ${f2(g.trottoirueberfahrt.breite)} m${e.trottoirueberfahrt?.breiteQuelle === 'eingabe' ? '' : ' (ohne Wirkung: Breite aus der AV)'}` : ''}`)
@@ -493,7 +502,7 @@ export function eingabenListe(fall: Fall, e: Ergebnis): string[] {
 export function hinweisListe(e: Ergebnis, meldungen: string[]): string[] {
   const aus: string[] = [...e.hinweise]
   for (const r of e.richtungen) {
-    for (const h of r.hinweise) aus.push(`${lageText(r)}: ${h}`)
+    for (const h of r.hinweise) aus.push(h.toLowerCase().startsWith(lageText(r).toLowerCase()) ? h : `${lageText(r)}: ${h}`)
     for (const h of r.velo?.hinweise ?? []) aus.push(`Velo ${lageKurz(r)}: ${h}`)
     for (const h of r.ueberholfall?.hinweise ?? []) aus.push(`Überholfall ${lageKurz(r)}: ${h}`)
   }
@@ -564,8 +573,8 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
   const abruf = (k: string) => (quellen[k]?.zeit ? `, abgerufen ${datumIso(quellen[k].zeit)}` : '') + `; ${quellenQualitaetText(quellen[k])}`
   const rv = !!e.rechtsvortritt
   const hindernisse = useMemo(() => bildHindernisse(fall, e), [fall, e])
-  // Begriffe, die im Bericht vorkommen (Annahmen, Hinweise, Herleitung)
-  const begriffe = useMemo(() => begriffeImText([...e.annahmen, ...hinweise, ...(e.herleitung ?? [])]), [e, hinweise])
+  // ohne die Herleitung (technisch): sie steht seit 05.11.2026 nur noch im Panel, nicht im Bericht
+  const begriffe = useMemo(() => begriffeImText([...e.annahmen, ...hinweise]), [e, hinweise])
 
   return createPortal(
     <div className="bericht" role="dialog" aria-label="Bericht">
@@ -657,6 +666,7 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
           <p className="klein">Die Eingaben lassen sich in der App mit «Fall speichern» als Fall-Datei (JSON) sichern und mit «Fall laden»
             wiederherstellen.</p>
           <h3>Annahmen</h3>
+          <p className="klein">Ziffern, Tabellen, Abbildungen und Seiten ohne Normnummer: VSS 40 273 (2024).</p>
           <ul className="klein">{(e.annahmenThemen ?? e.annahmen.map(text => ({ thema: text, titel: '', text }))).map(t => <li key={t.thema}>
             {t.titel && <b>{t.titel}: </b>}{t.text}</li>)}</ul>
         </section>
@@ -699,12 +709,6 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
         {begriffe.length > 0 && <section className="bericht-block">
           <h2>Begriffe</h2>
           <dl className="begriffe-liste klein">{begriffe.map(b => <Fragment key={b.id}><dt>{b.name}</dt><dd>{b.text}</dd></Fragment>)}</dl>
-        </section>}
-
-        {(e.herleitung?.length ?? 0) > 0 && <section className="bericht-block">
-          <h2>Anhang: Herleitung (technisch)</h2>
-          <ul className="klein">{e.herleitung!.map((x, i) => <li key={i}>{x}</li>)}</ul>
-          <p className="klein">Rechenzeit {Math.round(rechnung.ms)} ms.</p>
         </section>}
 
         <footer className="bericht-fuss">

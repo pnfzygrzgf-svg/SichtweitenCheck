@@ -13,18 +13,18 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { AvFlaeche } from './daten/av'
 import { KREISEL_TAG, type OsmKnoten, type Strassenname } from './daten/osm'
-import type { Rechnung, ArmInfo, KnotenInfo, KreiselSichtTeil, VerdeckerEintrag } from './rechner/typen'
+import type { Rechnung, ArmInfo, KnotenInfo, KreiselSichtTeil, VerdeckerEintrag, Richtung, FahrzeugLageHand } from './rechner/typen'
 import { linieImPolygon } from './rechner/poly'
 import { armText, nrLage, NR_ABSTAND_M } from './rechner/knoten'
 import { profilLinie, profilWert, INNENRING_AB_M } from './rechner/kreisel'
 import { lageNach, lageText, lageWort } from './rechner/lage'
-import { wgs, lv95, add, dist, sub, einheit, winkelGrad, type P } from './geo'
-import { querlinie, B_INNERORTS_M } from './rechner/beobachtung'
+import { wgs, lv95, add, dist, dot, sub, einheit, rechts, winkelGrad, type P } from './geo'
+import { querlinie, lageAnAchse, B_INNERORTS_M, FAHRERSITZ_M } from './rechner/beobachtung'
 import { TUE_BREITE_KURZ, f2 } from './texte'
 import { hindernisRing, artText, quelleText, type Hindernis } from './rechner/hindernisse'
 import Ortssuche from './Ortssuche'
 import { ortZoom, type Ort } from './daten/ortssuche'
-import { autoUmriss, autoScheibe, fbLage, fbVeloLage, faLage, veloLage, kreiselFahrzeug } from './rechner/fahrzeug'
+import { autoUmriss, autoScheibe, fbLage, fbVeloLage, faLage, faAnzeige, veloLage, veloTeile, kreiselFahrzeug, PW_LAENGE_M, LENKER_VOR_FRONT_M, VELO_LAENGE_M, VELO_BREITE_M } from './rechner/fahrzeug'
 import { kreuzungspunkte } from './berichtbild'
 import { BESCHRIFT_ZOOM, EBENEN, ebenenFarbe, ebenenSichtbar, ebenenSymbol, type EbeneId, type EbenenDaten, type EbenenObjekt } from './quellenEbenen'
 
@@ -200,6 +200,36 @@ function verdeckerName(v: { art: string; name: string }): string {
   return name === v.art || v.name === 'Gebäude (AV)' ? v.art : name.split(' ')[0] === v.art.split(' ')[0] ? name : `${v.art}: ${name}`
 }
 
+/** Abstand des Dreh-Griffs vor der Front [m] */
+const GRIFF_VOR_FRONT_M = 2.5
+/** Schiebe-Griff von F_B: so weit hinter D, im Heck des Fahrzeugs */
+const FB_GRIFF_HINTER_D_M = 1.5
+const GRIFF_FARBE = '#f59e0b'
+/** Symbole als SVG um die Mitte (12, 12): Schriftzeichen wie ✥ und ↻ sitzen je nach Schrift neben der Mitte */
+const griffSvg = (d: string) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" ` +
+  `stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`
+const GRIFF_SYMBOL = {
+  schieben: griffSvg('M12 3v18M3 12h18M12 3 9 6M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3'),
+  drehen: griffSvg('M19 12a7 7 0 1 1-2.05-4.95M17 3v4h-4'),
+}
+/** Griff zum Ziehen: Schieben bzw. Drehen; beiZug zeichnet die Vorschau, amEnde übernimmt die Lage */
+function griffZeichnen(ebene: L.LayerGroup, p: P, art: 'schieben' | 'drehen', titel: string, beiZug: (q: P) => void, amEnde: (q: P) => void, von?: P): void {
+  const lage = (ev: L.LeafletEvent): P => { const g = (ev.target as L.Marker).getLatLng(); return lv95(g.lat, g.lng) }
+  // Stiel vom Drehpunkt zum Griff: zeigt, wozu der Griff gehört
+  const stiel = von ? L.polyline([ll(von), ll(p)], { color: GRIFF_FARBE, weight: 3, interactive: false, pane: OBEN_PANE }).addTo(ebene) : null
+  L.marker(ll(p), { draggable: true, keyboard: false, pane: D_PANE, zIndexOffset: 1100, bubblingMouseEvents: false,
+    icon: L.divIcon({ className: `kartengriff ${art}`, iconSize: [30, 30], html: GRIFF_SYMBOL[art] }) })
+    .bindTooltip(titel).on('drag', ev => { const q = lage(ev); stiel?.setLatLngs([ll(von!), ll(q)]); beiZug(q) }).on('dragend', ev => amEnde(lage(ev))).addTo(ebene)
+}
+/** Vorschau beim Ziehen: gestrichelter Umriss, beim ersten Aufruf angelegt */
+function vorschauZeichnen(ebene: L.LayerGroup): (pts: P[]) => void {
+  let form: L.Polygon | null = null
+  return pts => {
+    if (form) form.setLatLngs(pts.map(ll))
+    else form = L.polygon(pts.map(ll), { color: '#f59e0b', weight: 2, dashArray: '4 3', fillOpacity: 0.15, interactive: false, pane: OBEN_PANE }).addTo(ebene)
+  }
+}
+
 /** Auto von oben als zwei Polygone (Umriss, Scheibe) mit Tooltip */
 function autoZeichnen(ebene: L.LayerGroup, mitte: P, richtung: P, farbe: string, rand: string, tooltip: string, schalten?: () => void): void {
   L.polygon(autoUmriss(mitte, richtung).map(ll), { color: rand, weight: 1.5, fillColor: farbe, fillOpacity: 0.9, pane: OBEN_PANE })
@@ -259,6 +289,13 @@ export default function Karte(props: {
   onKlick: (p: P) => void
   onKnotenKlick: (p: P) => void                      // Klick mit einem Werkzeug zum Knoten
   onD: (p: P) => void                                // D gezogen (D von Hand)
+  fahrzeugeBearbeiten: boolean                       // Griffe an F_A und F_B zeigen
+  halteBearbeiten: boolean                           // Griffe an der Halte- oder Wartelinie zeigen
+  onFbRichtung: (richtung: P) => void                // F_B um D gedreht
+  onFbVersatz: (versatz: number) => void             // F_B seitlich verschoben: Zufahrtsachse von Hand
+  onFaHand: (r: Richtung, lage: FahrzeugLageHand) => void   // F_A verschoben bzw. gedreht
+  onVeloHand: (r: Richtung, versatz: number) => void        // Velo mit Vortritt seitlich verschoben: Veloachse von Hand
+  onHaltelinie: (mitte: P, richtung: P) => void      // Halte- oder Wartelinie verschoben bzw. gedreht
   onDtrottoir: (p: P) => void                        // D' der Phase Trottoir gezogen (K0, D' von Hand)
   onDoppelklick: () => void
   onEcke: (id: string, i: number, p: P) => void
@@ -271,7 +308,7 @@ export default function Karte(props: {
   /** OSM-Tags der Strassen nach Weg-Id: der Tooltip eines Arms nennt die Tags, die die Rechnung liest (S6, seit 01.11.2026) */
   osmTags?: ReadonlyMap<number, Record<string, string>> | null
 }) {
-  const { mitte, av, kantone, knoten, strassennamen, gewaehlt, rechnung, zufahrt, hindernisse, werkzeug, knotenWerkzeug, zufahrtErster,
+  const { mitte, av, kantone, knoten, strassennamen, gewaehlt, rechnung, zufahrt, hindernisse, werkzeug, knotenWerkzeug, fahrzeugeBearbeiten, halteBearbeiten, zufahrtErster,
     zeichnung, bearbeiten, kartenRef, hervor = null } = props
   /** ein Werkzeug ist aktiv: Klicks auf Knoten, Arme und Hindernisse gehen an das Werkzeug */
   const werkzeugAktiv = () => !!(cb.current.werkzeug || cb.current.knotenWerkzeug)
@@ -791,9 +828,19 @@ export default function Karte(props: {
           pane: OBEN_PANE })
           .bindTooltip(`Ende der erforderlichen Sichtweite (A) ${name}: ${r.massgebend} m`).addTo(ziel.auto)
         // FA: vortrittsberechtigtes Fahrzeug mit der Front am Ende von A, auf K zu fahrend
-        const fa = faLage(r.sichtpunkte, iA)
-        if (fa) autoMitSicht(eb.fahrzeug, fa[0], fa[1], FA_FARBE, '#111827',
+        const fa = faAnzeige(r.faHand, r.sichtpunkte, iA), h = r.faHand
+        if (fa) autoMitSicht(eb.fahrzeug, fa[0], fa[1], FA_FARBE, h ? '#f59e0b' : '#111827', h ?
+          `F<sub>A</sub> ${name} von Hand: Front ${f1(h.abstandK)} m ab K, ${f1(h.seitlich)} m neben der Fahrstreifenachse<br><i>Status und Sichtdreieck bleiben auf der Fahrstreifenachse</i>` :
           `F<sub>A</sub> ${name}: Front am Ende der erforderlichen Sichtweite, ${r.massgebend} m`, () => sichtKlick('auto', id))
+        if (h) L.polyline([ll(e.D), ll(h.front)], { color: h.verdecker ? VERDECKT_FARBE : FREI_FARBE, weight: 2, dashArray: '3 5', pane: OBEN_PANE })
+          .bindTooltip(`Sichtlinie von D auf F<sub>A</sub> von Hand: ${h.verdecker ? `verdeckt durch ${esc(h.verdecker)}` : 'frei'}`, { sticky: true }).addTo(eb.fahrzeug)
+        if (fa && fahrzeugeBearbeiten && !werkzeug && !knotenWerkzeug) {
+          const [m, u] = [fa[0], einheit(fa[1])], zeige = vorschauZeichnen(eb.fahrzeug)
+          griffZeichnen(eb.fahrzeug, m, 'schieben', `F<sub>A</sub> ${name} verschieben`, q => zeige(autoUmriss(q, u)),
+            q => cb.current.onFaHand(r.richtung, { mitte: q, richtung: u }))
+          griffZeichnen(eb.fahrzeug, add(m, u, PW_LAENGE_M / 2 + GRIFF_VOR_FRONT_M), 'drehen', `F<sub>A</sub> ${name} drehen`,
+            q => zeige(autoUmriss(m, einheit(sub(q, m)))), q => cb.current.onFaHand(r.richtung, { mitte: m, richtung: einheit(sub(q, m)) }), m)
+        }
       }
       // Velo (E3b): Sichtdreieck Petrol gestrichelt, Fläche schwach; verdeckter Teil rot gestrichelt; Velo am Ende von A
       const v = r.velo
@@ -808,8 +855,15 @@ export default function Karte(props: {
         L.polyline(v.achse.map(ll), { color: VELO_FARBE, weight: 2, dashArray: '3 4', interactive: false, pane: OBEN_PANE }).addTo(ziel.velo)
         const iV = Math.min(v.A, v.sichtpunkte.length - 1)
         const vl = veloLage(v.sichtpunkte, iV)
-        if (vl) veloMitSicht(eb.fahrzeug, vl[0], vl[1], VELO_FARBE, '#ffffff',
-          `Velo ${name}: Vorderrad am Ende der erforderlichen Sichtweite, ${v.A} m`, () => sichtKlick('velo', id))
+        if (vl) veloMitSicht(eb.fahrzeug, vl[0], vl[1], VELO_FARBE, v.veloHand ? '#f59e0b' : '#ffffff',
+          `Velo ${name}: Vorderrad am Ende der erforderlichen Sichtweite, ${v.A} m${v.veloHand ? '; Veloachse von Hand versetzt' : ''}`, () => sichtKlick('velo', id))
+        // Velo seitlich verschieben (Veloachse von Hand): nur der Anteil quer zur Achse zählt
+        if (vl && fahrzeugeBearbeiten && !werkzeug && !knotenWerkzeug && v.achse.length >= 2) {
+          const [m, u] = vl, zeige = vorschauZeichnen(eb.fahrzeug), quer = rechts(u)
+          const seit = (q: P) => dot(sub(q, m), quer)
+          griffZeichnen(eb.fahrzeug, m, 'schieben', `Velo ${name} seitlich verschieben (Veloachse)`, q => zeige(veloTeile(add(m, quer, seit(q)), u).flat()),
+            q => cb.current.onVeloHand(r.richtung, (v.veloHand?.versatz ?? 0) + lageAnAchse(v.achse, add(m, quer, seit(q))).seitlich))
+        }
       }
     }
     // K je geprüfte Richtung als beschrifteter Punkt wie D
@@ -870,6 +924,13 @@ export default function Karte(props: {
       const text = `Halte- oder Wartelinie (Vorderkante: Beginn von B), ${f1(Math.abs(h.abstand))} m ${h.abstand >= 0 ? 'hinter' : 'vor'} der Kante${h.vorverlegt ? ' (vorverlegt)' : ''}`
       L.polyline(q, { color: '#111827', weight: 8, opacity: 0.9, pane: OBEN_PANE, interactive: false }).addTo(eb.sicht)
       L.polyline(q, { color: HALTELINIE_FARBE, weight: 5, opacity: 1, pane: OBEN_PANE }).bindTooltip(text, { sticky: true }).addTo(eb.sicht)
+      if (halteBearbeiten && !werkzeug && !knotenWerkzeug) {
+        const halb = dist(h.quer[0], h.quer[1]) / 2, zeige = vorschauZeichnen(eb.sicht)
+        const linie = (m: P, r: P): P[] => [add(m, r, -halb), add(m, r, halb)]
+        griffZeichnen(eb.sicht, h.mitte, 'schieben', 'Halte- oder Wartelinie verschieben', x => zeige(linie(x, h.richtung)), x => cb.current.onHaltelinie(x, h.richtung))
+        griffZeichnen(eb.sicht, add(h.mitte, h.richtung, halb + GRIFF_VOR_FRONT_M), 'drehen', 'Halte- oder Wartelinie drehen',
+          x => zeige(linie(h.mitte, einheit(sub(x, h.mitte)))), x => cb.current.onHaltelinie(h.mitte, einheit(sub(x, h.mitte))), h.mitte)
+      }
     }
     L.circleMarker(ll(e.rand), { radius: 3, color: ZUFAHRT_FARBE, weight: 2, fillColor: '#ffffff', fillOpacity: 1, pane: OBEN_PANE })
       .bindTooltip(`Kante des Fahrstreifens mit Vortritt${dist(e.rand, e.nullpunkt) < 0.05 ? ' (Beginn der Beobachtungsdistanz B)' : ''}`).addTo(eb.sicht)
@@ -882,17 +943,31 @@ export default function Karte(props: {
     // Zufahrtspunkt einer Grundstückzufahrt (geklickt): das Schild «Z» bei den Armen
     // FB: vortrittsbelastetes Fahrzeug auf der Zufahrt, Lenker (D) 2,0 m hinter der Front; folgt D von Hand. Velo gegen die Einbahn
     // auf der Zufahrt (E4): F_B als Velo (schwarz wie das Auto F_B, weiss umrandet), der velofahrende Person bei D
+    const fbA = e.fbDachse ?? e.Dachse
     if (e.zufahrtVelo) {
-      const fv = fbVeloLage(e.Dachse, add(e.Dachse, e.fbRichtung))
+      const fv = fbVeloLage(fbA, add(fbA, e.fbRichtung))
       veloMitSicht(eb.fahrzeug, fv[0], fv[1], FB_FARBE, '#ffffff',
         `F<sub>B</sub>: Velo gegen die Einbahn, velofahrende Person bei D`)
     } else {
-      const fb = fbLage(e.Dachse, add(e.Dachse, e.fbRichtung))
-      autoMitSicht(eb.fahrzeug, fb[0], fb[1], FB_FARBE, '#ffffff',
-        `F<sub>B</sub>: wartendes Fahrzeug, Fahrer*innenauge bei D`)
+      const fb = fbLage(fbA, add(fbA, e.fbRichtung))
+      autoMitSicht(eb.fahrzeug, fb[0], fb[1], FB_FARBE, e.fbHand ? '#f59e0b' : '#ffffff',
+        `F<sub>B</sub>: wartendes Fahrzeug, Fahrer*innenauge bei D${e.fbHand ? ', von Hand gedreht' : ''}<br><i>Verschieben und drehen: Block Zufahrt, «Fahrzeuge anpassen»</i>`)
     }
     // D zum Ziehen (E2b): D von Hand; nicht, solange ein Werkzeug aktiv ist
     const aktiv = !!(werkzeug || knotenWerkzeug)
+    // F_B drehen: Griff vor der Front, Drehpunkt D (das Auge bleibt, wo es ist)
+    if (fahrzeugeBearbeiten && !aktiv) {
+      const seite = dist(e.D, fbA), zeige = vorschauZeichnen(eb.fahrzeug), fbR = einheit(e.fbRichtung)
+      const umriss = (r: P, d = e.D) => { const a = add(d, rechts(r), seite); return e.zufahrtVelo ? autoUmriss(...fbVeloLage(a, add(a, r)), VELO_LAENGE_M, VELO_BREITE_M) : autoUmriss(...fbLage(a, add(a, r))) }
+      // Seitlich verschieben nimmt die Zufahrtsachse mit, längs bleibt B (nur der Anteil quer zur Achse zählt); ein D von Hand geht
+      // dabei in den Versatz über. Griff im Heck, damit er D nicht zudeckt
+      const schiebGriff = add(e.D, fbR, -FB_GRIFF_HINTER_D_M), quer = rechts(lageAnAchse(e.zufahrtAchse, e.D).t)
+      const seit = (q: P) => dot(sub(q, schiebGriff), quer)
+      griffZeichnen(eb.fahrzeug, schiebGriff, 'schieben', 'F<sub>B</sub> seitlich verschieben (mit der Zufahrtsachse)', q => zeige(umriss(fbR, add(e.D, quer, seit(q)))),
+        q => cb.current.onFbVersatz((e.zufahrtVersatz ?? 0) + e.Dlage.seitlich - (e.zufahrtVelo ? 0 : FAHRERSITZ_M) + seit(q)))
+      griffZeichnen(eb.fahrzeug, add(e.D, fbR, LENKER_VOR_FRONT_M + GRIFF_VOR_FRONT_M), 'drehen', 'F<sub>B</sub> um D drehen',
+        q => zeige(umriss(einheit(sub(q, e.D)))), q => cb.current.onFbRichtung(einheit(sub(q, e.D))), e.D)
+    }
     // bubblingMouseEvents: bei aktivem Werkzeug geht ein Klick auf D an die Karte (Haltelinie bzw. Zufahrt setzen)
     L.marker(ll(e.D), { draggable: !aktiv, keyboard: false, pane: D_PANE, zIndexOffset: 1000, bubblingMouseEvents: true,
       icon: L.divIcon({ className: e.Dhand ? 'd-punkt hand' : 'd-punkt', iconSize: [16, 16], html: '<span>D</span>' }) })
@@ -900,7 +975,7 @@ export default function Karte(props: {
         `Beobachtungspunkt D (${e.zufahrtVelo ? 'velofahrende Person' : 'Fahrer*innensitz'})<br><i>ziehen: D von Hand</i>`)
       .on('dragend', (ev: L.LeafletEvent) => { const g = (ev.target as L.Marker).getLatLng(); cb.current.onD(lv95(g.lat, g.lng)) })
       .addTo(eb.sicht)
-  }, [rechnung, zufahrt, werkzeug, knotenWerkzeug, sicht])
+  }, [rechnung, zufahrt, werkzeug, knotenWerkzeug, sicht, fahrzeugeBearbeiten, halteBearbeiten])
 
   // Hindernisse (Eingaben), Vorschläge (gestrichelt), amtliche Parkfelder (durchgezogen nach Klasse, verworfene gepunktet);
   // Klick wählt (Panel: bearbeiten, verwerfen, bestätigen); beim Bearbeiten Ecken ziehen

@@ -384,3 +384,32 @@ describe('E2: Zürcher Quellen in der Fall-Datei', () => {
     expect(hh).toContain('Gespeicherte Zürcher Quellen ungültig, übergangen')
   })
 })
+
+describe('Fall-Datei: Lage von Hand (halteRichtung, fbRichtung, faHand; optional)', () => {
+  it('veloHand wird gelesen und gezählt, ungültige Werte fallen auf die Vorgabe', () => {
+    const text = fallSchreiben(fallMit(x => { x.eingaben.veloHand = { links: null, rechts: -0.8 } }))
+    const [g] = fallLesen(text)
+    expect([g.eingaben.veloHand, eingabenZahl(g)]).toEqual([{ links: null, rechts: -0.8 }, 1])
+    const roh = JSON.parse(text)
+    const [u, hu] = fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, veloHand: { links: 'x' } } }))
+    expect([u.eingaben.veloHand ?? null, hu]).toEqual([null, ['Eingabe «veloHand» ungültig, Vorgabe']])
+  })
+  it('zufahrtVersatz wird gelesen und gezählt, ungültige Werte fallen auf die Vorgabe', () => {
+    const text = fallSchreiben(fallMit(x => { x.eingaben.zufahrtVersatz = 2.63 }))
+    const [g] = fallLesen(text)
+    expect([g.eingaben.zufahrtVersatz, eingabenZahl(g)]).toEqual([2.63, 1])
+    const roh = JSON.parse(text)
+    const [u, hu] = fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, zufahrtVersatz: 99 } }))
+    expect([u.eingaben.zufahrtVersatz ?? null, hu]).toEqual([null, ['Eingabe «zufahrtVersatz» ungültig, Vorgabe']])
+  })
+  it('werden gelesen, gezählt und ungültige Werte fallen auf die Vorgabe', () => {
+    const lage = { mitte: [2600010.5, 1200020.25] as [number, number], richtung: [1, 0] as [number, number] }
+    const text = fallSchreiben(fallMit(x => { x.eingaben.halteRichtung = [0, 1]; x.eingaben.fbRichtung = [1, 0]; x.eingaben.faHand = { links: lage, rechts: null } }))
+    const [g, h] = fallLesen(text)
+    expect([g.eingaben.halteRichtung, g.eingaben.fbRichtung, g.eingaben.faHand, h, eingabenZahl(g)]).toEqual([[0, 1], [1, 0], { links: lage, rechts: null }, [], 3])
+    const roh = JSON.parse(text)
+    const [u, hu] = fallLesen(JSON.stringify({ ...roh, eingaben: { ...roh.eingaben, fbRichtung: [5, 5], faHand: { links: { mitte: [1, 2], richtung: [1, 0] } } } }))
+    expect([u.eingaben.fbRichtung ?? null, u.eingaben.faHand ?? null, hu]).toEqual([null, null,
+      ['Eingabe «fbRichtung» ungültig, Vorgabe', 'Eingabe «faHand» ungültig, Vorgabe']])
+  })
+})

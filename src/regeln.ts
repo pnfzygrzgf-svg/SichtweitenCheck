@@ -207,8 +207,8 @@ const EINTRAEGE: readonly RegelEintrag[] = [
     prueft: 'Ist eine Halte- oder Wartelinie gesetzt, misst die App die Beobachtungsdistanz B ab ihrer Vorderkante statt ab dem Rand der ' +
       'Strasse mit Vortritt.',
     werte: `Klick höchstens ${HALTELINIE_SEITLICH_M} m neben der Fahrlinie der Zufahrt, von ${HALTELINIE_VOR_M} m vor bis ` +
-      `${HALTELINIE_HINTER_M} m hinter dem Rand (Annahme)`,
-    daten: 'Dein Klick auf der Karte' },
+      `${HALTELINIE_HINTER_M} m hinter dem Rand (Annahme); von Hand verschoben oder gedreht: B ab ihrem Schnitt mit der Zufahrtsachse (Annahme)`,
+    daten: 'Dein Klick auf der Karte, Lage und Ausrichtung von Hand' },
   { id: 'V273-6', werk: '40273', ordnung: 6, fundstelle: 'Ziffer 6, S. 4; Abb. 1, S. 5', titel: 'Überholfall ausserorts',
     wirkung: 'rechnet mit', thema: 'motorfahrzeuge', gilt: e => !!e.ueberholen?.geprueft,
     prueft: 'Ausserorts, wo Überholen erlaubt ist, prüft die App zusätzlich die Sicht auf ein Fahrzeug, das auf der Gegenfahrbahn ' +

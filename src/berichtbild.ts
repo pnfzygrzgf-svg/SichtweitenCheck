@@ -8,7 +8,7 @@ import type { P } from './geo'
 import type { QuellenQualitaet } from './daten/anbieter/gemeinsam/qualitaet'
 import type { Ergebnis, KnotenInfo, ArmInfo } from './rechner/typen'
 import { nrLage } from './rechner/knoten'
-import { autoUmriss, fbLage, fbVeloLage, faLage, veloTeile, veloLage } from './rechner/fahrzeug'
+import { autoUmriss, fbLage, fbVeloLage, faAnzeige, veloTeile, veloLage } from './rechner/fahrzeug'
 import { add } from './geo'
 
 /** Stand einer geladenen Quelle (Panel «Geladene Quellen»; zeit: Abruf, für die Quellen im Bericht) */
@@ -73,15 +73,15 @@ export function massstab(breiteM: number): number {
  */
 export function berichtPunkte(e: Ergebnis, kn: KnotenInfo | null = null): P[] {
   // F_B als Auto bzw. (E4, Velo gegen die Einbahn auf der Zufahrt) als Velo
-  const fb = e.zufahrtVelo ? veloTeile(...fbVeloLage(e.Dachse, add(e.Dachse, e.fbRichtung))).flat() :
-    autoUmriss(...fbLage(e.Dachse, add(e.Dachse, e.fbRichtung)))
+  const fbA = e.fbDachse ?? e.Dachse
+  const fb = e.zufahrtVelo ? veloTeile(...fbVeloLage(fbA, add(fbA, e.fbRichtung))).flat() : autoUmriss(...fbLage(fbA, add(fbA, e.fbRichtung)))
   const aus: P[] = [e.D, ...fb]
   const ringe = (l: { ring: P[] }[]) => { for (const t of l) aus.push(...t.ring) }
   for (const r of e.richtungen) {
     if (r.status !== 'keine_zufahrt') {
       aus.push(...r.dreieck, r.K)
       const iA = Math.min(r.massgebend, r.sichtpunkte.length - 1)
-      const fa = faLage(r.sichtpunkte, iA)
+      const fa = faAnzeige(r.faHand, r.sichtpunkte, iA)
       if (fa) aus.push(...autoUmriss(...fa))
       ringe(r.verdeckerListe)
       // Überholfall (Block 5): Sichtdreieck auf den Gegenfahrstreifen
