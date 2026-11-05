@@ -77,7 +77,8 @@ export function DatenQuellen() {
   return <ul className="klein">
     <li>Amtliche Vermessung (Fahrbahn, Trottoir, Gebäude): Amtliche Vermessung der Kantone, geodienste.ch (WFS).</li>
     <li>Strassennetz, Tempo, Signale, Veloführung: © OpenStreetMap-Mitwirkende, ODbL (Overpass).</li>
-    <li>Längsneigung: Höhenmodell {HOEHEN_QUELLE} (Profildienst api3.geo.admin.ch).</li>
+    <li>Längsneigung: Höhenmodell {HOEHEN_QUELLE} (Profildienst api3.geo.admin.ch); in der Stadt Bern das Geländemodell DTM 2023 (25 cm) der
+      Stadt, Geodaten Stadt Bern (gisapp.bern.ch), bei Ausfall swissALTI3D.</li>
     <li>Höhenkurven: © swisstopo, swissALTI3D; 1-m-Höhenkurven aus dem 2-m-Raster, neueste passende Ausgabe über STAC v1 (data.geo.admin.ch). Zuschaltbarer Kartenkontext ab Zoom 18; verändert keine Sichtrechnung. Ausgabe, Bereitstellung und Abruf getrennt, örtliches Aufnahmejahr nicht automatisch bekannt.</li>
     <li>Luftbild: {LUFTBILD_QUELLE} (Kartenkacheln und Bild des Berichts).</li>
     <li>Haltestellen des öffentlichen Verkehrs: © BAV, freie Nutzung mit Quellenangabe, über api3.geo.admin.ch. Aktive Bus-/Tramhaltestellen,
@@ -150,7 +151,8 @@ export function Datenschutz() {
             <li>swisstopo (geo.admin.ch): Kartenkacheln (Luftbild bzw. Landeskarte) des sichtbaren Ausschnitts (wmts.geo.admin.ch); bei eingeschalteten Höhenkurven ab Zoom 18 den sichtbaren Ausschnitt zur Kachelsuche und begrenzte Höhenraster-Teilabrufe (data.geo.admin.ch);
               das Kartenbild des Berichts (wms.geo.admin.ch); bei der Ortssuche der eingegebene Suchbegriff, das Flugjahr des
               Luftbilds (Bericht) und für die Längsneigung bis vier Linien je Fall (Fahrstreifenachsen, Zufahrt, Trottoir) an den
-              Höhendienst (api3.geo.admin.ch).</li>
+              Höhendienst (api3.geo.admin.ch); in der Stadt Bern gehen diese Linien (nur Koordinaten) stattdessen an gisapp.bern.ch
+              (Geodaten Stadt Bern, DTM 2023) und nur bei dessen Ausfall an swisstopo.</li>
             <li>swissTLM3D (Tram und Strassenklassen), ARE-Bauzonen und ASTRA-Unfälle über api3.geo.admin.ch: Rechteck ±200 m, bei dichten Beständen in Teilrechtecken; aktuelle öffentliche Ebenenmetadaten. Nur bestätigte Zuordnungen wirken auf Strassentyp und Innerortslage; Unfälle bleiben Kartenkontext.</li>
             <li>BAV-Haltestellen und Gemeindegrenzen über api3.geo.admin.ch: Rechteck ±200 m bzw. Ladepunkt für Haltestellen
               und unabhängige Gebietsbestimmung, auch ohne verfügbare AV. Haltestellen nur zur Kartenanzeige; beim Wiederöffnen werden wie bei den übrigen Quellen neue Daten geladen.

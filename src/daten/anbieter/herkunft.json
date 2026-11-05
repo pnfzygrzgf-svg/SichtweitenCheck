@@ -1,8 +1,8 @@
 {
   "quelle": "fgsCheck/fgsCheckWeb",
   "bereich": "src/daten/anbieter/gemeinsam",
-  "erzeugt": "2026-11-04T06:19:58.358Z",
-  "commit": "5dd2a08f5774becdde5618da34d848136ae60db5",
+  "erzeugt": "2026-11-05T21:38:05.383Z",
+  "commit": "c1e7d754e648f85d5641c771c2b3133c2858c7f2",
   "mitLokalenAenderungen": true,
   "hinweis": "Commit bezeichnet die Basis; Prüfsummen bezeichnen die tatsächlich übernommene Fassung. Nur im fgsCheck ändern und erneut übernehmen.",
   "dateien": {
@@ -32,7 +32,7 @@
     "gemeinsam.test.ts": "39336edf0eddce027123dd2db4bcc89345b2e86e23fc269338cd990c4fd4f36c",
     "geoAdmin.ts": "0fb23f2d6c412be87dd6f82db0866a5c242186271ed8411a2e71b89f38201302",
     "metadaten.test.ts": "0f1a223f0c7dad20a9c19ced0d7f4e144eea8fd2bc8c1dc1367f672abbfe914e",
-    "metadaten.ts": "64b53c143c8a32472055221433aabdaeec3f4e9f23a472b2bf107b663ffa99c8",
+    "metadaten.ts": "13697dcb94ea58e51bc25ef54e0a1c1d06bb2413ebb2e7d7ca48f9a2bb52be40",
     "ortQuellen.ts": "777325e08325e7651ffd511b8cdfb3ec7103b94d6f3dff38006f14abc6fd5586",
     "qualitaet.test.ts": "6b2a98269446eeea59adfd6e2a1ab18fd34af4d20e6758bd35b81fc8cbb92e88",
     "qualitaet.ts": "9fa95e40e620b8f1e7e6febf1af467dbffb39c6ee9cda2ba7c5d550bf731d76e",
@@ -45,7 +45,7 @@
     "regionalSignale.ts": "1412136ea4ca2db7943d0b9e86bc8db50ed84cdaba269bb96274a23efe7717d7",
     "regionalZuordnung.ts": "7cef60749d769cc15f49da93757df671b06c9dfba0ef9f6a5470b95bff12029a",
     "sortierung.test.ts": "fc437426b92b21d7a39c542e7df9875e07d02d5df1350b3f25e0eae064ea2924",
-    "sortierung.ts": "0efbc47d0bf705eab8d47074a644e97cab1d535ed9088c21680b33efa18bc217",
+    "sortierung.ts": "dd00fefb5e63d75437bcc34f2f4a6d1c96318e64cbe202ee2d1c90f872ac4012",
     "speicher.ts": "d63990683079b809599fd186a52c6f14a6522cc611a61a2d6f4d461f8a86ceac",
     "testdaten/README.md": "f06b107197045473ac01f7f67565cfb0f2f9483a15a65f37b2bf2af57d2a0039",
     "testdaten/av-publikationsstaende.csv": "a9b74e4d8e9f721dfec900845a039bd1735cdf4312b6e748270391d0778784b0",

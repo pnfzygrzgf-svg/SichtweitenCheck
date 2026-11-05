@@ -38,7 +38,8 @@ import { WAHRNEHMBARKEITEN, WAHRNEHMBARKEIT_TEXT, WAHRNEHMBARKEIT_VORGABE, ZUSTA
   RV_A_MIN_M, SCHMAL_M, ENG_LAENGE_M, ENG_SCHRITT_M, type Wahrnehmbarkeit } from './rechner/rechtsvortritt'
 import { VELOFUEHRUNGEN, VELOFUEHRUNG_TEXT, TAB3_EBIKE, TAB3_GRENZE, D_VELO_M, RADSTREIFEN_M,
   RADWEG_NAH_M, TROTTOIR_NEIGUNG_AUSLEGUNG, type Velofuehrung } from './rechner/velo'
-import { ladeNeigung, profilUrl } from './daten/hoehen'
+import { profilEcken } from './daten/hoehen'
+import { hoehenDienstFuer, hoehenName, ladeNeigungMit, mitRueckfall, rueckfallText } from './daten/hoehenDienst'
 import type { HoehenProfil } from './hoehenprofil/modell'
 import { ebenenBeschriften, ebenenAusDaten, type ProfilAnzeige } from './quellenEbenen'
 import { HOEHEN_QUELLE, PROFIL_MIN_M } from './rechner/neigung'
@@ -134,9 +135,10 @@ const GRUND_OHNE_LADEN_M = 50
 /** Schlüssel geladener Daten: Knoten bzw. Mitte (für «Nachladen gescheitert») */
 const datenKey = (d: Daten) => (d.nid !== null ? `k${d.nid}` : `z${zufahrtspunktKey(d.ort)}`)
 /** Längsneigung aus dem Höhenmodell (E3a): Messungen und wofür (Daten, Zufahrtspunkt, Zufahrt); vorschlag: Zufahrt war nicht gewählt */
-interface HoehenStand { sig: string; arme: string; vorschlag: boolean; stand: HoehenVorgabe; profile?: Partial<Record<keyof HoehenVorgabe, HoehenProfil>> }
+interface HoehenStand { sig: string; arme: string; vorschlag: boolean; stand: HoehenVorgabe; profile?: Partial<Record<keyof HoehenVorgabe, HoehenProfil>>
+  /** Schlüssel des benutzten Höhendienstes in «Geladene Quellen» (hoehen bzw. hoehenBern) */
+  schluessel: string }
 const zpSig = (z: ZufahrtspunktEingabe | null) => (z ? `${zufahrtspunktKey(z.p)}:${z.richtung ? z.richtung.join(',') : '-'}:${z.herkunft ?? ''}` : '')
-const HOEHEN_NAME = 'Höhenmodell (swisstopo, swissALTI3D, Profile)'
 /** LV95 auf cm (Eingaben von der Karte) */
 const cm = (p: P): P => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]
 /** Richtung auf vier Stellen (Fall-Datei) */
@@ -1751,8 +1753,17 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
       ['rechts', e.richtungen.find(r => r.richtung === 'rechts')?.profilLinie ?? []], ['zufahrt', e.zufahrtProfil],
       ['trottoir', e.trottoirProfil]] as
       [keyof HoehenVorgabe, P[]][]).filter(([, l]) => l.length >= 2)
-    setzeQuelle('hoehen', { name: HOEHEN_NAME })
-    Promise.all(linien.map(([k, l]) => ladeNeigung(l, ctrl.signal).then(r => [k, r] as const))).then(res => {
+    // Dienste in der Reihenfolge des Rückfalls (daten/hoehenDienst.ts): in der Stadt Bern (Zuständigkeit wie das amtliche Tempo,
+    // vsigKat) das DTM 2023 der Stadt, dann swissALTI3D; alle Profile eines Falls mit demselben Dienst. Beim Berner Dienst ist ein
+    // fehlendes Profil ein Rückfallgrund, beim letzten Dienst gibt ein Fehler «nicht verfügbar» (Neigung unbekannt)
+    const dienste = hoehenDienstFuer(!!vsigKat), letzter = dienste[dienste.length - 1]
+    setzeQuelle(dienste[0].schluessel, { name: hoehenName(dienste[0]) })
+    mitRueckfall(dienste, async dn => {
+      const res = await Promise.all(linien.map(([k, l]) => ladeNeigungMit(dn, l, ctrl.signal).then(r => [k, r] as const)))
+      const f = dn !== letzter ? res.find(([, [, a]]) => typeof a === 'string') : undefined
+      if (f) throw new Error(f[1][1] as string)
+      return res
+    }, (dn, f, n) => setzeQuelle(dn.schluessel, { name: hoehenName(dn), fehler: rueckfallText(f, n) })).then(({ dienst: dn, wert: res }) => {
       if (ctrl.signal.aborted || hoehenLaeuft.current !== lauf) return
       const stand: HoehenVorgabe = Object.fromEntries(res.map(([k, [m]]) => [k, m]))
       const profilTitel = (k: keyof HoehenVorgabe): string => {
@@ -1764,23 +1775,23 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
       const profile: Partial<Record<keyof HoehenVorgabe, HoehenProfil>> = Object.fromEntries(res.flatMap(([k, [, a]]) => typeof a === 'string' ? [] : [[k, {
         id: `gel:${sig}:${arme}:${k}`, titel: profilTitel(k),
         zweck: 'Geländehöhen entlang der für die Längsneigung verwendeten Achse. Keine Prüfung auf Verdeckung des Sichtfelds durch Gelände.',
-        linie: (JSON.parse(new URL(profilUrl(linien.find(([key]) => key === k)![1])).searchParams.get('geom')!) as { coordinates: P[] }).coordinates, punkte: a.daten,
-        quelle: '© swisstopo; Höhenprofil swissALTI3D/Kombinationsmodell', datenstand: a.datenstand, abgerufen: new Date().toISOString(),
+        linie: profilEcken(linien.find(([key]) => key === k)![1]), punkte: a.daten,
+        quelle: `${dn.anbieter}; Höhenprofil ${dn.kurz}${dn.id === 'swissalti' ? '/Kombinationsmodell' : ' (25 cm)'}`, datenstand: a.datenstand, abgerufen: new Date().toISOString(),
       }]]))
-      setHoehen({ sig, arme, vorschlag: z.zufahrt === null, stand, profile })
+      setHoehen({ sig, arme, vorschlag: z.zufahrt === null, stand, profile, schluessel: dn.schluessel })
       const ok = res.filter(([, [, a]]) => typeof a !== 'string'), fehler = res.filter(([, [, a]]) => typeof a === 'string')
       const name = (k: string) => (k === 'zufahrt' ? 'Zufahrt' : k === 'trottoir' ? 'Trottoir' : `von ${k}`)
       const abrufe = ok.map(([, [, a]]) => a as Exclude<typeof a, string>)
-      setzeQuelle('hoehen', { name: HOEHEN_NAME, objekte: `${res.length} Profile (${res.map(([k, [m]]) => `${name(k)} ${m.i === null ? 'Fehler' :
+      setzeQuelle(dn.schluessel, { name: hoehenName(dn), objekte: `${res.length} Profile (${res.map(([k, [m]]) => `${name(k)} ${m.i === null ? 'Fehler' :
         `${fi(m.i)} %, ${m.punkte} Punkte`}`).join('; ')})`, ...(abrufe.length ? { ms: Math.max(...abrufe.map(a => a.ms)),
         bytes: abrufe.reduce((x, a) => x + a.bytes, 0), server: abrufe[0].quelle } : {}),
         ...(fehler.length ? { fehler: fehler.map(([k, [, a]]) => `${name(k)}: ${a}`).join('; ') + ' (Neigung unbekannt, strengster Wert)' } : {}) })
-      if (abrufe.length) setFall(f => (f ? { ...f, quellen: { ...f.quellen, hoehen: `${HOEHEN_QUELLE} über ${abrufe[0].quelle}` } } : f))
+      if (abrufe.length) setFall(f => (f ? { ...f, quellen: { ...f.quellen, hoehen: `${dn.kurz} (${dn.anbieter.replace(/^© /, '')}) über ${abrufe[0].quelle}` } } : f))
     }, err => {
       if (ctrl.signal.aborted || istAbbruch(err)) return
-      setzeQuelle('hoehen', { name: HOEHEN_NAME, fehler: (err as Error).message })
+      setzeQuelle(letzter.schluessel, { name: hoehenName(letzter), fehler: (err as Error).message })
     }).finally(() => { if (hoehenLaeuft.current === lauf) hoehenLaeuft.current = null })
-  }, [rechnung, daten, ziel, hoehen, hoehenTakt, umkreisVorrang])
+  }, [rechnung, daten, ziel, hoehen, hoehenTakt, umkreisVorrang, vsigKat])
 
   // Blöcke in Schritt 3 und «Hinweise und Annahmen»: Aufklappzustand im Browser; ein aktives Werkzeug klappt seinen Block auf
   const [offen, setOffenAlle] = useState(offenLesen)
@@ -1868,10 +1879,11 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     const d = ebenenAusDaten({ osm: osmGeparst, vsig: vsigKat?.linien ?? null, park: parkKat?.felder ?? null, baeume: baumKat?.baeume ?? null,
       av, profile, parkQuelle: parkKat?.quelle.quellenangabe, baumQuelle: baumKat?.quelle.quellenangabe, hoehen: hoehenVorgabe, regional: regional.daten, zuerich: zh.daten, bav: 'daten' in bund.stand.bav ? bund.stand.bav.daten : null })
     if (hoehenVorgabe && hoehen?.stand === hoehenVorgabe) d.gelaende = Object.values(hoehen.profile ?? {}).flatMap(p => p ? [{
-      id: p.id, linien: [p.linie], klasse: 'profil', text: `${p.titel}: ${p.zweck}`, hoehenprofil: p, quellenSchluessel: 'hoehen',
+      id: p.id, linien: [p.linie], klasse: 'profil', text: `${p.titel}: ${p.zweck}`, hoehenprofil: p, quellenSchluessel: hoehen.schluessel,
     }] : [])
-    d.qualitaet = { ...Object.fromEntries((regional.daten?.teile ?? []).map(t => [`regional.${t.id}`, { datenstand: t.datenstand }])), zhTempo: quellen.zhTempo, zhZonen: quellen.zhZonen, av: quellen.av, parkfelder: quellen.parkkataster, baeume: quellen.baumkataster, steigung: quellen.hoehen,
-      vortritt: quellen.osm, lsa: quellen.osm, velofuss: quellen.osm, strassentyp: quellen.osm, tram: quellen.osm, gelaende: quellen.hoehen,
+    const hoehenQuelle = quellen[hoehen?.schluessel ?? 'hoehen'] ?? quellen.hoehen
+    d.qualitaet = { ...Object.fromEntries((regional.daten?.teile ?? []).map(t => [`regional.${t.id}`, { datenstand: t.datenstand }])), zhTempo: quellen.zhTempo, zhZonen: quellen.zhZonen, av: quellen.av, parkfelder: quellen.parkkataster, baeume: quellen.baumkataster, steigung: hoehenQuelle,
+      vortritt: quellen.osm, lsa: quellen.osm, velofuss: quellen.osm, strassentyp: quellen.osm, tram: quellen.osm, gelaende: hoehenQuelle,
       tempo: vsigKat?.linien?.some(l => l.vSig != null) ? quellen.vsig : quellen.osm }
     d.metadaten = quellen
     return ebenenBeschriften(d)

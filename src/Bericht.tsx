@@ -681,7 +681,7 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
           <ul className="klein">
             <li>Luftbild: {LUFTBILD_QUELLE}{flugjahr ? `, Flugjahr ${flugjahr}` : ''} ({bild === 'ok' ? `Kartenbild: wms.geo.admin.ch, abgerufen ${datum(heute)}` :
               'Kartenbild ohne Luftbild (nicht geladen)'}){flugjahr ? '' : '; Datenstand unbekannt'}; Vollständigkeit unbekannt</li>
-            <li>Höhenmodell: {fall.quellen.hoehen ?? 'swissALTI3D (swisstopo), nicht geladen'}{abruf('hoehen')}</li>
+            <li>Höhenmodell: {fall.quellen.hoehen ?? 'swissALTI3D (swisstopo), nicht geladen'}{abruf(quellen.hoehenBern ? 'hoehenBern' : 'hoehen')}</li>
             <li>Bodenbedeckung (Fahrbahn, Trottoir, Gebäude): {fall.quellen.av ?? `Amtliche Vermessung, Kanton ${kantone.join(', ') || '–'}, geodienste.ch`}{abruf('av')}</li>
             <li>Strassennetz, Tempo, Veloführung: © OpenStreetMap-Mitwirkende, ODbL{fall.quellen.osm ? ` (${fall.quellen.osm})` : ''}{abruf('osm')}</li>
             {fall.quellen.parkkataster && <li>Parkfelder: {fall.quellen.parkkataster}{abruf('parkkataster')}</li>}

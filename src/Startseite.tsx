@@ -42,7 +42,7 @@ export default function Startseite({ onStart }: { onStart: () => void }) {
       <p>
         Grundlage sind offene Daten: das Luftbild SWISSIMAGE und das Höhenmodell von swisstopo, die Amtliche Vermessung über
         geodienste.ch und OpenStreetMap, aus dem Tempo und Veloführung stammen. In Zürich fliessen amtliche Tempoabschnitte und Verkehrszonen ein. In der Stadt Bern fliessen die öffentlichen
-        Parkfelder und der Baumkataster automatisch ein.
+        Parkfelder, der Baumkataster und das Geländemodell der Stadt automatisch ein.
       </p>
       <p className="start-grenzen">
         Die App richtet sich an Fachleute und ersetzt keine Beurteilung vor Ort. Gerechnet werden kann dort, wo die Amtliche

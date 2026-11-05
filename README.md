@@ -47,11 +47,11 @@ Umgekehrt ist der Rechenkern hier führend: Der fgsCheck holt ihn für seine Kno
 Reihenfolge je Wert: eigene Angabe, amtliche örtliche Quelle, OSM. Fehlt eine örtliche Quelle oder schlägt ihr Abruf fehl, zeigt die
 App das an, statt «keines» anzunehmen. Welche Quellen an einem Ort gelten, steht unter «Datenquellen und Ladezustand».
 
-- Luftbild, Landeskarte, Höhenmodell swissALTI3D, swissTLM3D, Gemeindegrenzen: © swisstopo
+- Luftbild, Landeskarte, Höhenmodell swissALTI3D (Profile; ausserhalb der Stadt Bern), swissTLM3D, Gemeindegrenzen: © swisstopo
 - Haltestellen, Bauzonen, Unfälle: BAV, ARE und ASTRA über geo.admin.ch
 - Bodenbedeckung: Amtliche Vermessung der Kantone über geodienste.ch
 - Strassennetz, Tempo, Veloführung: © OpenStreetMap-Mitwirkende, ODbL (Overpass API)
-- Parkfelder, Bäume, Tempo Stadt Bern: Geodaten Stadt Bern
+- Parkfelder, Bäume, Tempo, Geländemodell DTM 2023 (Höhenprofile) Stadt Bern: Geodaten Stadt Bern
 - Tempo, Zonen, Signale und Kartenkontext weiterer Kantone und Städte: je nach Ort, Anbieter und Lizenz nennt die App
 
 Normen erscheinen nur als Nummern, Ziffern, Seiten und Zahlenwerte, nie als Normtext. Sie liegen nicht im Repository.
