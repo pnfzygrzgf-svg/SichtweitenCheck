@@ -63,5 +63,6 @@ export function RegelnFall({ gruppen }: { gruppen: { werk: WerkId; regeln: Regel
   return <ul className="klein">{gruppen.map(g => <li key={g.werk}><b>{WERKE[g.werk].name}</b> ({WERKE[g.werk].ausgabe.replace(`${WERKE[g.werk].name}:`, '')};{' '}
     {WERKE[g.werk].herkunft}):{' '}
     {g.regeln.map((r, i) => { const zusatz = [...(FUNDSTELLE_OHNE.includes(r.fundstelle) ? [] : [r.fundstelle]), ...(r.wirkung === 'nur Hinweis' ? [WIRKUNG_TEXT[r.wirkung]] : [])]
-      return <Fragment key={r.id}>{i ? '; ' : ''}{r.titel}{zusatz.length ? ` (${zusatz.join('; ')})` : ''}</Fragment> })}</li>)}</ul>
+      return <Fragment key={r.id}>{i ? '; ' : ''}{r.titel}{zusatz.length ? ` (${zusatz.join('; ')})` : ''}</Fragment> })}
+    {WERKE[g.werk].bezug && ` (${WERKE[g.werk].bezug})`}{WERKE[g.werk].link && <> <a href={WERKE[g.werk].link!}>{/\.pdf($|[?#])/i.test(WERKE[g.werk].link!) ? 'PDF' : 'Seite'}</a></>}</li>)}</ul>
 }

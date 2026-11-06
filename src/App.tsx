@@ -2,6 +2,9 @@ import { zustaendigkeitAmOrt, istZuerichAmOrt, gemeindeText } from './daten/anbi
 import { useHoehenkurvenQuelle } from './hoehenkurven/stand'
 import { SichtGesamtTaste, MassWahl, SichtTaste, richtungSichtId, type SichtArt } from './Sichtfelder'
 import { ZufahrtHilfe } from './ZufahrtHilfe'
+import { aktuelleUebergabe, uebergabeText } from './verknuepfung'
+import { AndereRechner } from './AndereRechner'
+import { QuerungenAmKnoten, querungenAmKnoten } from './querungenAmKnoten'
 import { zufahrtKontext, zufahrtGeo, zufahrtEntwurf, type ZufahrtKontext } from './zufahrtEntwurf'
 import { ZUFAHRT_HERKUNFT } from './rechner/grundstueck'
 import type { ZufahrtHerkunft } from './rechner/typen'
@@ -1136,6 +1139,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   const [rechnung, setRechnung] = useState<Rechnung | null>(null)
   const [rechnet, setRechnet] = useState(false)
   const [meldung, setMeldung] = useState<string>('Ort suchen bzw. Karte verschieben; dann einen Knoten (blauer Punkt) anklicken.')
+  const [uebergabeHinweis, setUebergabeHinweis] = useState<string | null>(() => uebergabeText(aktuelleUebergabe(), knotenAusUrl() !== null))
   const [nochmals, setNochmals] = useState<{ wahl: Wahl; fall: Fall | null } | null>(null)   // nach einem Fehler beim Laden: «erneut laden»
   const [avFehler, setAvFehler] = useState<string | null>(null)               // Nachladen der AV gescheitert
   const [quellen, setQuellen] = useState<Record<string, QuellenStand>>({})
@@ -1826,6 +1830,14 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     return () => clearTimeout(t)
   }, [laden])
 
+  // Link aus einem anderen Rechner ohne Knoten: nur die Karte zeigen, der Knoten wird dort gewählt
+  useEffect(() => {
+    const o = aktuelleUebergabe()?.ort
+    if (!o || knotenAusUrl() !== null) return
+    const t = setTimeout(() => kartenRef.current?.setView([o.lat, o.lon], 18), 0)
+    return () => clearTimeout(t)
+  }, [])
+
   // gewählter Knoten immer dabei, auch wenn sein Ausschnitt aus dem Cache der Suche gefallen ist
   // Gabelungen, Kreisel und Fahrbahnteilungen aus dem geladenen Umkreis ausblenden, LSA-Knoten kennzeichnen
   const [ausgeblendet, setAusgeblendet] = useState<Set<number>>(() => new Set())
@@ -1891,6 +1903,9 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
   }, [osmGeparst, vsigKat, parkKat, baumKat, av, rechnung, hoehenVorgabe, hoehen, bund.stand.bav, quellen, zh.daten, regional.daten])
 
   const kn = rechnung?.knoten ?? null
+  // Fussgängerquerungen am Knoten für die Kachel «In anderen Rechnern prüfen»: Übergänge aus den schon geladenen OSM-Daten
+  const osmDaten = useMemo(() => (daten ? osmParsen(daten.osm as Parameters<typeof osmParsen>[0]) : null), [daten?.osm])   // eslint-disable-line react-hooks/exhaustive-deps
+  const querungen = useMemo(() => (osmDaten && kn ? querungenAmKnoten(osmDaten, kn.p) : []), [osmDaten, kn?.p])   // eslint-disable-line react-hooks/exhaustive-deps
   const erg = rechnung?.ergebnis ?? null
   const zGewaehlt = zufahrt ?? erg?.zufahrt ?? null     // gewählt (sofort), sonst die vorgeschlagene der Rechnung
   zAktuell.current = zGewaehlt
@@ -1975,6 +1990,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
           <button className="zweit klein" onClick={() => setFallHinweis(null)}>ausblenden</button></p>}
         {!zp && zufahrtHilfe}
 
+        {uebergabeHinweis && <p className="hinweis">{uebergabeHinweis}{' '}
+          <button className="zweit klein" onClick={() => setUebergabeHinweis(null)}>ausblenden</button></p>}
         {speicherHinweis && <p className="hinweis" role="alert">{speicherHinweis}</p>}
         {meldung && <p className="hinweis">{meldung}
           {nochmals !== null && <>{' '}<button className="zweit klein" onClick={() => laden(nochmals.wahl, nochmals.fall)}>erneut laden</button></>}</p>}
@@ -1982,6 +1999,13 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
           nachladenFehler.current = null; setAvFehler(null); if (daten) setDaten({ ...daten })
         }}>erneut laden</button></p>}
         {rechnet && <p className="klein">Rechnung läuft …</p>}
+
+        {/* oben, damit die Links zu den anderen Rechnern gefunden werden; eingeklappt, damit die Arbeitsfläche nicht wegrückt */}
+        <AndereRechner von="swc" logos={['fgs', 'vrc']} titelZusatz={querungen.length ? `${querungen.length} Fussgängerquerung${querungen.length > 1 ? 'en' : ''} am Knoten` : undefined} ziele={fall ? [
+          ...(kn ? [] : [{ text: 'Fussgängerstreifen prüfen', rechner: 'fgs' as const, ort: fall.ort }]),
+          { text: 'Veloinfrastruktur bewerten', rechner: 'vrc' as const, ort: fall.ort }] : []}>
+          {kn && <QuerungenAmKnoten liste={querungen} ort={{ lat: kn.ll[0], lon: kn.ll[1] }} />}
+        </AndereRechner>
 
         {/* 1 Knoten bzw. Grundstückzufahrt */}
         {zp ? (

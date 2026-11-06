@@ -14,7 +14,7 @@ import { osmParsen, kreiselMitten, overpassAbfrage, KREISEL_TAG, type OsmDaten, 
 import { avParsen, type AvFlaeche, type GeoJson } from '../daten/av'
 import { OsmNetz, abschneiden, streckeLaenge } from './netz'
 import { Fahrbahn } from './flaechen'
-import { knotenArt, knotenFinden, keineKnoten, nachNr } from './knoten'
+import { armText, knotenArt, knotenFinden, keineKnoten, nachNr } from './knoten'
 import { rechneKnoten } from './rechnen'
 import { kreiselKnoten, ringWege, kreiselTypVorgabe, kreiselAusserhalb, innenringVorschlag, profilWert, KREISEL_EINFAHRT_TEXT,
   KREISEL_BREITE_OHNE_AV_M, INNENRING_AB_M, KREISEL_ARM_GRAD, BYPASS_M, VELOBYPASS_ARM_M, VELOBYPASS_MIN_LAENGE_M,
@@ -365,6 +365,37 @@ describe('E10: Bypass', () => {
   })
 })
 
+describe('Weg ohne Einbahn, zu dem von aussen nichts führt', () => {
+  const R = 12.5
+  const t = { highway: 'residential', name: 'Südweststrasse' }
+  const stich: [number, number, number] = [60, ...pol(R + 3, 230)], teil: [number, number, number] = [61, ...pol(R + 25, 215)]
+  // kurzes Stück ohne Einbahn bei 230°, dahinter eine Einbahn vom Ring weg; die Einfahrt mündet bei 190°, 10° vor der Ausfahrt der Südstrasse
+  const wege = (mehr: OsmWeg[] = [], weg7: Record<string, string> = { ...t, oneway: 'yes' }) => daten([ring(R), arm(2, R, 90, 'Nordstrasse'), arm(3, R, 0, 'Oststrasse'),
+    arm(4, R, 200, 'Südstrasse'), weg(6, [ringPunkt(R, 230), stich], t), weg(7, [stich, teil], weg7),
+    weg(8, [teil, ringPunkt(R, 190)], { ...t, oneway: 'yes' }), weg(9, [teil, [62, ...pol(R + 80, 215)]], t), ...mehr])
+  const av = fahrbahn(17, 8, [90, 0, 200, 230])
+  const sw = (k: KnotenInfo) => k.kreisel!.arme.find(a => a.name === 'Südweststrasse')!
+  it('nur Ausfahrt: der Einbahnweg bleibt die Einfahrt und wird nicht zum Bypass; Annahme', () => {
+    const k = knoten(wege(), av), a = sw(k)
+    expect([a.ein, a.aus, a.getrennt, a.bypass, a.nurAusfahrt]).toEqual(['8:1:-1', '6:0:1', true, [], [6]])
+    expect(k.kreisel!.annahmen).toContain(`Arm ${armText(a)}: Der OSM-Weg 6 ist ohne Einbahn erfasst, aber von aussen führt kein Weg für ` +
+      'Motorfahrzeuge zu ihm. Er zählt nur als Ausfahrt.')
+  })
+  it('hinter dem Stück führt ein Weg mit Gegenverkehr nach aussen: es bleibt Einfahrt, der Einbahnweg gilt wie bisher als Bypass', () => {
+    const a = sw(knoten(wege([], t), av))
+    expect([a.ein, a.nurAusfahrt, a.bypass.map(b => b.wid)]).toEqual(['6:0:1', [], [8]])
+  })
+  it('eine Zufahrt zum Stück (auch service) genügt; ein Radweg zählt nicht', () => {
+    const zu = (tags: Record<string, string>) => weg(10, [[63, ...pol(R + 30, 240)], stich], tags)
+    expect(sw(knoten(wege([zu({ highway: 'service' })]), av)).nurAusfahrt).toEqual([])
+    expect(sw(knoten(wege([zu({ highway: 'cycleway' })]), av)).nurAusfahrt).toEqual([6])
+  })
+  it('Sackgasse ohne Einbahn bleibt Arm mit Ein- und Ausfahrt', () => {
+    const a = nachNr(knoten(daten([ring(R), arm(2, R, 90, 'Nordstrasse'), arm(3, R, 0, 'Oststrasse'), arm(4, R, 230, 'Südweststrasse')]), av).kreisel!.arme)[2]
+    expect([a.ein, a.aus, a.nurAusfahrt]).toEqual(['4:0:1', '4:0:1', []])
+  })
+})
+
 describe('K2 und K3: Einfahrt, K, D, Ablenkungswinkel', () => {
   const R = 12.5, w = 3.5, aussen = 17, insel = 8, grenze = aussen - INNENRING_AB_M   // Innenring 11,50 m
   const o = daten([ring(R), arm(2, R, 90, 'Nordstrasse'), arm(3, R, 0, 'Oststrasse'), arm(4, R, 270, 'Südstrasse'), arm(5, R, 180, 'Weststrasse')])
@@ -522,6 +553,15 @@ describe('Velobypass: Dalmazibrücke Bern (Ringpunkt 564771785), Negativfall', (
     expect(osm.querungen.some(w => w.id === 1113134819)).toBe(true)
     expect(k.arme.flatMap(a => a.velobypass)).toEqual([])
     expect(k.hinweise.some(h => h.startsWith('Velobypass'))).toBe(false)
+  })
+  it('Arm 3 Aarstrasse: Einfahrt ist der Einbahnweg 568733940, kein Bypass; das kurze Stück 568733920 ohne Einbahn ist nur Ausfahrt', () => {
+    const k = rechneKnoten(osm, av, { knoten: 564771785, zufahrt: null }).knoten!.kreisel!
+    expect(nachNr(k.arme).map(a => [a.nr, a.name, a.ein, a.aus, a.bypass.length, a.nurAusfahrt])).toEqual([
+      ['1', 'Aarstrasse', '1113766671:3:-1', '1113766670:0:1', 0, []],
+      ['2', 'Dalmazibrücke', '1113134460:3:-1', '4707434:0:1', 0, []],
+      ['3', 'Aarstrasse', '568733940:3:-1', '568733920:0:1', 0, [568733920]],
+      ['4', 'Brückenstrasse', null, '1113134820:0:1', 0, []],
+      ['5', 'Gasstrasse', null, '8223862:0:1', 0, []]])
   })
 })
 

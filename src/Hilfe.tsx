@@ -140,6 +140,8 @@ export function Datenschutz() {
       <ul>
         <li>Keine Anmeldung, kein eigener Server: gerechnet wird im Browser (Web Worker). Nicht gesendet werden Eingaben,
           Bezeichnung, Zahlen und Status; die Dienste erhalten nur Koordinaten bzw. Ausschnitte (siehe unten).</li>
+        <li>Die Links unter «In anderen Rechnern prüfen» öffnen einen anderen Rechner; dabei gehen nur Lage und OSM-Id mit, keine Eingaben. Die
+          Angaben stehen hinter dem # der Adresse und gehen nicht an den Webserver.</li>
         <li>Eingaben (Hindernisse, Regelung, Halte- oder Wartelinie, D, Tempo, Neigung, Häkchen, Bezeichnung) bleiben im Browser: je Knoten bzw.
           Grundstückzufahrt mit Eingaben ein Eintrag im lokalen Speicher (localStorage, Schlüssel «SichtweitenCheck.fall.» und Nummer
           des Knotens bzw. «z» und Koordinaten des Zufahrtspunkts), sonst nur in der Fall-Datei, wenn du sie speicherst. Die zuletzt gesehene Kartenansicht (Mitte und Zoom) steht unter

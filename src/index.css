@@ -496,3 +496,11 @@ span.quelle-chip { display: inline-block; max-width: 100%; font-size: 12px; line
 span.quelle-chip.q-annahme { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
 /* Meldung oben im Panel: Abstand zu den Kacheln */
 .panel > .hinweis { margin-top: 8px; }
+
+/* Kachel «In anderen Rechnern prüfen»: Logos zeigen den anderen Rechner */
+.rechner-logo { vertical-align: -4px; border-radius: 4px; margin-left: 2px; }
+.ziele { list-style: none; margin: 0 0 6px; padding: 0; }
+.ziele li { display: flex; align-items: flex-start; gap: 8px; margin: 6px 0; line-height: 1.35; }
+.ziele li .rechner-logo { flex-shrink: 0; margin: 2px 0 0; }
+.ziele a { color: var(--accent); }
+.ziele-kopf { margin: 8px 0 2px; font-size: 14px; }

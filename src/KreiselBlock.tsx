@@ -95,6 +95,7 @@ export default function KreiselBlock({ kn, setTyp, zufahrt, zufahrtWaehlen, setB
         <p>Strassen, die am Ring beginnen (OSM, ohne Zufahrtswege «service»). Getrennte Wege derselben Strasse, etwa Einfahrt und
           Ausfahrt um eine Leitinsel, bilden einen Arm, wenn sie {KREISEL_ARM_M} m vom Ring höchstens {KREISEL_ARM_GRAD}° auseinander
           liegen (Annahme). Wege, die ganz am Ring vorbeiführen, und Tramgleise sind keine Arme. Nummern im Uhrzeigersinn ab Norden.</p>
+        <p>Ein Weg ohne Einbahn zählt nur als Ausfahrt, wenn von aussen kein Weg für Motorfahrzeuge zu ihm führt (Annahme).</p>
         <p><b>Bypass:</b> Mündet eine zweite Einfahrt eines Arms höchstens {BYPASS_M} m vor der Ausfahrt des nächsten Arms in den Ring,
           gilt sie als Bypass (Annahme): gestrichelt auf der Karte, keine Einfahrt zum Wählen; das Einfädeln prüft die App nicht.</p>
         <p><b>Velobypass:</b> ein Rad- bzw. Fuss- und Radweg (OSM highway=cycleway bzw. path/footway mit bicycle=designated oder yes), der
