@@ -16,7 +16,7 @@ import { BerichtQuellenTabelle, berichtQuellenZeilen } from './BerichtQuellen'
 // im Bild zusätzlich als Strichart (frei durchgezogen, verdeckt gestrichelt): schwarz-weiss lesbar.
 
 import { memo, useEffect, useMemo, useState } from 'react'
-import { regelnDesFalls, WERKE } from './regeln'
+import { regelnDesFalls, ungunstAusgeloest, WERKE } from './regeln'
 import { RegelnFall } from './RegelUebersicht'
 import { createPortal } from 'react-dom'
 import type { Fall } from './fall'
@@ -87,16 +87,14 @@ const datum = (d: Date) => d.toLocaleDateString('de-CH', { day: '2-digit', month
 const datumIso = (s: string | undefined) => (s ? datum(new Date(s)) : '–')
 const tausender = (x: number) => x.toFixed(1).replace(/\B(?=(\d{3})+(?!\d))/g, '’').replace('.', ',')
 /** Status mit dem oberen Wert als Zahl */
-const gesamtMitWert = (r: RichtungErgebnis): string => gesamtText(r).replace('oberer Wert', `oberer Wert ${r.erforderlichOben} m`)
+const gesamtMitWert = (r: RichtungErgebnis): string => gesamtText(r).replace('≥ oberer Wert', `≥\u00a0oberer\u00a0Wert\u00a0${r.erforderlichOben}\u00a0m`)
 /** Werke, die der Bericht nennt, ohne dass sie das Ergebnis tragen: ihre Rolle steht dabei */
 function nebenWerke(e: Ergebnis): string[] {
   const rs = e.richtungen.filter(r => r.status !== 'keine_zufahrt')
-  const u = e.strasse.ungunst
-  const ausgeloest = [u.fahrstreifen && 'Fahrstreifen', u.neigung && 'Gefälle', u.schwerverkehr && 'Schwerverkehr'].filter(Boolean)
   return [
     ...(rs.some(r => r.anhalte && !r.anhalteAngewendet) ? [`${WERKE['40090'].name} (2019-03), Abb. 2, S. 5: Anhaltesichtweite geprüft, hier nicht angewendet`] : []),
     ...(e.richtungen.some(r => r.velo) ? [`${WERKE.BFU.name} (2022), Tab. 2, S. 5: Vergleichswert Velo`] : []),
-    ...(!e.rechtsvortritt ? [`${WERKE.SO.name}, S. 3: Masse für ungünstige Verhältnisse auch ausserhalb des Kantons angewendet; ${ausgeloest.length ? `ausgelöst durch ${ausgeloest.join(', ')}` : 'hier nicht ausgelöst'}`] : []),
+    ...(!e.rechtsvortritt && !ungunstAusgeloest(e) ? [`${WERKE.SO.name}, S. 3: Masse für ungünstige Verhältnisse, auch ausserhalb des Kantons; hier nicht ausgelöst`] : []),
   ]
 }
 const vorhandenText = (vorhanden: number, bisEnde: boolean) => `${bisEnde ? '≥ ' : ''}${f1(vorhanden)} m`
@@ -753,7 +751,8 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
           <ul className="klein">{hinweise.map((x, i) => <li key={i}>{x}</li>)}</ul>
         </section>}
 
-        <section className="bericht-block">
+        {/* kurze Tabelle: Überschrift und Kopf bleiben bei den Zeilen */}
+        <section className="bericht-block druck-block">
           <h2>Quellen</h2>
           <BerichtQuellenTabelle zeilen={berichtQuellenZeilen({ fall, quellen, kantone, luftbild: { flugjahr, geladen: bild === 'ok', abgerufen: datum(heute) },
             avFuer: 'Fahrbahn, Trottoir, Gebäude', osmFuer: 'Strassennetz, Tempo, Veloführung' })}>
@@ -768,13 +767,12 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
           <RegelnFall gruppen={regelnDesFalls(e)} />
           {nebenWerke(e).length > 0 && <><p className="klein"><b>Geprüft oder zum Vergleich, ohne Wirkung auf das Ergebnis:</b></p>
             <ul className="klein">{nebenWerke(e).map(t => <li key={t}>{t}</li>)}</ul></>}
-          <p className="klein">Je Werk die Herkunft (Recht, Norm, Fachempfehlung, kantonale Praxis, Annahme der App, Projektentscheid);
-            Regeln mit dem Vermerk «nur Hinweis» ändern das Ergebnis nicht. Nur Fundstellen (Ziffer, Seite) und Zahlenwerte; die Normen sind
-            kostenpflichtig, ihr Text ist im Original nachzulesen. Alle Regeln stehen in der App unter «Regeln».</p>
+          <p className="klein">Regeln mit dem Vermerk «nur Hinweis» ändern das Ergebnis nicht. Hier stehen nur Fundstellen und Zahlenwerte; die Normen sind
+            kostenpflichtig. Alle Regeln stehen in der App unter «Regeln».</p>
         </section>
 
 
-        <footer className="bericht-fuss">
+        <footer className="bericht-fuss druck-block">
           <p><b>Die App ersetzt keine Beurteilung vor Ort.</b> Daten aus offenen Quellen können veraltet oder unvollständig sein (Parkierung,
             Hecken, Mauerhöhen, Signalisation); die Höhe der Hindernisse (Sichtraum) prüft die App nicht.</p>
           <p>SichtweitenCheck v{__APP_VERSION__} ({MARKE}, Stand {__BUILD_DATUM__.split('-').reverse().join('.')}) · {APP_ADRESSE} · Code unter MIT, eigene Inhalte unter CC BY 4.0 ·

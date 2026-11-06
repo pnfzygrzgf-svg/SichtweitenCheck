@@ -219,7 +219,7 @@ export default function KreiselBericht({ fall, kn, kantone, quellen, aendern, sc
             <ul className="klein"><li>Normen: VSS 40 263 (Kreisel), VSS 40 273 (Sichtverhältnisse); nur Fundstellen und Zahlenwerte, der Text ist im Original nachzulesen.</li></ul>
           </BerichtQuellenTabelle>
         </section>
-        <footer className="bericht-fuss">
+        <footer className="bericht-fuss druck-block">
           <p><b>Die App ersetzt keine Beurteilung vor Ort.</b> Daten aus offenen Quellen können veraltet oder unvollständig sein; die Höhe der
             Hindernisse und ob die Insel die Durchsicht verhindert, prüft die App nicht.</p>
           <p>SichtweitenCheck v{__APP_VERSION__} ({MARKE}, Stand {__BUILD_DATUM__.split('-').reverse().join('.')}) · {APP_ADRESSE} · Code unter MIT, eigene Inhalte unter CC BY 4.0 ·

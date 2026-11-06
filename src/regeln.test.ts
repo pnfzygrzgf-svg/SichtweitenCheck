@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { REGELN, WERKE, WERK_IDS, MIT_SEITE, THEMEN, HERKUNFT, WIRKUNG_TEXT, regelnJeWerk, regelGruppen, regelnVonWerk, regelnZaehlen } from './regeln'
+import type { Ergebnis } from './rechner/typen'
+import { REGELN, WERKE, WERK_IDS, MIT_SEITE, THEMEN, HERKUNFT, WIRKUNG_TEXT, regelnJeWerk, regelGruppen, regelnVonWerk, regelnZaehlen, ungunstAusgeloest } from './regeln'
 
 // Katalog der angewendeten Regeln
 describe('Regeln', () => {
@@ -76,5 +77,17 @@ describe('Regeln', () => {
       'VSS 40 040b:2019-03', 'bfu 2.443.01-2022/BM.021', 'SR 741.21, geltende Fassung', 'SR 741.01, geltende Fassung', 'SR 741.11, geltende Fassung', 'Ausgabe Dezember 2024', '1.2.2024',
       '653.105, 11/2018', '1.1.2023', '2026-10', '2026-10'])
     for (const w of ['40273', '40090', '40242', '40213', '40040'] as const) expect(WERKE[w].bezug).toBe('kostenpflichtig')
+  })
+})
+
+describe('Solothurn im Bericht', () => {
+  const fall = (ungunst: object, fahrstreifenJe?: object) => ({ rechtsvortritt: false, strasse: { ungunst: { fahrstreifen: false, neigung: false, schwerverkehr: false, ...ungunst }, fahrstreifenJe } }) as unknown as Ergebnis
+  it('steht nur bei den angewendeten Regeln, wenn ungünstige Verhältnisse ausgelöst sind', () => {
+    expect(ungunstAusgeloest(fall({}))).toBe(false)
+    expect(ungunstAusgeloest(fall({ neigung: true }))).toBe(true)
+    expect(ungunstAusgeloest(fall({}, { links: { mehr: false }, rechts: { mehr: true } }))).toBe(true)
+    const so3 = REGELN.find(r => r.id === 'SO-3')!
+    expect(so3.gilt!(fall({}))).toBe(false)
+    expect(so3.gilt!(fall({ schwerverkehr: true }))).toBe(true)
   })
 })

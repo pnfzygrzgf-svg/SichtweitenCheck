@@ -172,6 +172,11 @@ export interface Regel extends RegelEintrag {
 
 const rv = (e: Ergebnis) => !!e.rechtsvortritt
 const nichtRv = (e: Ergebnis) => !e.rechtsvortritt
+/** Ungünstige Verhältnisse in mindestens einer Richtung, also rechnet die App mit den Massen aus Solothurn */
+export const ungunstAusgeloest = (e: Ergebnis): boolean => {
+  const { ungunst: u, fahrstreifenJe: je } = e.strasse
+  return u.neigung || u.schwerverkehr || (je ? Object.values(je).some(x => x.mehr) : u.fahrstreifen)   // wie ungunstRichtung in rechnen.ts
+}
 const tue = (e: Ergebnis) => !!e.trottoirueberfahrt
 const mitVelo = (e: Ergebnis) => e.richtungen.some(r => !!r.velo)
 const mitTrottoir = (e: Ergebnis) => !!e.trottoirPruefung
@@ -520,7 +525,7 @@ const EINTRAEGE: readonly RegelEintrag[] = [
     daten: 'Deine Wahl im Panel (Grundstückzufahrt bzw. Trottoirüberfahrt)' },
   // ── kantonale Praxis ──
   { id: 'SO-3', werk: 'SO', ordnung: 3, fundstelle: 'S. 3', titel: 'Masse der ungünstigen Verhältnisse (Solothurn)', wirkung: 'rechnet mit',
-    thema: 'motorfahrzeuge', gilt: nichtRv,
+    thema: 'motorfahrzeuge', gilt: e => nichtRv(e) && ungunstAusgeloest(e),
     prueft: 'Die VSS-Norm nennt keine Masse für ungünstige Verhältnisse. Die App übernimmt die Masse des Kantons Solothurn.',
     werte: `mehr als ein Fahrstreifen (gilt für die Richtung zum Knoten mit mehreren Fahrstreifen); Gefälle über ${NEIGUNG_GROSS_PROZENT} %; Schwerverkehrsanteil über ` +
       `${SCHWERVERKEHR_PROZENT} %`,
