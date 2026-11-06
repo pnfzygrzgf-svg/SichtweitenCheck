@@ -38,7 +38,7 @@ export function Anleitung() {
         <li><b>Ergebnis:</b> Status je Richtung für Auto, Velo und Trottoir. Braun markiert sind Annahmen, die du prüfen solltest; wie
           gerechnet wurde, zeigt die aufklappbare Herleitung. Die Karte erklärt die «Legende».</li>
         <li><b>Massnahmen:</b> Reicht die Sicht nicht, zeigt das Panel Varianten; «übernehmen» setzt sie als Eingabe.</li>
-        <li><b>Bericht und Fall:</b> «Bericht drucken / als PDF» für die Druckansicht, «Fall speichern» und «Fall laden» für die Datei.</li>
+        <li><b>Bericht und Fall:</b> «Bericht / PDF» für die Druckansicht, «Fall speichern» und «Fall laden» für die Datei.</li>
       </ol>
       <p>Was die Begriffe bedeuten und nach welchen Regeln die App rechnet, steht unter «Begriffe» und «Regeln».</p>
     </details>
@@ -183,7 +183,7 @@ export function Datenschutz() {
 export function Fusszeile() {
   return (
     <footer className="fuss klein">
-      SichtweitenCheck v{__APP_VERSION__} ({MARKE}) · Code unter <a href="https://opensource.org/license/mit" target="_blank" rel="noopener noreferrer">MIT</a>, eigene Inhalte unter{' '}
+      SichtweitenCheck {MARKE} v{__APP_VERSION__} · Code unter <a href="https://opensource.org/license/mit" target="_blank" rel="noopener noreferrer">MIT</a>, eigene Inhalte unter{' '}
       <a href="https://creativecommons.org/licenses/by/4.0/deed.de" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>{' '}
       (eingebundene Daten behalten ihre eigenen Lizenzen) ·{' '}
       <a href={QUELLCODE} target="_blank" rel="noopener noreferrer">Quellcode auf GitHub</a> · Vibecoding. Don't trust, verify!

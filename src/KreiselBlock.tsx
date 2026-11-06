@@ -187,10 +187,10 @@ export function KreiselErgebnis({ kn }: { kn: KnotenInfo }) {
           <p><b>Velo:</b> dieselbe Linie, A nach VSS 40 273 Tab. 3.</p>
           <p><b>Sichtberme:</b> der Teil der Insel bzw. des Innenrings im Sichtfeld; dort nichts zwischen 0,60 und 3,00 m Höhe. Liegt ein
             Hindernis darin, ist die Sicht nicht erfüllt.</p>
-          <p><b>Az</b> (Sicht zur Zufahrt links): Vergleichswert, kein Normwert ({AZ_QUELLE}). Er zählt nicht zum Gesamtstatus.</p>
-          <p>Gesamtstatus: schlechtester von Ak, Velo und Sichtberme.</p></Info></p>
+          <p><b>Az</b> (Sicht zur Zufahrt links): Vergleichswert, kein Normwert ({AZ_QUELLE}). Er zählt nicht zum Gesamtergebnis.</p>
+          <p>Gesamtergebnis: schlechtester von Ak, Velo und Sichtberme.</p></Info></p>
       <table className="zahlen">
-        <thead><tr><th>Teil</th><th>nötig</th><th>vorhanden</th><th>Status</th></tr></thead>
+        <thead><tr><th>Teil</th><th>nötige Sicht</th><th>vorhandene Sicht</th><th>Ergebnis</th></tr></thead>
         <tbody>
           {zeile('Motorfahrzeuge (Ak)', s.auto, nochText(s.auto, s.auto.oben > s.auto.A ? `${f1(s.auto.A)} m (oberer Wert ${f1(s.auto.oben)} m)` : `${f1(s.auto.A)} m`))}
           {zeile('Velo', s.velo, nochText(s.velo, `${f1(s.velo.A)} m`))}

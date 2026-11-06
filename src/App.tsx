@@ -214,7 +214,7 @@ function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false, u
     <label key={k}><input type="checkbox" checked={gesetzt[k]} onChange={ev => {
       const v = ev.target.checked
       setEingaben(e => k === 'fahrstreifen' ? { ...e, fahrstreifen: v } : k === 'neigung' ? { ...e, neigungGross: v } : { ...e, schwerverkehr: v })
-    }} /> {UNGUNST_TEXT[k]} <span className={warn ? 'klein annahme' : 'klein'}>({quelle})</span></label>
+    }} /> {UNGUNST_TEXT[k]} <span className={warn ? 'quelle-chip q-annahme' : 'quelle-chip'}>{quelle}</span></label>
   )
   const vorgabe = (b: boolean) => (b ? 'ja' : 'nein')
   const ohneWirkung = typ !== 'hvs' && (gesetzt.fahrstreifen || gesetzt.neigung || gesetzt.schwerverkehr || anteilUngunst)
@@ -423,7 +423,7 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false,
                   'Parkstreifen: ' : ''}{r.lageQuelle}).</li>
                 <SichtHerleitung t={r} faktorText={`${String(ZIEL_FAKTOR).replace('.', ',')} × ${r.rv ? 'grösste Stufe der Abb. 6' :
                   r.massgebend > r.erforderlichOben ? 'massgebender' : 'oberer'} Wert`} />
-                <li>Status: {r.rv ? rvStatusText(r, r.status) : STATUS_TEXT[r.status]}{r.statusZusatz.map(z => ` · ${z}`).join('')}.</li>
+                <li>Ergebnis: {r.rv ? rvStatusText(r, r.status) : STATUS_TEXT[r.status]}{r.statusZusatz.map(z => ` · ${z}`).join('')}.</li>
               </>}
             </ul>
             <VerdeckerListe liste={r.verdeckerListe} />
@@ -534,7 +534,7 @@ function RvAlle({ rv, armWaehlen }: { rv: RechtsvortrittErgebnis; armWaehlen: (k
       seinen Eingaben, die übrigen mit den Daten und Annahmen der App (ohne Halte- oder Wartelinie, D von Hand, Neigung). Ein Klick auf den Arm wählt ihn.</p>
       {rv.alle.filter(x => x.status === 'keine').map(x => <p key={x.arm}>{x.armName}: {x.grund}.</p>)}</Info></h4>
     <table className="zahlen">
-      <thead><tr><th>Arm</th><th>gegen rechts</th><th>Sichtweite vorhanden</th><th>Status</th></tr></thead>
+      <thead><tr><th>Arm</th><th>gegen rechts</th><th>vorhandene Sicht</th><th>Ergebnis</th></tr></thead>
       <tbody>{rv.alle.map((x: RvArm) => <tr key={x.arm}>
         <td><button className={x.arm === rv.arm.arm ? 'aktiv klein' : 'zweit klein'} onClick={() => armWaehlen(x.arm)}
           title="Diesen Arm wählen: die Karte zeigt ihn">{x.armName}</button></td>
@@ -831,7 +831,7 @@ function TempoZeile({ r, wert, setzen }: { r: RichtungErgebnis; wert: TempoEinga
           aria-label={`Tempo ${name}: Begründung`} value={text} onChange={e => setText(e.target.value)} onBlur={uebernehmen} onKeyDown={enter} /></>}
       {wert && !ok && <span className="fehler klein"> ganze Zahl von {TEMPO_MIN} bis {TEMPO_MAX} eingeben (gilt weiter: {wert.wert} km/h)</span>}
       {wert ? <div className="klein">(<Hand />; {r.tempoVorgabeQuelle.startsWith('Annahme') ? 'Annahme' : 'Datenwert'} {r.tempoVorgabe} km/h)</div> :
-        <>{' '}<span className={r.tempoAnnahme ? 'klein annahme' : 'klein'}>({kurzQuelle(r.tempoVorgabeQuelle)}{r.tempoOsmVergleich ? `; ${r.tempoOsmVergleich}` : ''})</span></>}
+        <>{' '}<span className={r.tempoAnnahme ? 'quelle-chip q-annahme' : 'quelle-chip'}>{kurzQuelle(r.tempoVorgabeQuelle)}{r.tempoOsmVergleich ? `; ${r.tempoOsmVergleich}` : ''}</span></>}
     </div>
   )
 }
@@ -866,7 +866,7 @@ function RegelungAbschnitt({ e, eingaben, setEingaben }: { e: Ergebnis | null; e
             {eingaben.regelung !== null && e && <>{' '}<button className="zweit klein" onClick={() => setEingaben(x => ({ ...x, regelung: null }))}>Wieder automatisch ermitteln</button></>}
             <div className="klein">{!e ? (eingaben.regelung !== null ? '(gewählt)' : '(aus OSM abgeleitet, sobald ein Arm gewählt ist)') :
               eingaben.regelung !== null ? `(gewählt; automatisch ermittelt: ${REGELUNG_TEXT[e.regelungVorgabe]})` :
-              <span className="annahme">({annahmeText(e.regelungQuelle)})</span>}</div>
+              <span className="quelle-chip q-annahme">{annahmeText(e.regelungQuelle)}</span>}</div>
             {regelung === 'rechtsvortritt' && e?.zufahrtspunkt && <div className="klein warnung">Gilt an einer Grundstückzufahrt nicht:
               gerechnet wie «Kein Vortritt».</div>}
             {eingaben.regelung === 'rechtsvortritt' && eingaben.trottoirueberfahrt && !e?.zufahrtspunkt && <div className="klein warnung">Gilt an
@@ -889,7 +889,7 @@ function RegelungAbschnitt({ e, eingaben, setEingaben }: { e: Ergebnis | null; e
               <option value="vorgabe">Annahme: {WAHRNEHMBARKEIT_TEXT[WAHRNEHMBARKEIT_VORGABE]}</option>
               {WAHRNEHMBARKEITEN.map(w => <option key={w} value={w}>{WAHRNEHMBARKEIT_TEXT[w]}</option>)}
             </select>
-            {' '}<span className={eingaben.wahrnehmbarkeit ? 'klein' : 'klein annahme'}>({eingaben.wahrnehmbarkeit ? 'gewählt' : 'Annahme'})</span>
+            {' '}<span className={eingaben.wahrnehmbarkeit ? 'quelle-chip' : 'quelle-chip q-annahme'}>{eingaben.wahrnehmbarkeit ? 'gewählt' : 'Annahme'}</span>
             <div><label><input type="checkbox" checked={!!eingaben.markierungRv}
               onChange={ev => { const v = ev.target.checked; setEingaben(x => ({ ...x, markierungRv: v })) }} /> besondere Markierung
               «Rechtsvortritt» vorhanden</label>{' '}<span className="klein">(VSS 40 851; Hilfe zur Einstufung, ohne Wirkung auf die
@@ -1473,7 +1473,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
       return true
     } catch (err) {
       if (ctrl.signal.aborted || istAbbruch(err)) return false
-      setMeldung(`Laden fehlgeschlagen: ${(err as Error).message} (Details unter «Geladene Quellen»)`)
+      setMeldung(`Laden fehlgeschlagen: ${(err as Error).message} (Details unter «Datenquellen und Ladezustand»)`)
       setNochmals({ wahl, fall: fallNeu })
       return false
     } finally {
@@ -1726,7 +1726,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
       nachladenFehler.current = datenKey(d)
       setzeQuelle('av', { name, fehler: (err as Error).message })
       setAvFehler(`AV nachladen (±${radius} m) fehlgeschlagen: ${(err as Error).message}. Gerechnet mit ±${d.avRadius} m: weiter weg fehlen ` +
-        'Gebäude (Details unter «Geladene Quellen»).')
+        'Gebäude (Details unter «Datenquellen und Ladezustand»).')
     }).finally(() => { nachLaedt.current = false })
   }, [rechnung, daten])
 
@@ -1956,7 +1956,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
           <button className="logo-knopf" onClick={onStartseite} title="Zur Startseite" aria-label="Zur Startseite">
             <img className="logo" src={import.meta.env.BASE_URL + 'logo-klein.svg'} alt="" width={36} height={36} />
           </button>
-          SichtweitenCheck <span className="marke">{MARKE}</span>
+          SichtweitenCheck <span className="marke">{MARKE} v{__APP_VERSION__}</span>
         </h1>
         <Anleitung />
         <div className="knopfzeile">
@@ -1969,7 +1969,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
             'Hindernisse, Quellenstand und ein Auszug des Ergebnisses'}>Fall speichern</button>}
           {fall && <button onClick={() => setBerichtOffen(true)} disabled={!(erg || kn?.kreisel?.sicht) || rechnet}
             title={(erg || kn?.kreisel?.sicht) && !rechnet ? 'Druckansicht mit Kartenbild, Ergebnis, Verdeckern, Massnahmen, Eingaben und Quellen; als PDF über den Druckdialog' :
-              'Erst nach der Rechnung'}>Bericht drucken / als PDF</button>}
+              'Erst nach der Rechnung'}>Bericht / PDF</button>}
         </div>
         {fallHinweis && fall && <p className="klein hinweisbox">{fallHinweis}{' '}
           <button className="zweit klein" onClick={() => setFallHinweis(null)}>ausblenden</button></p>}
@@ -2178,6 +2178,19 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
               'Motorfahrzeuge und Velo sind in beiden Richtungen erfüllt: keine Massnahmen nach Ziffer 14 nötig.'}</p>
         </section>}
 
+        <AmtlicheSignale daten={regional.daten} wahl={fall?.signalEntscheide} setzen={xs => aendern(f => { f.signalEntscheide = xs; return f })}
+          ziele={kn && erg ? [{ knoten: kn.id, zufahrt: erg.zufahrt, p: kn.p, name: `Knoten ${kn.name}, Zufahrt ${erg.zufahrt}` }] : []} />
+        <details className="abschnitt">
+          <summary><h2>Datenquellen und Ladezustand{fehlerQuellen > 0 && <span className="fehler"> ({fehlerQuellen} Fehler)</span>}</h2></summary>
+          <p className="klein">Beim Wiederöffnen werden die Datenquellen neu geladen. Angezeigt wird der jeweils verwendete
+            Datenstand; bestätigte Eingaben bleiben erhalten. Das Abrufdatum ist kein Datenstand.</p>
+          <ul className="klein">
+            {quellenSortiert({...quellen,...hkQuellen}).map(([k, q]) => (
+              <li key={k}><b>{quellenThema(k, q.name)}</b> – {q.name}: {q.fehler ? <span className="fehler">{q.fehler}</span> :
+                q.ms !== undefined ? `${q.objekte ? q.objekte + ', ' : ''}${Math.round(q.ms)} ms, ${Math.round((q.bytes ?? 0) / 1024)} kB${q.server ? `, ${q.server}` : ''}` : q.objekte ?? 'lädt …'}<div>{quellenQualitaetText(q)}{q.zeit && <> · Abgerufen {new Date(q.zeit).toLocaleString('de-CH')}</>}</div></li>
+            ))}
+          </ul>
+        </details>
         <details className="abschnitt">
           <summary><h2>Legende</h2></summary>
           {/* Alltagssprache, Farbnamen statt Code-Namen; Farben selbst unverändert */}
@@ -2262,19 +2275,6 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
           <RegelUebersicht />
         </details>
 
-        <AmtlicheSignale daten={regional.daten} wahl={fall?.signalEntscheide} setzen={xs => aendern(f => { f.signalEntscheide = xs; return f })}
-          ziele={kn && erg ? [{ knoten: kn.id, zufahrt: erg.zufahrt, p: kn.p, name: `Knoten ${kn.name}, Zufahrt ${erg.zufahrt}` }] : []} />
-        <details className="abschnitt">
-          <summary><h2>Datenquellen und Ladezustand{fehlerQuellen > 0 && <span className="fehler"> ({fehlerQuellen} Fehler)</span>}</h2></summary>
-          <p className="klein">Beim Wiederöffnen werden die Datenquellen neu geladen. Angezeigt wird der jeweils verwendete
-            Datenstand; bestätigte Eingaben bleiben erhalten. Das Abrufdatum ist kein Datenstand.</p>
-          <ul className="klein">
-            {quellenSortiert({...quellen,...hkQuellen}).map(([k, q]) => (
-              <li key={k}><b>{quellenThema(k, q.name)}</b> – {q.name}: {q.fehler ? <span className="fehler">{q.fehler}</span> :
-                q.ms !== undefined ? `${q.objekte ? q.objekte + ', ' : ''}${Math.round(q.ms)} ms, ${Math.round((q.bytes ?? 0) / 1024)} kB${q.server ? `, ${q.server}` : ''}` : q.objekte ?? 'lädt …'}<div>{quellenQualitaetText(q)}{q.zeit && <> · Abgerufen {new Date(q.zeit).toLocaleString('de-CH')}</>}</div></li>
-            ))}
-          </ul>
-        </details>
         <Datenschutz />
         <Fusszeile />
       </aside>

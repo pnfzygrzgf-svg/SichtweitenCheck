@@ -355,7 +355,7 @@ function ErgebnisTabelle({ e }: { e: Ergebnis }) {
   const tr = (r: RichtungErgebnis) => e.trottoirPruefung?.richtungen.find(t => t.richtung === r.richtung) ?? null
   return (
     <table className="bericht-tabelle bericht-ergebnis">
-      <thead><tr><th></th>{rs.map(r => <th key={r.richtung}>{lageText(r)}: {r.strasse}<div className="klein">{r.spur === 'nah' ? 'nahe' : 'ferne'} Fahrspur</div></th>)}</tr></thead>
+      <thead><tr><th>Angabe</th>{rs.map(r => <th key={r.richtung}>{lageText(r)}: {r.strasse}<div className="klein">{r.spur === 'nah' ? 'nahe' : 'ferne'} Fahrspur</div></th>)}</tr></thead>
       <tbody>
         {!rv && <>
           <tr className="bericht-zwischen"><td colSpan={rs.length + 1}><b>Motorfahrzeuge</b> (VSS 40 273 Tab. 1){e.trottoirueberfahrt ?
@@ -373,7 +373,7 @@ function ErgebnisTabelle({ e }: { e: Ergebnis }) {
             leer('unter 30 km/h keine Kurve')))}
           {zeile('A massgebend', auto(r => <><b>{r.massgebend} m</b><div className="klein">{r.massgebendText}</div></>))}
           {zeile('A vorhanden', auto(r => <><b>{vorhandenText(r.vorhanden, r.bisEnde)}</b>{r.bisEnde && <div className="klein">geprüft bis {r.sMax} m</div>}</>))}
-          {zeile('Status', auto(r => <><b>{statusMarke(r.status)} {autoText(r)}</b>{r.statusZusatz.length > 0 &&
+          {zeile('Ergebnis', auto(r => <><b>{statusMarke(r.status)} {autoText(r)}</b>{r.statusZusatz.length > 0 &&
             <div className="klein">{r.statusZusatz.join('; ')}</div>}</>))}
           {zeile('Überholfall', auto(r => r.ueberholfall ? <><b>{statusMarke(r.ueberholfall.status)} {STATUS_TEXT_TEIL[r.ueberholfall.status]}</b>
             {' '}({vorhandenText(r.ueberholfall.vorhanden, r.ueberholfall.bisEnde)} von {r.ueberholfall.A} m)<div className="klein">Ziffer 6,
@@ -388,7 +388,7 @@ function ErgebnisTabelle({ e }: { e: Ergebnis }) {
           'unbekannt' : `${fi(r.velo.neigung)} %`}
           {r.velo.ebike ? '; schnelle E-Bikes verboten' : ''}; {r.velo.lageText}</div></> : leer('keine Prüfung'), 'A Velo')}
         {zeile('A vorhanden Velo', r => r.velo ? <b>{vorhandenText(r.velo.vorhanden, r.velo.bisEnde)}</b> : leer('–'), 'vV')}
-        {zeile('Status Velo', r => r.velo ? <><b>{statusMarke(r.velo.status)} {STATUS_TEXT_TEIL[r.velo.status]}</b>{r.velo.veloHand &&
+        {zeile('Ergebnis Velo', r => r.velo ? <><b>{statusMarke(r.velo.status)} {STATUS_TEXT_TEIL[r.velo.status]}</b>{r.velo.veloHand &&
           <div className="klein">Veloachse von Hand</div>}</> : leer('–'), 'sV')}
         {zeile('Vergleich bfu', r => { if (!r.velo) return leer('–'); const b = bfuVelo(r.velo.neigung, r.velo.neigungUnbekannt)
           const belegt = r.velo.vorhanden >= b.A ? '' : r.velo.bisEnde ? `; geprüft bis ${f1(r.velo.vorhanden)} m, Vergleichswert damit nicht belegt` : '; nicht erreicht'
@@ -401,12 +401,12 @@ function ErgebnisTabelle({ e }: { e: Ergebnis }) {
             <div className="klein">{t.neigungQuelle}</div></> : leer('–') }, 'iT')}
           {zeile('A Trottoir', r => { const t = tr(r); return t ? <><b>{t.A} m</b><div className="klein">{t.text}</div></> : leer('–') }, 'AT')}
           {zeile('A vorhanden Trottoir', r => { const t = tr(r); return t ? <b>{vorhandenText(t.vorhanden, t.bisEnde)}</b> : leer('–') }, 'vT')}
-          {zeile('Status Trottoir', r => { const t = tr(r); return t ? <b>{statusMarke(t.status)} {STATUS_TEXT_TEIL[t.status]}</b> : leer('–') }, 'sT')}
+          {zeile('Ergebnis Trottoir', r => { const t = tr(r); return t ? <b>{statusMarke(t.status)} {STATUS_TEXT_TEIL[t.status]}</b> : leer('–') }, 'sT')}
           {zeile('Vergleich bfu', r => { const t = tr(r); if (!t) return leer('–'); const b = bfuTrottoir(t.neigung, t.neigungUnbekannt)
             return <>Zufussgehende, fäG, Kinder auf dem Velo {b.fuss} m; zugelassene Velos {b.velo} m<div className="klein">{b.text};
               Vergleichswerte, ohne Wirkung (massgebend VSS 40 273 Tab. 2)</div></> }, 'bT')}
         </> : <tr><td>Trottoir</td><td colSpan={rs.length}>{leer(`keine Prüfung (${e.trottoirGrund || 'kein Trottoir an der Zufahrt nach AV'})`)}</td></tr>}
-        <tr className="bericht-gesamt"><td><b>Gesamtstatus</b></td>{rs.map(r => <td key={r.richtung}><b>{statusMarke(r.gesamt, !!r.rv)} {gesamtText(r)}</b></td>)}</tr>
+        <tr className="bericht-gesamt"><td><b>Gesamtergebnis</b></td>{rs.map(r => <td key={r.richtung}><b>{statusMarke(r.gesamt, !!r.rv)} {gesamtText(r)}</b></td>)}</tr>
       </tbody>
     </table>
   )
@@ -440,7 +440,7 @@ function RvBerichtBlock({ e }: { e: Ergebnis }) {
       {rv.alle && <>
         <h4>Alle Arme (je gegen den rechten Nachbarn)</h4>
         <table className="bericht-tabelle">
-          <thead><tr><th>Arm</th><th>gegen rechts</th><th>Sichtweite</th><th>Zustand Abb. 6</th><th>Status</th></tr></thead>
+          <thead><tr><th>Arm</th><th>gegen rechts</th><th>vorhandene Sicht</th><th>Zustand Abb. 6</th><th>Ergebnis</th></tr></thead>
           <tbody>{rv.alle.map((x: RvArm) => <tr key={x.arm}><td>{x.armName}{x.arm === a.arm ? ' (gewählt)' : ''}</td><td>{x.rechtsName}</td>
             <td>{x.status === 'keine' ? '–' : vorhandenText(x.vorhanden, x.bisEnde)}{x.schmal ? ' · schmal' : ''}</td>
             <td>{x.zustand ? ZUSTAND_TEXT[x.zustand] : '–'}</td>
@@ -663,7 +663,7 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
         </header>
 
         <section className="bericht-block">
-          <h2>Ort und Zufahrt</h2>
+          <h2>Ort</h2>
           <table className="bericht-zahlen"><tbody>
             <tr className={bez.trim() ? '' : 'nicht-drucken'}><td>Bezeichnung</td><td>
               <input className="nicht-drucken bericht-eingabe" type="text" maxLength={BEZEICHNUNG_MAX}
@@ -694,7 +694,7 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
         <section className="bericht-block">
           <h2>Ergebnis</h2>
           {e.lsa && <p className="klein"><b>{LSA_TEXT}</b></p>}
-          <p className="klein">Gesamtstatus je Richtung: schlechtester Teil (Motorfahrzeuge, Überholfall, Velo, Trottoir). ✓ erfüllt, (✓) bedingt, ✗ nicht
+          <p className="klein">Gesamtergebnis je Richtung: schlechtester Teil (Motorfahrzeuge, Überholfall, Velo, Trottoir). ✓ erfüllt, (✓) bedingt, ✗ nicht
             erfüllt, – keine Prüfung.</p>
           {e.trottoirueberfahrt && <ul className="bericht-status">
             <li>Trottoirüberfahrt, Phase Trottoir (ab dem hinteren Rand):{' '}
@@ -740,16 +740,12 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
         </section>
 
         <section className="bericht-block">
-          <h2>Annahmen</h2>
+          <h2>Annahmen und Hinweise</h2>
           <p className="klein">Ziffern, Tabellen, Abbildungen und Seiten ohne Normnummer: VSS 40 273 (2024).</p>
           <ul className="klein">{(e.annahmenThemen ?? e.annahmen.map(text => ({ thema: text, titel: '', text }))).map(t => <li key={t.thema}>
             {t.titel && <b>{t.titel}: </b>}{t.text}</li>)}</ul>
+          {hinweise.length > 0 && <ul className="klein">{hinweise.map((x, i) => <li key={i}>{x}</li>)}</ul>}
         </section>
-
-        {hinweise.length > 0 && <section className="bericht-block">
-          <h2>Hinweise</h2>
-          <ul className="klein">{hinweise.map((x, i) => <li key={i}>{x}</li>)}</ul>
-        </section>}
 
         {/* kurze Tabelle: Überschrift und Kopf bleiben bei den Zeilen */}
         <section className="bericht-block druck-block">
@@ -763,7 +759,7 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
         {/* Werke und die im Fall angewendeten Regeln (regeln.ts), ohne Normtabellen; Herkunft je Werk und
             Vermerk «nur Hinweis» (Überarbeitung 31.10.2026) */}
         <section className="bericht-block">
-          <h2>Werke und angewendete Regeln</h2>
+          <h3>Werke und angewendete Regeln</h3>
           <RegelnFall gruppen={regelnDesFalls(e)} />
           {nebenWerke(e).length > 0 && <><p className="klein"><b>Geprüft oder zum Vergleich, ohne Wirkung auf das Ergebnis:</b></p>
             <ul className="klein">{nebenWerke(e).map(t => <li key={t}>{t}</li>)}</ul></>}

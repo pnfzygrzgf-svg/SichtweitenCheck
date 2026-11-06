@@ -143,7 +143,7 @@ export default function KreiselBericht({ fall, kn, kantone, quellen, aendern, sc
           <p className="klein">Sicht am Kreisel nach VSS 40 263 und VSS 40 273 · Bericht vom {datum(heute)}</p>
         </header>
         <section className="bericht-block">
-          <h2>Ort und Einfahrt</h2>
+          <h2>Ort</h2>
           <table className="bericht-zahlen"><tbody>
             <tr><td>Bezeichnung</td><td>
               <input className="nicht-drucken bericht-eingabe" type="text" maxLength={BEZEICHNUNG_MAX} value={bez}
@@ -172,7 +172,7 @@ export default function KreiselBericht({ fall, kn, kantone, quellen, aendern, sc
           <p><b>{statusMarke(s.gesamt)} {STATUS_TEXT[s.gesamt]}</b> (schlechtester von Ak, Velo und Sichtberme; Az ist ein Vergleichswert und
             zählt nicht dazu)</p>
           <table className="bericht-zahlen">
-            <thead><tr><th>Teil</th><th>nötig</th><th>vorhanden</th><th>Status</th></tr></thead>
+            <thead><tr><th>Teil</th><th>nötige Sicht</th><th>vorhandene Sicht</th><th>Ergebnis</th></tr></thead>
             <tbody>
               {zeile('Motorfahrzeuge (Ak, VSS 40 263 Ziffer 13.2, S. 8–9)', s.auto, nochText(s.auto, `${f1(s.auto.A)} m, oberer Wert ${f1(s.auto.oben)} m`) +
                 ` (${s.auto.text})`)}
@@ -206,13 +206,12 @@ export default function KreiselBericht({ fall, kn, kantone, quellen, aendern, sc
         <section className="bericht-block">
           <h2>Eingaben von Hand</h2>
           {eingaben.length ? <ul className="klein">{eingaben.map(x => <li key={x}>{x}</li>)}</ul> : <p className="klein">Keine.</p>}
-          <h3>Annahmen</h3>
-          <ul className="klein">{[...k.annahmen, ...s.annahmen].map(x => <li key={x}>{x}</li>)}</ul>
         </section>
-        {hinweise.length > 0 && <section className="bericht-block">
-          <h2>Hinweise</h2>
-          <ul className="klein">{hinweise.map(x => <li key={x}>{x}</li>)}</ul>
-        </section>}
+        <section className="bericht-block">
+          <h2>Annahmen und Hinweise</h2>
+          <ul className="klein">{[...k.annahmen, ...s.annahmen].map(x => <li key={x}>{x}</li>)}</ul>
+          {hinweise.length > 0 && <ul className="klein">{hinweise.map(x => <li key={x}>{x}</li>)}</ul>}
+        </section>
         <section className="bericht-block">
           <h2>Quellen</h2>
           <BerichtQuellenTabelle zeilen={berichtQuellenZeilen({ fall, quellen, kantone, avFuer: 'Fahrbahn, Insel, Gebäude', osmFuer: 'Kreisel, Arme, Velobypässe, Tram' })}>
