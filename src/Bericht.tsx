@@ -1,6 +1,6 @@
 import { swcSichtMasse, massBildPunkte } from './sichtMasse'
 import { ZUFAHRT_HERKUNFT } from './rechner/grundstueck'
-import { MassBild, useSichtWahl, sichtZeigen, sichtMassZeigen, richtungSichtId, sichtBildText, type SichtArt } from './Sichtfelder'
+import { MassBild, useSichtWahl, sichtZeigen, sichtMassZeigen, richtungSichtId, type SichtArt, type SichtWahl } from './Sichtfelder'
 import { bundBelegText } from './daten/anbieter/gemeinsam/bundBelege'
 import { signalText } from './daten/anbieter/gemeinsam/regionalSignale'
 import { regionalDienst } from './daten/anbieter/gemeinsam/regionalDienste'
@@ -30,12 +30,44 @@ import { armText, nachNr } from './rechner/knoten'
 import { lageKurz, lageText } from './rechner/lage'
 import type { AvFlaeche } from './daten/av'
 import { hindernisRing, type Hindernis } from './rechner/hindernisse'
-import { autoUmriss, autoScheibe, fbLage, fbVeloLage, faAnzeige, veloTeile, veloLage } from './rechner/fahrzeug'
-import { wgs, add, dist, type P } from './geo'
+import { autoUmriss, autoScheibe, fbLage, fbVeloLage, faAnzeige, veloTeile, veloLage, PW_LAENGE_M, VELO_LAENGE_M } from './rechner/fahrzeug'
+import { wgs, add, dist, type P, sub } from './geo'
 import { wmsBildUrl, ladeFlugjahr, LUFTBILD_QUELLE } from './daten/luftbild'
 import { NR_GEWAEHLT_FARBE, AV_FARBEN, STATUS_FARBE, FREI_FARBE, VERDECKT_FARBE, D_FARBE, D_RAND_FARBE, D_HAND_FARBE, ZUFAHRT_FARBE, FB_FARBE, FA_FARBE, VELO_FARBE, TROTTOIR_FARBE,
   TREFFER_FARBE, hindernisFarbe, hindernisText } from './Karte'
 import { ausschnitt, bildPixel, svgAbbildung, massstab, berichtPunkte, imAusschnitt, schilder, VB, type QuellenStand } from './berichtbild'
+/** Farbprobe in der Bildlegende: Fläche, Linie (gestrichelt), Rand (Umriss) oder Punkt; dunkel: dunkler Grund für helle Farben */
+function Probe({ art, farbe, rand, strich, deckung = 1, dunkel = false }: { art: 'flaeche' | 'linie' | 'rand' | 'punkt'; farbe: string; rand?: string
+  strich?: string; deckung?: number; dunkel?: boolean }) {
+  return <svg className="probe" viewBox="0 0 30 14" width="30" height="14" aria-hidden="true">
+    {dunkel && <rect x="0" y="0" width="30" height="14" rx="2" fill="#4b5563" />}
+    {art === 'flaeche' && <rect x="2" y="2" width="26" height="10" rx="2" fill={farbe} fillOpacity={deckung} stroke={rand ?? farbe} strokeWidth="1.5" />}
+    {art === 'linie' && <line x1="2" y1="7" x2="28" y2="7" stroke={farbe} strokeWidth="2.5" strokeDasharray={strich} />}
+    {art === 'rand' && <rect x="2" y="2" width="26" height="10" rx="2" fill="none" stroke={farbe} strokeWidth="2.5" strokeDasharray={strich} />}
+    {art === 'punkt' && <circle cx="15" cy="7" r="5" fill={farbe} stroke={rand ?? '#111827'} strokeWidth="2" />}
+  </svg>
+}
+/** Hindernisart für die Legende: «Parkfeld Auto», «Baum», … */
+function hindernisArtText(h: Hindernis): string {
+  const klasse: Record<string, string> = { auto: 'Auto', velo: 'Velo', motorrad: 'Motorrad' }
+  const art: Record<string, string> = { laengsparkierung: 'Längsparkierung', baum: 'Baum', hecke: 'Hecke', mauer: 'Mauer', zaun: 'Zaun', uebrige: 'übriges Hindernis' }
+  return h.art === 'parkfeld' ? `Parkfeld ${klasse[h.klasse] ?? h.klasse}` : art[h.art] ?? h.art
+}
+/** Satz zu den dargestellten Sichtfeldern: je Richtung und Art, mit den ausgeblendeten */
+function sichtSatz(e: Ergebnis, w: SichtWahl): string {
+  const an: string[] = [], aus: string[] = []
+  const tu = (text: string, zeigt: boolean) => (zeigt ? an : aus).push(text)
+  for (const r of e.richtungen) {
+    if (r.status !== 'keine_zufahrt') tu(`Auto ${lageKurz(r)}`, sichtZeigen(w, 'auto', richtungSichtId(e, r)))
+    if (r.velo) tu(`Velo ${lageKurz(r)}`, sichtZeigen(w, 'velo', richtungSichtId(e, r)))
+    if (r.ueberholfall) tu(`Überholsicht ${lageKurz(r)}`, sichtZeigen(w, 'ueberholen', richtungSichtId(e, r)))
+  }
+  for (const t of e.trottoirPruefung?.richtungen ?? []) tu(`Trottoir ${lageKurz(t)}`, sichtZeigen(w, 'trottoir', richtungSichtId(e, t)))
+  return `Sichtfelder im Bild: ${an.length ? an.join(', ') : 'keine'}${aus.length ? `; ausgeblendet: ${aus.join(', ')}` : ''}` +
+    `${w.masse && an.length ? '; mit Vermassung' : ''}. Die Ergebnisse unten enthalten alle Sichtarten.`
+}
+/** Fahrzeugsymbole im Kartenbild mindestens so lang [px der Zeichenfläche VB], Velo 80 % davon (nur Darstellung, Front liegt richtig) */
+const SYMBOL_MIN_PX = 48
 import { f1, f2, fi, autoText, gesamtText, statusMarke, STATUS_TEXT_TEIL, RV_STATUS_TEXT, TUE_BREITE_KURZ, tuePhaseText } from './texte'
 import { TUE_GEHLINIE_M } from './rechner/trottoirueberfahrt'
 import { REGELUNG_TEXT, TEMPO_ART_TEXT, LSA_TEXT } from './rechner/rechnen'
@@ -117,17 +149,61 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
     return <text x={x + (rechts ? -9 : 9)} y={y - 10} fontSize={17} fontWeight={700} fill="#000000" textAnchor={rechts ? 'end' : 'start'}
       {...halo}>{text}</text>
   }
-  const auto = (mitte: P, richtung: P, farbe: string, rand: string) => <>
-    <path d={pfad([autoUmriss(mitte, richtung)])} fill={farbe} stroke={rand} strokeWidth={1.5} />
-    <path d={pfad([autoScheibe(mitte, richtung)])} fill="#94a3b8" stroke="#94a3b8" strokeWidth={1} />
-  </>
+  // Fahrzeuge als Symbole: bei grossem Ausschnitt (z. B. 190 m Breite) wäre ein Auto 15 px und ein Velo 6 px lang und im Bericht nicht
+  // erkennbar. Darum mindestens SYMBOL_MIN_PX lang, vergrössert um den Ankerpunkt (die Front, die bei A bzw. an der Kante liegt).
+  const pxJeM = VB / wM
+  const vergroessert = (ring: P[], anker: P, laengeM: number, minPx: number): P[] => {
+    const f = Math.max(1, minPx / (laengeM * pxJeM))
+    return f === 1 ? ring : ring.map(q => add(anker, sub(q, anker), f))
+  }
+  const auto = (mitte: P, richtung: P, farbe: string, rand: string) => {
+    const front = add(mitte, richtung, PW_LAENGE_M / 2)
+    return <>
+      <path d={pfad([vergroessert(autoUmriss(mitte, richtung), front, PW_LAENGE_M, SYMBOL_MIN_PX)])} fill={farbe} stroke={rand} strokeWidth={1.5} />
+      <path d={pfad([vergroessert(autoScheibe(mitte, richtung), front, PW_LAENGE_M, SYMBOL_MIN_PX)])} fill="#94a3b8" stroke="#94a3b8" strokeWidth={1} />
+    </>
+  }
   const fbA = e.fbDachse ?? e.Dachse
   const fb = fbLage(fbA, add(fbA, e.fbRichtung))
   // Velo gegen die Einbahn auf der Zufahrt (E4): F_B als Velo, velofahrende Person bei D
   const fbVelo = e.zufahrtVelo ? fbVeloLage(fbA, add(fbA, e.fbRichtung)) : null
-  const velo = (l: [P, P], key: string, fb = false) => veloTeile(l[0], l[1]).map((t, k) => <path key={key + k} d={pfad([t])}
-    fill={fb ? FB_FARBE : k === 3 ? '#111827' : VELO_FARBE} stroke={fb ? '#ffffff' : VELO_FARBE} strokeWidth={fb ? 1.5 : 1} />)
+  const velo = (l: [P, P], key: string, fb = false) => veloTeile(l[0], l[1]).map((t, k) => <path key={key + k}
+    d={pfad([vergroessert(t, add(l[0], l[1], VELO_LAENGE_M / 2), VELO_LAENGE_M, SYMBOL_MIN_PX * 0.8)])}
+    fill={fb ? FB_FARBE : k === 3 ? '#111827' : VELO_FARBE} stroke={fb ? '#ffffff' : '#0f172a'} strokeWidth={1.5} paintOrder="stroke" />)
   const m = e.rechtsvortritt?.arm.sichtfeld
+  // Legende: nur, was im Bild vorkommt, je Zeile eine Farbprobe und ein kurzer Text
+  const zeigt = (art: SichtArt, r: { richtung: Richtung }) => sichtZeigen(sicht, art, richtungSichtId(e, r))
+  const autoDa = e.richtungen.some(r => r.status !== 'keine_zufahrt' && zeigt('auto', r)) || !!m
+  const veloDa = e.richtungen.some(r => r.velo && zeigt('velo', r))
+  const trottoirDa = (e.trottoirPruefung?.richtungen ?? []).some(t => zeigt('trottoir', t))
+  const ueberholDa = e.richtungen.some(r => r.ueberholfall && zeigt('ueberholen', r))
+  const hindArten = [...new Map(hind.map(({ h }) => [hindernisFarbe(h) + hindernisArtText(h), { farbe: hindernisFarbe(h), text: hindernisArtText(h) }])).values()]
+  const wirkungen = new Set(treffer.map(t => t.wirkung))
+  const legende: { probe: React.ReactNode; text: React.ReactNode }[] = [
+    { probe: <Probe art="flaeche" farbe={AV_FARBEN.Strasse_Weg} rand="#6b7280" />, text: 'Fahrbahn und Gebäude (amtliche Vermessung)' },
+    ...(autoDa ? [{ probe: <><Probe art="linie" farbe={FREI_FARBE} /><Probe art="linie" farbe={VERDECKT_FARBE} strich="6 4" /></>,
+      text: 'Sichtdreieck Auto von D bis A: grün frei, rot gestrichelt verdeckt' }] : []),
+    ...(veloDa ? [{ probe: <Probe art="linie" farbe={VELO_FARBE} strich="6 4" />, text: 'Sichtdreieck Velo von D bis A (verdeckt rot fein gestrichelt); Veloachse fein gestrichelt' }] : []),
+    ...(trottoirDa ? [{ probe: <Probe art="linie" farbe={TROTTOIR_FARBE} />, text: "Sichtdreieck Trottoir von D' (verdeckt rot gestrichelt); Zufussgehende als Ring am Ende von A" }] : []),
+    ...(ueberholDa ? [{ probe: <Probe art="linie" farbe={FREI_FARBE} strich="2 3" />, text: 'Überholfall (ausserorts, Ziffer 6): feines Sichtdreieck auf den Gegenfahrstreifen' }] : []),
+    { probe: <Probe art="linie" farbe="#ffffff" strich="6 4" dunkel />, text: 'Fahrstreifenachse ab K, Beschriftung am Ende von A' },
+    { probe: <Probe art="linie" farbe={ZUFAHRT_FARBE} strich="6 4" dunkel />, text: e.zufahrtVelo ? 'Achse des Velogegenverkehrs auf der Zufahrt' : 'Zufahrtsachse' },
+    ...(e.haltelinie ? [{ probe: <Probe art="linie" farbe="#ffffff" dunkel />, text: 'Halte- oder Wartelinie (Vorderkante)' }] : []),
+    { probe: <Probe art="flaeche" farbe={FB_FARBE} rand="#ffffff" dunkel />, text: e.zufahrtVelo ? <>F<sub>B</sub>: Velo gegen die Einbahn auf der Zufahrt, velofahrende Person bei D</> :
+      <>F<sub>B</sub>: wartendes Fahrzeug auf der Zufahrt, D am Fahrer*innensitz</> },
+    ...(e.richtungen.some(r => r.status !== 'keine_zufahrt') ? [{ probe: <Probe art="flaeche" farbe={FA_FARBE} rand="#111827" />,
+      text: <>F<sub>A</sub>: Fahrzeug mit Vortritt, Front am Ende von A (Symbol; bei grossem Ausschnitt vergrössert)</> }] : []),
+    ...(e.richtungen.some(r => r.velo) ? [{ probe: <Probe art="flaeche" farbe={VELO_FARBE} rand={VELO_FARBE} />, text: 'Velo mit Vortritt, Vorderrad am Ende von A (Symbol)' }] : []),
+    ...hindArten.map(x => ({ probe: <Probe art="flaeche" farbe={x.farbe} rand={x.farbe} deckung={0.4} />, text: `Hindernis: ${x.text}` })),
+    ...(wirkungen.has('voll') ? [{ probe: <Probe art="rand" farbe={TREFFER_FARBE.voll} />, text: 'Rand dunkelrot: verdeckt das Sichtdreieck bis A' }] : []),
+    ...(wirkungen.has('palisade') ? [{ probe: <Probe art="rand" farbe={TREFFER_FARBE.palisade} />, text: 'Rand gelb: Palisade (Bäume)' }] : []),
+    ...(wirkungen.has('hinweis') ? [{ probe: <Probe art="rand" farbe={TREFFER_FARBE.hinweis} strich="6 4" />, text: 'Rand violett gestrichelt: nur Hinweis (Zweiräder, Zaun)' }] : []),
+    { probe: <Probe art="punkt" farbe={D_FARBE} rand={e.Dhand ? D_HAND_FARBE : D_RAND_FARBE} />, text: `D: Augpunkt ${e.zufahrtVelo ? 'der velofahrenden Person' : 'am Fahrer*innensitz'}${e.Dhand ? ', oranger Rand: von Hand' : ''}` },
+    ...(e.trottoirPruefung ? [{ probe: <Probe art="punkt" farbe={TROTTOIR_FARBE} rand="#111827" />, text: "D': Augpunkt für die Sicht aufs Trottoir" }] : []),
+    { probe: <Probe art="punkt" farbe="#ffffff" rand="#111827" />, text: 'K: Kreuzungspunkt der Zufahrtsachse mit der Fahrstreifenachse' },
+    ...(kn ? [{ probe: <Probe art="punkt" farbe={NR_GEWAEHLT_FARBE} rand="#0f172a" />, text: `Nummern: Arme im Uhrzeigersinn ab Norden${kn.grundstueck ? ', Z = Grundstückzufahrt' : ''}; grün die gewählte Zufahrt` }] : []),
+    ...(m ? [{ probe: <Probe art="linie" farbe="#6b7280" strich="8 3 2 3" />, text: `Rechtsvortritt, schmale Zufahrt (Abb. 5): Sichtlinien von D alle ${ENG_SCHRITT_M} m auf dem Pfad über den Schnitt der Achsen; grau frei, rot verdeckt, dick rot die erste verdeckte` }] : []),
+  ]
   return (
     <figure className="bericht-karte">
       <div className="bericht-bild" style={{ aspectRatio: `${bw} / ${bh}` }}>
@@ -169,7 +245,7 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
           {/* Verdecker im Sichtdreieck bis A: Rand rot (verdeckt), gelb (Palisade), violett gestrichelt (nur Hinweis) */}
           {treffer.map((t, i) => <path key={'v' + i} d={pfad([t.ring])} fill="none" stroke={t.wirkung === 'voll' ? '#7f1d1d' : TREFFER_FARBE[t.wirkung]}
             strokeWidth={3} strokeDasharray={t.wirkung === 'hinweis' ? '6 4' : undefined} />)}
-          {/* Velo: Petrol gestrichelt, verdeckt rot gestrichelt; Veloachse */}
+          {/* Velo: Türkis gestrichelt, verdeckt rot gestrichelt; Veloachse */}
           {e.richtungen.map(r => sichtZeigen(sicht, 'velo', richtungSichtId(e, r)) && r.velo && <g key={'velo' + r.richtung}>
             {r.velo.dreieckFrei.length >= 3 && <path d={pfad([r.velo.dreieckFrei])} fill={VELO_FARBE} fillOpacity={0.08} stroke={VELO_FARBE}
               strokeWidth={2.5} strokeDasharray={STRICH_VELO} />}
@@ -248,31 +324,13 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
         </svg>
       </div>
       <figcaption className="klein">
-        {sichtBildText(sicht, (['auto', 'velo', 'trottoir', 'ueberholen'] as SichtArt[]).filter(a =>
-          a === 'auto' ? e.richtungen.some(r => r.status !== 'keine_zufahrt') || !!m : a === 'velo' ? e.richtungen.some(r => r.velo) :
-          a === 'trottoir' ? !!e.trottoirPruefung : e.richtungen.some(r => r.ueberholfall)))}{' '}
-
-        {status === 'laedt' && <span className="nicht-drucken">Luftbild wird geladen … </span>}
-        {(status === 'fehler' || status === 'zeit') && <span className="warnung">Luftbild nicht geladen: Kartenbild ohne Hintergrund. </span>}
-        {(status === 'fehler' || status === 'zeit') && <span className="nicht-drucken">
-          {status === 'zeit' ? `Noch keine Antwort nach ${BILD_ZEITGRENZE_MS / 1000} s; es erscheint, sobald es eintrifft. ` : ''}
-          <button className="zweit klein" onClick={() => setVersuch(v => v + 1)}>erneut versuchen</button>{' '}</span>}
-        Ausschnitt {Math.round(wM)} × {Math.round(hM)} m, Norden oben (LV95). Grau: Fahrbahn und Gebäude (AV). Sichtdreiecke Motorfahrzeuge
-        von D bis A: grün durchgezogen frei, rot gestrichelt verdeckt; Velo blaugrün gestrichelt (Veloachse fein gestrichelt, Velo am Ende von
-        A); Trottoir indigo von D' (Zufussgehende als Ring am Ende von A). Weiss gestrichelt: Fahrstreifenachsen ab K, beschriftet am Ende
-        von A (Velo verdeckt: rot fein gestrichelt, Trottoir verdeckt: rot gestrichelt); orange gestrichelt: {e.zufahrtVelo ? 'Achse des Velogegenverkehrs auf der Zufahrt' : 'Zufahrtsachse'};{' '}
-        {e.zufahrtVelo ? <>dunkles Velo: F<sub>B</sub> als Velo (Velo gegen die Einbahn auf der Zufahrt, velofahrende Person bei D)</> : <>dunkles Fahrzeug F<sub>B</sub> auf der
-        Zufahrt</>}, helles F<sub>A</sub> mit der Front bei A
-        (Personenwagen, nur Darstellung). Farbige Flächen: Hindernisse (blau Parkfeld Auto, blaugrün Velo, pink Motorrad, braun Baum, orange
-        Hecke und Mauer, violett Zaun, dunkelbraun übriges Hindernis); Rand dunkelrot: Verdecker im Sichtdreieck bis A, gelb: Palisade, violett gestrichelt: nur Hinweis.
-        {e.haltelinie && <> Weisse Querlinie: Halte- oder Wartelinie (Vorderkante).</>}
-        {e.richtungen.some(r => r.ueberholfall) && <> Überholfall (ausserorts, Ziffer 6): schwaches, fein gestricheltes Sichtdreieck auf den
-          Gegenfahrstreifen.</>}
-        {' '}D: weisser Punkt mit dunklem Rand {e.zufahrtVelo ? 'bei der velofahrenden Person' : 'am Fahrer*innensitz'} von F<sub>B</sub>{e.Dhand ? ', oranger Rand: von Hand' : ''}.
-        {kn && <> Nummern: Arme im Uhrzeigersinn ab Norden{kn.grundstueck ? ', Z = Grundstückzufahrt (am Zufahrtspunkt)' : ''}; grün die
-          gewählte Zufahrt.</>}
-        {m && <> Rechtsvortritt, schmale Zufahrt (Abb. 5, Konstruktion nach bfu BM.021 Abb. 4): Sichtlinien von D zu den Punkten alle{' '}
-          {ENG_SCHRITT_M} m auf dem Pfad über den Schnitt der Achsen (strichpunktiert); grau frei, rot verdeckt, dick rot die erste verdeckte.</>}
+        <p className="legende-satz">{sichtSatz(e, sicht)} Ausschnitt {Math.round(wM)} × {Math.round(hM)} m, Norden oben (LV95).{' '}
+          {status === 'laedt' && <span className="nicht-drucken">Luftbild wird geladen … </span>}
+          {(status === 'fehler' || status === 'zeit') && <span className="warnung">Luftbild nicht geladen: Kartenbild ohne Hintergrund. </span>}
+          {(status === 'fehler' || status === 'zeit') && <span className="nicht-drucken">
+            {status === 'zeit' ? `Noch keine Antwort nach ${BILD_ZEITGRENZE_MS / 1000} s; es erscheint, sobald es eintrifft. ` : ''}
+            <button className="zweit klein" onClick={() => setVersuch(v => v + 1)}>erneut versuchen</button>{' '}</span>}</p>
+        <ul className="legende">{legende.map((l, i) => <li key={i}>{l.probe}<span>{l.text}</span></li>)}</ul>
       </figcaption>
     </figure>
   )

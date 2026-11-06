@@ -32,7 +32,7 @@ import { BESCHRIFT_ZOOM, EBENEN, ebenenFarbe, ebenenSichtbar, ebenenSymbol, type
 // Übergänge, Arme zum Wählen der Zufahrt, Beobachtungspunkt D, Sichtdreiecke, Fahrstreifenachsen, verdeckende Gebäude.
 // E2a aus fgsCheck: Zeichenwerkzeuge (Klick setzt Punkte, Doppelklick schliesst, Fadenkreuz), Hindernisse und Vorschläge,
 // Ecken ziehen; neu: Verdecker im Sichtdreieck hervorgehoben (voll rot, Palisade gelb, Hinweis violett gestrichelt).
-// E3b: Velo-Sichtdreieck (Petrol gestrichelt), Veloachse und Velosymbol am Ende von A; Trottoir: Dreiecke von D' zu den
+// E3b: Velo-Sichtdreieck (Türkis gestrichelt), Veloachse und Velosymbol am Ende von A; Trottoir: Dreiecke von D' zu den
 // Trottoirpunkten (Bernstein), Zufussgehende (Punkt mit Ring) am Ende von A, D'.
 // E2b: Werkzeuge «Haltelinie setzen» und «Zufahrt setzen» (Grundstückzufahrt, zweiter Klick zeichnet die Richtung), D zum
 // Ziehen (D von Hand), Haltelinie als Querlinie, Nullpunkt von B, Zufahrtspunkt.
@@ -58,8 +58,9 @@ export const ZUFAHRT_FARBE = '#f59e0b'
 /** Fahrzeuge (Vogelperspektive, nur Darstellung): FB vortrittsbelastet auf der Zufahrt, FA vortrittsberechtigt am Ende von A */
 export const FB_FARBE = '#1e293b'
 export const FA_FARBE = '#f8fafc'
-/** E3b: Velo-Prüfung (Petrol, wie VeloroutenCheck) und Trottoir-Prüfung (Bernstein, wie fgsCheck) */
-export const VELO_FARBE = '#0f766e'
+/** E3b: Velo-Prüfung (Türkis: auf Luftbildern mit Grün und Grau gut sichtbar; das Petrol des VeloroutenCheck ging dort unter, 06.11.2026)
+ *  und Trottoir-Prüfung (Indigo) */
+export const VELO_FARBE = '#06b6d4'
 export const TROTTOIR_FARBE = '#4f46e5'   // Indigo (Orange nur für die Zufahrt)
 const SCHEIBE_FARBE = '#94a3b8'
 /** Nummernschild der gewählten Zufahrt (App-Farbe; Karte: CSS .arm-nr.gewaehlt, Bericht: Kartenbild) */
@@ -91,7 +92,7 @@ export const HINDERNIS_FARBE: Record<string, string> = {
 export const hindernisFarbe = (h: Hindernis): string =>
   h.art === 'parkfeld' ? HINDERNIS_FARBE[h.klasse] : h.art === 'laengsparkierung' ? HINDERNIS_FARBE.auto : HINDERNIS_FARBE[h.art]
 /** Massnahmen (E3a): hervorgehobenes Hindernis */
-export const HERVOR_FARBE = '#06b6d4'
+export const HERVOR_FARBE = '#d946ef'   // Fuchsia (Türkis ist seit 06.11.2026 das Velo)
 /** Verdecker im Sichtdreieck bis A: voll, Palisade, Hinweis */
 export const TREFFER_FARBE: Record<string, string> = { voll: '#dc2626', palisade: '#facc15', hinweis: '#a855f7' }
 /** Strichmuster der Vorschläge (OSM, Baumkataster) */
@@ -248,7 +249,7 @@ function veloZeichnen(ebene: L.LayerGroup, mitte: P, richtung: P, farbe: string,
   const grad = Math.atan2(-richtung[1] / n, richtung[0] / n) * 180 / Math.PI
   const w = VELO_SYMBOL_PX, h = Math.round(VELO_SYMBOL_PX / 3)
   // Vogelperspektive, Fahrt nach rechts: Hinterrad, Rahmen, Vorderrad, Lenker quer, Kopf des Fahrers
-  const html = `<svg viewBox="0 0 60 20" width="${w}" height="${h}" style="display:block;overflow:visible;transform:rotate(${grad}deg)">` +
+  const html = `<svg viewBox="0 0 60 20" width="${w}" height="${h}" style="display:block;overflow:visible;transform:rotate(${grad}deg);filter:drop-shadow(0 0 1.5px #0f172a) drop-shadow(0 0 1px #0f172a)">` +
     `<rect x="2" y="7" width="20" height="6" rx="3" fill="${farbe}" stroke="${rand}" stroke-width="1.5"/>` +
     `<rect x="38" y="7" width="20" height="6" rx="3" fill="${farbe}" stroke="${rand}" stroke-width="1.5"/>` +
     `<rect x="18" y="8.5" width="24" height="3" fill="${farbe}" stroke="${rand}" stroke-width="1"/>` +
@@ -842,7 +843,7 @@ export default function Karte(props: {
             q => zeige(autoUmriss(m, einheit(sub(q, m)))), q => cb.current.onFaHand(r.richtung, { mitte: m, richtung: einheit(sub(q, m)) }), m)
         }
       }
-      // Velo (E3b): Sichtdreieck Petrol gestrichelt, Fläche schwach; verdeckter Teil rot gestrichelt; Velo am Ende von A
+      // Velo (E3b): Sichtdreieck Türkis gestrichelt, Fläche schwach; verdeckter Teil rot gestrichelt; Velo am Ende von A
       const v = r.velo
       if (v) {
         const vn = `Velo ${name}`
