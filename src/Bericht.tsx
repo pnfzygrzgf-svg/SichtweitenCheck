@@ -3,10 +3,7 @@ import { ZUFAHRT_HERKUNFT } from './rechner/grundstueck'
 import { MassBild, useSichtWahl, sichtZeigen, sichtMassZeigen, richtungSichtId, type SichtArt, type SichtWahl } from './Sichtfelder'
 import { bundBelegText } from './daten/anbieter/gemeinsam/bundBelege'
 import { signalText } from './daten/anbieter/gemeinsam/regionalSignale'
-import { regionalDienst } from './daten/anbieter/gemeinsam/regionalDienste'
-import { zhStandText } from './daten/anbieter/gemeinsam/zuerich'
-import { quellenQualitaetText } from './daten/anbieter/gemeinsam/qualitaet'
-import { bavDatenstandText } from './daten/anbieter/gemeinsam/bav'
+import { BerichtQuellenTabelle, berichtQuellenZeilen } from './BerichtQuellen'
 // ── Bericht (E4a): Druckansicht eines Falls, als PDF über den Druckdialog des Browsers ──
 //
 // Vorlage: Bericht.tsx des fgsCheck. Eigene Ansicht über der App (die Karte bleibt darunter bestehen), als Portal direkt im body,
@@ -18,9 +15,8 @@ import { bavDatenstandText } from './daten/anbieter/gemeinsam/bav'
 // Normbezüge nur als Nummer, Ziffer, Tabelle und Zahlenwerte, kein Normtext. Status zusätzlich als Zeichen und Text (texte.ts),
 // im Bild zusätzlich als Strichart (frei durchgezogen, verdeckt gestrichelt): schwarz-weiss lesbar.
 
-import { Fragment, memo, useEffect, useMemo, useState } from 'react'
-import { regelnDesFalls } from './regeln'
-import { begriffeImText } from './begriffe'
+import { memo, useEffect, useMemo, useState } from 'react'
+import { regelnDesFalls, WERKE } from './regeln'
 import { RegelnFall } from './RegelUebersicht'
 import { createPortal } from 'react-dom'
 import type { Fall } from './fall'
@@ -32,7 +28,7 @@ import type { AvFlaeche } from './daten/av'
 import { hindernisRing, type Hindernis } from './rechner/hindernisse'
 import { autoUmriss, autoScheibe, fbLage, fbVeloLage, faAnzeige, veloTeile, veloLage, PW_LAENGE_M, VELO_LAENGE_M } from './rechner/fahrzeug'
 import { wgs, add, dist, type P, sub } from './geo'
-import { wmsBildUrl, ladeFlugjahr, LUFTBILD_QUELLE } from './daten/luftbild'
+import { wmsBildUrl, ladeFlugjahr } from './daten/luftbild'
 import { NR_GEWAEHLT_FARBE, AV_FARBEN, STATUS_FARBE, FREI_FARBE, VERDECKT_FARBE, D_FARBE, D_RAND_FARBE, D_HAND_FARBE, ZUFAHRT_FARBE, FB_FARBE, FA_FARBE, VELO_FARBE, TROTTOIR_FARBE,
   TREFFER_FARBE, hindernisFarbe, hindernisText } from './Karte'
 import { ausschnitt, bildPixel, svgAbbildung, massstab, berichtPunkte, imAusschnitt, schilder, VB, type QuellenStand } from './berichtbild'
@@ -90,6 +86,19 @@ const STRICH_VELO_VERDECKT = '3 4'
 const datum = (d: Date) => d.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' })
 const datumIso = (s: string | undefined) => (s ? datum(new Date(s)) : '–')
 const tausender = (x: number) => x.toFixed(1).replace(/\B(?=(\d{3})+(?!\d))/g, '’').replace('.', ',')
+/** Status mit dem oberen Wert als Zahl */
+const gesamtMitWert = (r: RichtungErgebnis): string => gesamtText(r).replace('oberer Wert', `oberer Wert ${r.erforderlichOben} m`)
+/** Werke, die der Bericht nennt, ohne dass sie das Ergebnis tragen: ihre Rolle steht dabei */
+function nebenWerke(e: Ergebnis): string[] {
+  const rs = e.richtungen.filter(r => r.status !== 'keine_zufahrt')
+  const u = e.strasse.ungunst
+  const ausgeloest = [u.fahrstreifen && 'Fahrstreifen', u.neigung && 'Gefälle', u.schwerverkehr && 'Schwerverkehr'].filter(Boolean)
+  return [
+    ...(rs.some(r => r.anhalte && !r.anhalteAngewendet) ? [`${WERKE['40090'].name} (2019-03), Abb. 2, S. 5: Anhaltesichtweite geprüft, hier nicht angewendet`] : []),
+    ...(e.richtungen.some(r => r.velo) ? [`${WERKE.BFU.name} (2022), Tab. 2, S. 5: Vergleichswert Velo`] : []),
+    ...(!e.rechtsvortritt ? [`${WERKE.SO.name}, S. 3: Masse für ungünstige Verhältnisse auch ausserhalb des Kantons angewendet; ${ausgeloest.length ? `ausgelöst durch ${ausgeloest.join(', ')}` : 'hier nicht ausgelöst'}`] : []),
+  ]
+}
 const vorhandenText = (vorhanden: number, bisEnde: boolean) => `${bisEnde ? '≥ ' : ''}${f1(vorhanden)} m`
 
 /** Hindernisse für das Bild: Eingaben des Falls und die zählenden amtlichen Parkfelder */
@@ -330,7 +339,7 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
           {(status === 'fehler' || status === 'zeit') && <span className="nicht-drucken">
             {status === 'zeit' ? `Noch keine Antwort nach ${BILD_ZEITGRENZE_MS / 1000} s; es erscheint, sobald es eintrifft. ` : ''}
             <button className="zweit klein" onClick={() => setVersuch(v => v + 1)}>erneut versuchen</button>{' '}</span>}</p>
-        <ul className="legende">{legende.map((l, i) => <li key={i}>{l.probe}<span>{l.text}</span></li>)}</ul>
+        <ul className="bild-legende">{legende.map((l, i) => <li key={i}>{l.probe}<span>{l.text}</span></li>)}</ul>
       </figcaption>
     </figure>
   )
@@ -359,7 +368,8 @@ function ErgebnisTabelle({ e }: { e: Ergebnis }) {
           {zeile('Längsneigung i', auto(r => <>{r.neigungUnbekannt ? 'unbekannt' : `${fi(r.neigung)} %`}<div className="klein">{r.neigungQuelle}</div></>))}
           {zeile('A nach Strassentyp', auto(r => <>{r.typWert} m<div className="klein">{r.typText}; Tab. 1 {r.erforderlichUnten} bis {r.erforderlichOben} m</div></>))}
           {zeile('Anhaltesichtweite', auto(r => r.anhalte ? <>{r.anhalte.meter} m<div className="klein">VSS 40 090b Abb. 2, VP {r.anhalte.stufe} km/h;{' '}
-            {r.anhalteAngewendet ? (r.neigungUnbekannt ? `angewendet, Neigung unbekannt (strengster Wert bei ${fi(r.anhalte.i)} %)` : 'angewendet') :
+            {r.anhalteAngewendet ? (r.neigungUnbekannt ? `angewendet, Neigung unbekannt (strengster Wert bei ${fi(r.anhalte.i)} %)` :
+              r.anhalte.meter <= r.typWert ? 'geprüft, nicht höher als Tab. 1' : 'angewendet') :
               `nicht angewendet (|i| bis ${NEIGUNG_EBEN_PROZENT} %)`}{r.anhalte.unsicher ? `; Kurve ${r.anhalte.verlaengert ? 'verlängert' :
               'gestrichelt'}, unsicher` : ''}</div></> :
             leer('unter 30 km/h keine Kurve')))}
@@ -383,7 +393,8 @@ function ErgebnisTabelle({ e }: { e: Ergebnis }) {
         {zeile('Status Velo', r => r.velo ? <><b>{statusMarke(r.velo.status)} {STATUS_TEXT_TEIL[r.velo.status]}</b>{r.velo.veloHand &&
           <div className="klein">Veloachse von Hand</div>}</> : leer('–'), 'sV')}
         {zeile('Vergleich bfu', r => { if (!r.velo) return leer('–'); const b = bfuVelo(r.velo.neigung, r.velo.neigungUnbekannt)
-          return <>{b.A} m<div className="klein">{b.text}; Vergleichswert, ohne Wirkung (massgebend VSS 40 273 Tab. 3)</div></> }, 'bV')}
+          const belegt = r.velo.vorhanden >= b.A ? '' : r.velo.bisEnde ? `; geprüft bis ${f1(r.velo.vorhanden)} m, Vergleichswert damit nicht belegt` : '; nicht erreicht'
+          return <>{b.A} m<div className="klein">{b.text}; Vergleichswert, ohne Wirkung (massgebend VSS 40 273 Tab. 3){belegt}</div></> }, 'bV')}
         <tr className="bericht-zwischen"><td colSpan={rs.length + 1}><b>Trottoir</b> (Tab. 2, von D'){e.trottoirueberfahrt ?
           ` – Trottoirüberfahrt, Phase Trottoir (D' = B ${f2(B_INNERORTS_M)} m hinter dem hinteren Rand, VSS 40 273 Ziffer 13.2; Gehlinie ` +
           `${f2(TUE_GEHLINIE_M)} m vor dem hinteren Rand der Überfahrt)` : ''}</td></tr>
@@ -453,8 +464,8 @@ function VerdeckerBlock({ e }: { e: Ergebnis }) {
     for (const t of r.ueberholfall?.verdeckerListe ?? []) zeilen.push({ wo: `${lageKurz(r)}, Überholfall`, t })
     if (r.palisade && r.palisade.anteil > 0) zusatz.push(`${lageText(r)}: Bäume verdecken ${Math.round(r.palisade.anteil * 100)} % der Strecke ` +
       `K bis A, längste Strecke ${f1(r.palisade.laengste)} m (${r.palisade.zaehlt ? 'zählt als Palisade' : 'zählt nicht als Palisade'}).`)
-    if (r.verdecker && !r.verdeckerListe.some(t => t.id === r.verdecker!.id)) zusatz.push(`${lageText(r)}: Sichtweite begrenzt durch ` +
-      `${r.verdecker.art} ${r.verdecker.name} (${r.verdecker.quelle}) bei ${f1(r.verdecker.sVerdeckt)} m, ausserhalb von A.`)
+    if (r.verdecker && !r.verdeckerListe.some(t => t.id === r.verdecker!.id)) zusatz.push(`${lageText(r)}: Sicht endet bei ${f1(r.vorhanden)} m, ` +
+      `ausserhalb von A, an ${r.verdecker.name}.`)
   }
   for (const t of e.trottoirPruefung?.richtungen ?? []) for (const v of t.verdeckerListe) zeilen.push({ wo: `Trottoir ${lageKurz(t)}`, t: v })
   return (
@@ -467,8 +478,8 @@ function VerdeckerBlock({ e }: { e: Ergebnis }) {
           <td>{t.quelle}</td><td>{WIRKUNG_TEXT[t.wirkung]}</td><td>{f1(t.sErst)} m</td><td>{f1(t.strecke)} m</td></tr>)}</tbody>
       </table> : <p className="klein">Keine Fläche schneidet eine Sichtlinie bis A.</p>}
       {zusatz.length > 0 && <ul className="klein">{zusatz.map((x, i) => <li key={i}>{x}</li>)}</ul>}
-      <p className="klein">Verdeckt ab: erster verdeckter Zielpunkt ab K entlang der Achse; Strecke: verdeckte Länge der Achse bis A. Palisade:
-        Bäume zählen erst, wenn sie zusammenhängend eine Mindeststrecke verdecken.</p>
+      {zeilen.length > 0 && <p className="klein">Verdeckt ab: erster verdeckter Zielpunkt ab K entlang der Achse; Strecke: verdeckte Länge der
+        Achse bis A. Palisade: Bäume zählen erst, wenn sie zusammenhängend eine Mindeststrecke verdecken.</p>}
     </section>
   )
 }
@@ -628,11 +639,8 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
     window.addEventListener('keydown', esc)
     return () => window.removeEventListener('keydown', esc)
   }, [schliessen])
-  const abruf = (k: string) => (quellen[k]?.zeit ? `, abgerufen ${datumIso(quellen[k].zeit)}` : '') + `; ${quellenQualitaetText(quellen[k])}`
   const rv = !!e.rechtsvortritt
   const hindernisse = useMemo(() => bildHindernisse(fall, e), [fall, e])
-  // ohne die Herleitung (technisch): sie steht seit 05.11.2026 nur noch im Panel, nicht im Bericht
-  const begriffe = useMemo(() => begriffeImText([...e.annahmen, ...hinweise]), [e, hinweise])
 
   return createPortal(
     <div className="bericht" role="dialog" aria-label="Bericht">
@@ -644,9 +652,10 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
       <article className="bericht-seite">
         {/* Druckrand als Rahmen (wie fgsCheck): Kopf und Fuss der Tabelle wiederholen sich auf jeder gedruckten Seite, so kommt der
             Bericht ohne Seitenrand aus (@page margin 0) und der Browser setzt keine eigene Kopf- und Fusszeile dazu. Zwei Zeilen:
-            Seite 1 Kopf und Kartenbild, ab Seite 2 das Ergebnis. */}
+            Seite 1 Kopf mit Ergebnis, Kartenbild und Legende, ab Seite 2 Ergebnistabelle und Grundlagen. */}
         <table className="bericht-rahmen">
-        <thead><tr><td><div className="bericht-rand-oben" /></td></tr></thead>
+        {/* Fallkennung auf jeder Seite (lose Blätter); der Seitenzähler bleibt im wiederholten Kopf in Firefox auf 0 */}
+        <thead><tr><td><div className="bericht-rand-oben"><span className="bericht-kennung">SichtweitenCheck v{__APP_VERSION__} · {fall.ort.bezeichnung?.trim() || kn?.name || 'Zufahrt'} · {datum(heute)}</span></div></td></tr></thead>
         <tfoot><tr><td><div className="bericht-rand-unten" /></td></tr></tfoot>
         <tbody><tr><td>
         <header>
@@ -658,7 +667,7 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
         <section className="bericht-block">
           <h2>Ort und Zufahrt</h2>
           <table className="bericht-zahlen"><tbody>
-            <tr><td>Bezeichnung</td><td>
+            <tr className={bez.trim() ? '' : 'nicht-drucken'}><td>Bezeichnung</td><td>
               <input className="nicht-drucken bericht-eingabe" type="text" maxLength={BEZEICHNUNG_MAX}
                 placeholder="z. B. Adresse, Projekt (erscheint im Bericht und in der Fall-Datei)"
                 value={bez} onChange={ev => setBez(ev.target.value)} onBlur={bezUebernehmen}
@@ -666,26 +675,17 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
               <span className="nur-drucken">{bez.trim() ? bez : '–'}</span>
             </td></tr>
             <tr><td>Strassen</td><td>{kn?.name || '–'}</td></tr>
-            <tr><td>Koordinaten</td><td>LV95 E {tausender(ort[0])}, N {tausender(ort[1])} · WGS84 {lat.toFixed(6)}, {lon.toFixed(6)}</td></tr>
             <tr><td>{fall.ort.zufahrtspunkt ? 'Grundstückzufahrt' : 'OSM-Knoten'}</td><td>{fall.ort.zufahrtspunkt ?
               `Zufahrtspunkt am Fahrbahnrand (LV95), Richtung ${e.zufahrtspunkt?.gezeichnet ? 'gezeichnet' : e.zufahrtspunkt?.weg != null ?
                 `entlang des OSM-Wegs ${e.zufahrtspunkt.weg}` : 'senkrecht zum Rand'}${e.zufahrtspunkt?.herkunft ? ` (${ZUFAHRT_HERKUNFT[e.zufahrtspunkt.herkunft]})` : ''}${e.zufahrtspunkt?.winkel != null ? `, ${f1(e.zufahrtspunkt.winkel)}° zur lokalen Strassenachse` : ''}; Vortrittsstrasse ${e.zufahrtspunkt?.strasse ?? '–'}` :
               `Knoten ${fall.ort.knoten ?? kn?.id ?? '–'}${kn ? `, ${kn.arme.length} Arme` : ''}`}</td></tr>
-            {kn && <tr><td>Arme</td><td>{nachNr(kn.arme).map(armText).join(', ')}<div className="klein">Nummern im Uhrzeigersinn ab Norden wie
-              auf der Karte{kn.grundstueck ? ', Z = Grundstückzufahrt' : ''}</div></td></tr>}
             <tr><td>Zufahrt</td><td>{e.zufahrtName}{fall.ort.zufahrt === null && !fall.ort.zufahrtspunkt ? ' (Vorschlag der App)' : ''}
               {e.zufahrtVelo && <div className="klein">nur Velos gegen die Einbahn (Einzelheiten unter Annahmen und Hinweise)</div>}</td></tr>
             <tr><td>Regelung für die gewählte Zufahrt</td><td>{REGELUNG_TEXT[e.regelung]} ({e.regelungGewaehlt ? 'von Hand' : `automatisch ermittelt: ${e.regelungQuelle}`})</td></tr>
-            <tr><td>Strassentyp</td><td>{rv ? 'gilt beim Rechtsvortritt nicht (Teil E)' : `${STRASSENTYP_TEXT[e.strasse.typ]} (${e.strasse.typGewaehlt ?
-              'von Hand' : `Annahme aus ${e.strasse.typQuelle}`})`}</td></tr>
-            <tr><td>Beobachtung</td><td>B {f2(e.B)} m ({rv ? 'Rechtsvortritt, Abb. 4' : e.ausserorts ? 'ausserorts' : 'innerorts'}) ab der{' '}
-              {e.nullpunktText}; D {e.Dhand ? 'von Hand' : e.zufahrtVelo ? 'bei der velofahrenden Person' :
-                `am Fahrer*innensitz, ${f2(FAHRERSITZ_M)} m links der Achse`}; Einbiegewinkel rund
-              {' '}{Math.round(e.einbiegewinkel)}°</td></tr>
-            {e.trottoirueberfahrt && <tr><td>Trottoirüberfahrt</td><td>Breite {f2(e.trottoirueberfahrt.breite)} m
-              ({TUE_BREITE_KURZ[e.trottoirueberfahrt.breiteQuelle]}), hinterer Rand {f2(e.trottoirueberfahrt.laenge)} m hinter der Bordkante;{' '}
-              {e.trottoirueberfahrt.regelungText}<div className="klein">{e.trottoirueberfahrt.breiteText}</div></td></tr>}
-            <tr><td>Daten geladen</td><td>{datumIso(fall.quellen.geladen)}</td></tr>
+            <tr><td>Ergebnis</td><td>{e.seiteOhneArm === 'links' && <div>links: kein Arm</div>}{e.richtungen.map(r => <div key={r.richtung}>
+              {lageText(r)}, {r.strasse}:{' '}<b>{statusMarke(r.gesamt, !!r.rv)} {gesamtMitWert(r)}</b></div>)}
+              {e.seiteOhneArm === 'rechts' && <div>rechts: kein Arm</div>}
+              <div className="klein">Geprüft im Grundriss; Hindernishöhen, Kuppen und Senken sind nicht geprüft.</div></td></tr>
           </tbody></table>
         </section>
 
@@ -696,9 +696,6 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
         <section className="bericht-block">
           <h2>Ergebnis</h2>
           {e.lsa && <p className="klein"><b>{LSA_TEXT}</b></p>}
-          <ul className="bericht-status">{e.seiteOhneArm === 'links' && <li>links: kein Arm</li>}{e.richtungen.map(r => <li key={r.richtung}>
-            {lageText(r)}, {r.strasse}:{' '}<b>{statusMarke(r.gesamt, !!r.rv)} {gesamtText(r)}</b></li>)}
-            {e.seiteOhneArm === 'rechts' && <li>rechts: kein Arm</li>}</ul>
           <p className="klein">Gesamtstatus je Richtung: schlechtester Teil (Motorfahrzeuge, Überholfall, Velo, Trottoir). ✓ erfüllt, (✓) bedingt, ✗ nicht
             erfüllt, – keine Prüfung.</p>
           {e.trottoirueberfahrt && <ul className="bericht-status">
@@ -714,16 +711,38 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
           <ErgebnisTabelle e={e} />
         </section>
 
+        <section className="bericht-block druck-block">
+          <h2>Grundlagen</h2>
+          <table className="bericht-zahlen"><tbody>
+            <tr><td>Koordinaten</td><td>LV95 E {tausender(ort[0])}, N {tausender(ort[1])} · WGS84 {lat.toFixed(6)}, {lon.toFixed(6)}</td></tr>
+            {kn && <tr><td>Arme</td><td>{nachNr(kn.arme).map(armText).join(', ')}<div className="klein">Nummern im Uhrzeigersinn ab Norden wie
+              auf der Karte{kn.grundstueck ? ', Z = Grundstückzufahrt' : ''}</div></td></tr>}
+            <tr><td>Strassentyp</td><td>{rv ? 'gilt beim Rechtsvortritt nicht (Teil E)' : `${STRASSENTYP_TEXT[e.strasse.typ]} (${e.strasse.typGewaehlt ?
+              'von Hand' : `Annahme aus ${e.strasse.typQuelle}`})`}</td></tr>
+            <tr><td>Beobachtung</td><td>B {f2(e.B)} m ({rv ? 'Rechtsvortritt, Abb. 4' : e.ausserorts ? 'ausserorts' : 'innerorts'}) ab der{' '}
+              {e.nullpunktText}; D {e.Dhand ? 'von Hand' : e.zufahrtVelo ? 'bei der velofahrenden Person' :
+                `am Fahrer*innensitz, ${f2(FAHRERSITZ_M)} m links der Achse`}; Einbiegewinkel rund
+              {' '}{Math.round(e.einbiegewinkel)}°</td></tr>
+            {e.trottoirueberfahrt && <tr><td>Trottoirüberfahrt</td><td>Breite {f2(e.trottoirueberfahrt.breite)} m
+              ({TUE_BREITE_KURZ[e.trottoirueberfahrt.breiteQuelle]}), hinterer Rand {f2(e.trottoirueberfahrt.laenge)} m hinter der Bordkante;{' '}
+              {e.trottoirueberfahrt.regelungText}<div className="klein">{e.trottoirueberfahrt.breiteText}</div></td></tr>}
+            <tr><td>Daten geladen</td><td>{datumIso(fall.quellen.geladen)}</td></tr>
+          </tbody></table>
+        </section>
+
         <VerdeckerBlock e={e} />
         <MassnahmenBlock e={e} spiegel={fall.spiegel ?? []} />
 
-        <section className="bericht-block">
+        <section className="bericht-block druck-block">
           <h2>Eingaben von Hand</h2>
           {eingaben.length ? <ul className="klein">{eingaben.map((x, i) => <li key={i}>{x}</li>)}</ul> :
             <p className="klein">Keine. Ergebnis aus den geladenen Daten, Rechenregeln und ausgewiesenen Annahmen.</p>}
           <p className="klein">Die Eingaben lassen sich in der App mit «Fall speichern» als Fall-Datei (JSON) sichern und mit «Fall laden»
             wiederherstellen.</p>
-          <h3>Annahmen</h3>
+        </section>
+
+        <section className="bericht-block">
+          <h2>Annahmen</h2>
           <p className="klein">Ziffern, Tabellen, Abbildungen und Seiten ohne Normnummer: VSS 40 273 (2024).</p>
           <ul className="klein">{(e.annahmenThemen ?? e.annahmen.map(text => ({ thema: text, titel: '', text }))).map(t => <li key={t.thema}>
             {t.titel && <b>{t.titel}: </b>}{t.text}</li>)}</ul>
@@ -736,22 +755,10 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
 
         <section className="bericht-block">
           <h2>Quellen</h2>
-          <ul className="klein">
-            <li>Luftbild: {LUFTBILD_QUELLE}{flugjahr ? `, Flugjahr ${flugjahr}` : ''} ({bild === 'ok' ? `Kartenbild: wms.geo.admin.ch, abgerufen ${datum(heute)}` :
-              'Kartenbild ohne Luftbild (nicht geladen)'}){flugjahr ? '' : '; Datenstand unbekannt'}; Vollständigkeit unbekannt</li>
-            <li>Höhenmodell: {fall.quellen.hoehen ?? 'swissALTI3D (swisstopo), nicht geladen'}{abruf(quellen.hoehenBern ? 'hoehenBern' : 'hoehen')}</li>
-            <li>Bodenbedeckung (Fahrbahn, Trottoir, Gebäude): {fall.quellen.av ?? `Amtliche Vermessung, Kanton ${kantone.join(', ') || '–'}, geodienste.ch`}{abruf('av')}</li>
-            <li>Strassennetz, Tempo, Veloführung: © OpenStreetMap-Mitwirkende, ODbL{fall.quellen.osm ? ` (${fall.quellen.osm})` : ''}{abruf('osm')}</li>
-            {fall.quellen.parkkataster && <li>Parkfelder: {fall.quellen.parkkataster}{abruf('parkkataster')}</li>}
-            {fall.quellen.baumkataster && <li>Bäume: {fall.quellen.baumkataster}{abruf('baumkataster')}</li>}
-            {fall.quellen.vsig && <li>Tempo: {fall.quellen.vsig} (Geoportal Stadt Bern, vor OSM){abruf('vsig')}</li>}
-            {fall.amtlicheQuellen?.bav && <li>Haltestellen (nur Kartenquelle): {fall.quellen.bav}; {fall.amtlicheQuellen.bav.halte.length} Punkte,
-              abgerufen {fall.amtlicheQuellen.bav.abgerufen}; Datenstand {bavDatenstandText(fall.amtlicheQuellen.bav)} (Ebene); Vollständigkeit unbekannt.</li>}
-            {(fall.signalEntscheide ?? []).map((x,i) => <li key={`signal:${i}`}>{signalText(x)}</li>)}
-            {(fall.regional?.teile ?? []).map(t => <li key={t.id}>{regionalDienst(t.id)?.name}: {t.objekte.length} Objekte; Datenstand {t.datenstand}, abgerufen {t.abgerufen}; {regionalDienst(t.id)?.lizenz}; Vollständigkeit unbekannt.</li>)}
-            {(['tempo', 'zonen'] as const).map(k => { const z = fall.zuerich?.[k]; return z ? <li key={k}>Stadt Zürich, {k === 'tempo' ? 'signalisierte Geschwindigkeiten' : 'Verkehrszonen'}: {z.objekte.length} Objekte; Datenstand {zhStandText(z)}, abgerufen {z.abgerufen}; CC0; Vollständigkeit unbekannt.</li> : null })}
-            {fall.quellen.gebiet && <li>Gebietsbestimmung: {fall.quellen.gebiet}{abruf('gebiet')}</li>}
-          </ul>
+          <BerichtQuellenTabelle zeilen={berichtQuellenZeilen({ fall, quellen, kantone, luftbild: { flugjahr, geladen: bild === 'ok', abgerufen: datum(heute) },
+            avFuer: 'Fahrbahn, Trottoir, Gebäude', osmFuer: 'Strassennetz, Tempo, Veloführung' })}>
+            {(fall.signalEntscheide?.length ?? 0) > 0 && <ul className="klein">{fall.signalEntscheide!.map((x, i) => <li key={`signal:${i}`}>{signalText(x)}</li>)}</ul>}
+          </BerichtQuellenTabelle>
         </section>
 
         {/* Werke und die im Fall angewendeten Regeln (regeln.ts), ohne Normtabellen; Herkunft je Werk und
@@ -759,20 +766,18 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
         <section className="bericht-block">
           <h2>Werke und angewendete Regeln</h2>
           <RegelnFall gruppen={regelnDesFalls(e)} />
+          {nebenWerke(e).length > 0 && <><p className="klein"><b>Geprüft oder zum Vergleich, ohne Wirkung auf das Ergebnis:</b></p>
+            <ul className="klein">{nebenWerke(e).map(t => <li key={t}>{t}</li>)}</ul></>}
           <p className="klein">Je Werk die Herkunft (Recht, Norm, Fachempfehlung, kantonale Praxis, Annahme der App, Projektentscheid);
             Regeln mit dem Vermerk «nur Hinweis» ändern das Ergebnis nicht. Nur Fundstellen (Ziffer, Seite) und Zahlenwerte; die Normen sind
-            kostenpflichtig, ihr Text ist im Original nachzulesen. Alle Regeln der App stehen im Panel unter «Regeln».</p>
+            kostenpflichtig, ihr Text ist im Original nachzulesen. Alle Regeln stehen in der App unter «Regeln».</p>
         </section>
 
-        {begriffe.length > 0 && <section className="bericht-block">
-          <h2>Begriffe</h2>
-          <dl className="begriffe-liste klein">{begriffe.map(b => <Fragment key={b.id}><dt>{b.name}</dt><dd>{b.text}</dd></Fragment>)}</dl>
-        </section>}
 
         <footer className="bericht-fuss">
           <p><b>Die App ersetzt keine Beurteilung vor Ort.</b> Daten aus offenen Quellen können veraltet oder unvollständig sein (Parkierung,
             Hecken, Mauerhöhen, Signalisation); die Höhe der Hindernisse (Sichtraum) prüft die App nicht.</p>
-          <p>SichtweitenCheck v{__APP_VERSION__} ({MARKE}, Stand {__BUILD_DATUM__}) · {APP_ADRESSE} · Code unter MIT, eigene Inhalte unter CC BY 4.0 ·
+          <p>SichtweitenCheck v{__APP_VERSION__} ({MARKE}, Stand {__BUILD_DATUM__.split('-').reverse().join('.')}) · {APP_ADRESSE} · Code unter MIT, eigene Inhalte unter CC BY 4.0 ·
             eingebundene Daten unter ihren eigenen Lizenzen (siehe Quellen).</p>
         </footer>
         </td></tr></tbody>

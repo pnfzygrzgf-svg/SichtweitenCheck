@@ -57,9 +57,11 @@ export function RegelUebersicht() {
 
 /** Liste der Regeln eines Falls (Bericht): je Werk mit Herkunft die angewendeten Regeln mit Fundstelle; Regeln, die nur einen Hinweis
  *  geben, sind so bezeichnet */
+/** Fundstellen, die nur die Herkunft wiederholen: im Bericht weggelassen (das Werk nennt sie schon) */
+const FUNDSTELLE_OHNE = ['Annahme', 'Festlegung des Projekts']
 export function RegelnFall({ gruppen }: { gruppen: { werk: WerkId; regeln: Regel[] }[] }) {
-  return <ul className="klein">{gruppen.map(g => <li key={g.werk}><b>{WERKE[g.werk].name}</b> ({WERKE[g.werk].ausgabe};{' '}
+  return <ul className="klein">{gruppen.map(g => <li key={g.werk}><b>{WERKE[g.werk].name}</b> ({WERKE[g.werk].ausgabe.replace(`${WERKE[g.werk].name}:`, '')};{' '}
     {WERKE[g.werk].herkunft}):{' '}
-    {g.regeln.map((r, i) => <Fragment key={r.id}>{i ? '; ' : ''}{r.titel} ({r.fundstelle}{r.wirkung === 'nur Hinweis' ?
-      `; ${WIRKUNG_TEXT[r.wirkung]}` : ''})</Fragment>)}</li>)}</ul>
+    {g.regeln.map((r, i) => { const zusatz = [...(FUNDSTELLE_OHNE.includes(r.fundstelle) ? [] : [r.fundstelle]), ...(r.wirkung === 'nur Hinweis' ? [WIRKUNG_TEXT[r.wirkung]] : [])]
+      return <Fragment key={r.id}>{i ? '; ' : ''}{r.titel}{zusatz.length ? ` (${zusatz.join('; ')})` : ''}</Fragment> })}</li>)}</ul>
 }

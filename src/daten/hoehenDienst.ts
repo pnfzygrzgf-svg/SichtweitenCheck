@@ -8,7 +8,7 @@
 
 import type { P } from '../geo'
 import { istAbbruch, type Abruf } from './holen'
-import { ladeProfil, PROFIL_PUNKTE } from './hoehen'
+import { ladeProfil, linieLaenge, PROFIL_PUNKTE } from './hoehen'
 import { HOEHEN_QUELLE, neigungMessung, type ProfilPunkt } from '../rechner/neigung'
 import type { NeigungMessung } from '../rechner/typen'
 import { BERN_DTM_KURZ, ladeBernProfil } from './bernDtm'
@@ -49,8 +49,8 @@ export const hoehenDienst = (name: string | undefined): HoehenDienst | undefined
 export const hoehenName = (d: HoehenDienst): string => `Höhenmodell (${d.kurz}, ${d.anbieter.replace(/^© /, '')}; Profile)`
 
 /** Neigungsmessung des Kerns mit dem Modellnamen des Dienstes als Quelle (der Kern schreibt immer HOEHEN_QUELLE) */
-export function neigungMit(d: HoehenDienst, profil: ProfilPunkt[] | Error): NeigungMessung {
-  const m = neigungMessung(profil)
+export function neigungMit(d: HoehenDienst, profil: ProfilPunkt[] | Error, geplantM?: number): NeigungMessung {
+  const m = neigungMessung(profil, geplantM)
   return d.id === 'swissalti' ? m : { ...m, quelle: m.quelle.replace(HOEHEN_QUELLE, `${d.kurz} (${d.anbieter.replace(/^© /, '')})`) }
 }
 
@@ -59,7 +59,7 @@ export function neigungMit(d: HoehenDienst, profil: ProfilPunkt[] | Error): Neig
 export async function ladeNeigungMit(d: HoehenDienst, linie: P[], signal?: AbortSignal): Promise<[NeigungMessung, Abruf<ProfilPunkt[]> | string]> {
   try {
     const r = await d.laden(linie, PROFIL_PUNKTE, signal)
-    return [neigungMit(d, r.daten), r]
+    return [neigungMit(d, r.daten, linieLaenge(linie)), r]
   } catch (e) {
     if (signal?.aborted || istAbbruch(e)) throw e
     const f = e instanceof Error ? e : new Error(String(e))

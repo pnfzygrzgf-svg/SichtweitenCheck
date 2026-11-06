@@ -489,7 +489,7 @@ const EINTRAEGE: readonly RegelEintrag[] = [
     werte: 'abwärts negativ',
     daten: 'Höhenmodell swissALTI3D' },
   // ── SSV, SVG, VRV ──
-  { id: 'SSV-36', werk: 'SSV', ordnung: 36, fundstelle: 'Art. 36 (Signale 3.01 und 3.02)', titel: 'Stop und Kein Vortritt',
+  { id: 'SSV-36', werk: 'SSV', ordnung: 36, fundstelle: 'Art. 36, Signale 3.01 und 3.02', titel: 'Stop und Kein Vortritt',
     wirkung: 'rechnet mit', thema: 'knoten',
     prueft: 'Mit «Stop» oder «Kein Vortritt» muss die gewählte Zufahrt dem Verkehr auf der anderen Strasse den Vortritt lassen. Die ' +
       'Regelung gilt für diese Zufahrt.',
@@ -522,7 +522,7 @@ const EINTRAEGE: readonly RegelEintrag[] = [
   { id: 'SO-3', werk: 'SO', ordnung: 3, fundstelle: 'S. 3', titel: 'Masse der ungünstigen Verhältnisse (Solothurn)', wirkung: 'rechnet mit',
     thema: 'motorfahrzeuge', gilt: nichtRv,
     prueft: 'Die VSS-Norm nennt keine Masse für ungünstige Verhältnisse. Die App übernimmt die Masse des Kantons Solothurn.',
-    werte: `mehr als ein Fahrstreifen je Richtung; Gefälle über ${NEIGUNG_GROSS_PROZENT} %; Schwerverkehrsanteil über ` +
+    werte: `mehr als ein Fahrstreifen (gilt für die Richtung zum Knoten mit mehreren Fahrstreifen); Gefälle über ${NEIGUNG_GROSS_PROZENT} %; Schwerverkehrsanteil über ` +
       `${SCHWERVERKEHR_PROZENT} %`,
     daten: 'OpenStreetMap (Zahl der Fahrstreifen), Höhenmodell swissALTI3D, deine Eingabe (Schwerverkehrsanteil)' },
   { id: 'BE-2.3', werk: 'TBA_BE', ordnung: 2.3, fundstelle: 'Arbeitshilfe Vortritt, Kap. 2.3 «Stop-Strassen», S. 7', titel: 'Kein Vortritt statt Stop (Bern)',

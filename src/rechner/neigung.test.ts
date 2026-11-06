@@ -178,4 +178,21 @@ describe('E3a: Fall-Datei Version 3', () => {
     expect(fallLesen(datei(2, { links: 0, rechts: -5.5 }))[0].eingaben.neigung).toEqual({ links: null, rechts: -5.5 })
     expect(fallLesen(datei(3, { links: 0, rechts: null }))[0].eingaben.neigung).toEqual({ links: 0, rechts: null })
   })
+  it('Mindestlänge: fehlende Höhen ergeben eine unbekannte Neigung, ein kurzer Arm behält den Messwert mit Hinweis', () => {
+    const kurz = [{ dist: 0, h: 500 }, { dist: 1, h: 500.1 }, { dist: 2, h: 500.2 }]
+    expect(neigungMessung(kurz)).toMatchObject({ i: null, laenge: 2 })
+    expect(neigungMessung(kurz).hinweis).toContain('deckt nur 2 m ab')
+    expect(neigungMessung(kurz, 40).i).toBeNull()                           // lange Linie, kurze Antwort
+    const arm = Array.from({ length: 13 }, (_, i) => ({ dist: i, h: 500 + i * 0.05 }))
+    expect(neigungMessung(arm, 12).i).toBe(-5)
+    expect(neigungMessung(arm, 12).hinweis).toContain('kurze Achse')
+    const gerade20 = Array.from({ length: 21 }, (_, i) => ({ dist: i, h: 500 }))
+    expect(neigungMessung(gerade20, 20)).toMatchObject({ i: 0, hinweis: null })
+  })
+  it('Länge der Messung: die Punkte der Geraden, nicht die verworfenen', () => {
+    const p = [...Array.from({ length: 30 }, (_, i) => ({ dist: i, h: 500 + i * 0.02 })), { dist: 60, h: 540 }]
+    const r = neigungAusProfil(p)!
+    expect(r.ausreisser).toBeGreaterThan(0)
+    expect(r.laenge).toBe(29)
+  })
 })

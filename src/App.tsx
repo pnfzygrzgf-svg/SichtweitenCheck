@@ -240,7 +240,7 @@ function ErforderlichBlock({ s, eingaben, setEingaben, richtungen, rv = false, u
             <p>Bei einer Hauptverkehrsstrasse hebt ein Häkchen den Wert der Tab. 1 vom Zwischenwert auf den oberen Wert. Bei
               Erschliessungs-, Sammel- und Verbindungsstrassen sind ungünstige Verhältnisse nur ein Hinweis: der untere Wert bleibt.</p>
             <p>Automatisch ermittelt: mehr als ein Fahrstreifen je Richtung aus OSM (lanes:forward bzw. lanes:backward, sonst lanes: bei einer
-              Einbahn ab 2, sonst ab 3; hier {s.fahrstreifenQuelle}); grosse Längsneigung bei einem Gefälle über{' '}
+              Einbahn ab 2, sonst ab 3; hier {s.fahrstreifenQuelle}), gilt für die Richtung zum Knoten mit mehreren Fahrstreifen; grosse Längsneigung bei einem Gefälle über{' '}
               {NEIGUNG_GROSS_PROZENT} % in einer Richtung, also |i| über {NEIGUNG_GROSS_PROZENT} % (bei unbekannter Neigung nicht gesetzt:
               kein Mass bekannt); hoher Schwerverkehrsanteil über {SCHWERVERKEHR_PROZENT} % aus dem eingegebenen Anteil, das Häkchen setzt
               ihn von Hand (dann unabhängig vom Anteil).</p>

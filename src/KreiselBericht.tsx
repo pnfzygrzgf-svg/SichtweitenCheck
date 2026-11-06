@@ -1,10 +1,9 @@
 import { swcSichtMasse } from './sichtMasse'
 import { MassBild, useSichtWahl, sichtZeigen, sichtBildText, kreiselSichtId } from './Sichtfelder'
-import { bavDatenstandText } from './daten/anbieter/gemeinsam/bav'
-import { quellenQualitaetText } from './daten/anbieter/gemeinsam/qualitaet'
+import { BerichtQuellenTabelle, berichtQuellenZeilen } from './BerichtQuellen'
 // ── Bericht am Kreisel (K4): Druckansicht mit Skizze (SVG in LV95, ohne Luftbild), Masse, Ablenkungswinkel, Sicht aus der gewählten
 //    Einfahrt (Ak, Velo, Sichtberme, Az als Vergleichswert), Annahmen, Hinweise und Quellen. Gleicher Druckrahmen wie Bericht.tsx; der
-//    vollständige Bericht mit Luftbild, Regeln und Begriffen folgt in K6. ──
+//    vollständige Bericht mit Luftbild und Regeln folgt in K6. ──
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -115,7 +114,6 @@ export default function KreiselBericht({ fall, kn, kantone, quellen, aendern, sc
     window.addEventListener('keydown', esc)
     return () => window.removeEventListener('keydown', esc)
   }, [schliessen])
-  const abruf = (k: string) => (quellen[k]?.zeit ? `, abgerufen ${datumIso(quellen[k].zeit)}` : '') + `; ${quellenQualitaetText(quellen[k])}`
   const nr = (key: string) => k.arme.find(a => a.key === key)?.nr ?? '?'
   const zeile = (name: string, t: KreiselSichtTeil, noetig: string, az = false) => <tr key={name}><td>{name}</td><td>{noetig}</td>
     <td>{f1(t.vorhanden)} m{t.bisEnde ? ' (Linie frei)' : t.verdecker ? `, verdeckt durch ${t.verdecker.name}` : ''}</td>
@@ -136,7 +134,7 @@ export default function KreiselBericht({ fall, kn, kantone, quellen, aendern, sc
       </div>
       <article className="bericht-seite">
         <table className="bericht-rahmen">
-        <thead><tr><td><div className="bericht-rand-oben" /></td></tr></thead>
+        <thead><tr><td><div className="bericht-rand-oben"><span className="bericht-kennung">SichtweitenCheck v{__APP_VERSION__} · {fall.ort.bezeichnung?.trim() || kn.name || String(kn.id)} · {datum(heute)}</span></div></td></tr></thead>
         <tfoot><tr><td><div className="bericht-rand-unten" /></td></tr></tfoot>
         <tbody><tr><td>
         <header>
@@ -217,21 +215,14 @@ export default function KreiselBericht({ fall, kn, kantone, quellen, aendern, sc
         </section>}
         <section className="bericht-block">
           <h2>Quellen</h2>
-          <ul className="klein">
-            <li>Bodenbedeckung (Fahrbahn, Insel, Gebäude): {fall.quellen.av ?? `Amtliche Vermessung, Kanton ${kantone.join(', ') || '–'}, geodienste.ch`}{abruf('av')}</li>
-            <li>Kreisel, Arme, Velobypässe, Tram: © OpenStreetMap-Mitwirkende, ODbL{fall.quellen.osm ? ` (${fall.quellen.osm})` : ''}{abruf('osm')}</li>
-            {fall.quellen.parkkataster && <li>Parkfelder: {fall.quellen.parkkataster}{abruf('parkkataster')}</li>}
-            {fall.quellen.baumkataster && <li>Bäume: {fall.quellen.baumkataster}{abruf('baumkataster')}</li>}
-            {fall.amtlicheQuellen?.bav && <li>Haltestellen (nur Kartenquelle): {fall.quellen.bav}; {fall.amtlicheQuellen.bav.halte.length} Punkte,
-              abgerufen {fall.amtlicheQuellen.bav.abgerufen}; Datenstand {bavDatenstandText(fall.amtlicheQuellen.bav)} (Ebene); Vollständigkeit unbekannt.</li>}
-            {fall.quellen.gebiet && <li>Gebietsbestimmung: {fall.quellen.gebiet}{abruf('gebiet')}</li>}
-            <li>Normen: VSS 40 263 (Kreisel), VSS 40 273 (Sichtverhältnisse); nur Fundstellen und Zahlenwerte, der Text ist im Original nachzulesen.</li>
-          </ul>
+          <BerichtQuellenTabelle zeilen={berichtQuellenZeilen({ fall, quellen, kantone, avFuer: 'Fahrbahn, Insel, Gebäude', osmFuer: 'Kreisel, Arme, Velobypässe, Tram' })}>
+            <ul className="klein"><li>Normen: VSS 40 263 (Kreisel), VSS 40 273 (Sichtverhältnisse); nur Fundstellen und Zahlenwerte, der Text ist im Original nachzulesen.</li></ul>
+          </BerichtQuellenTabelle>
         </section>
         <footer className="bericht-fuss">
           <p><b>Die App ersetzt keine Beurteilung vor Ort.</b> Daten aus offenen Quellen können veraltet oder unvollständig sein; die Höhe der
             Hindernisse und ob die Insel die Durchsicht verhindert, prüft die App nicht.</p>
-          <p>SichtweitenCheck v{__APP_VERSION__} ({MARKE}, Stand {__BUILD_DATUM__}) · {APP_ADRESSE} · Code unter MIT, eigene Inhalte unter CC BY 4.0 ·
+          <p>SichtweitenCheck v{__APP_VERSION__} ({MARKE}, Stand {__BUILD_DATUM__.split('-').reverse().join('.')}) · {APP_ADRESSE} · Code unter MIT, eigene Inhalte unter CC BY 4.0 ·
             eingebundene Daten unter ihren eigenen Lizenzen (siehe Quellen).</p>
         </footer>
         </td></tr></tbody>

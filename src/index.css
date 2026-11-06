@@ -185,6 +185,10 @@ button.aktiv { background: var(--accent); color: #ffffff; }
 .bericht-seite h2 { font-size: 12.5pt; margin: 14px 0 4px; color: #000000; border-bottom: 1px solid #000000; padding-bottom: 1px; }
 .bericht-seite h3 { font-size: 11pt; margin: 10px 0 2px; color: #000000; }
 .bericht-seite .klein { font-size: 9pt; color: #1f2937; }
+/* Quellen als Tabelle (wie fgsCheck) */
+.bericht-seite .bericht-quellen { font-size: 9pt; margin: 2px 0 6px; }
+.bericht-seite .bericht-quellen th, .bericht-seite .bericht-quellen td { border-top: 1px solid #94a3b8; }
+.bericht-quellen tr { break-inside: avoid; page-break-inside: avoid; }
 .bericht-seite ul { margin: 2px 0 6px; padding-left: 16px; }
 .bericht-seite li { margin: 1px 0; }
 .bericht-seite td, .bericht-seite th { border-bottom: 1px solid #9ca3af; padding: 3px 4px; color: #000000; }
@@ -197,15 +201,18 @@ button.aktiv { background: var(--accent); color: #ffffff; }
 .bericht-karte figcaption { margin-top: 4px; }
 /* Bildlegende: ein Satz zu den Sichtfeldern, dann je Zeile Farbprobe und Text, zweispaltig wo Platz ist */
 .legende-satz { margin: 0 0 4px; }
-.legende { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 2px 16px; }
-.legende li { display: flex; align-items: flex-start; gap: 7px; line-height: 1.35; }
-.legende .probe { flex: none; margin-top: 2px; }
-.legende .probe + .probe { margin-left: 3px; }
+.bericht-seite ul.bild-legende { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 2px 16px; }
+.bericht-seite .bild-legende li { display: flex; align-items: flex-start; gap: 7px; margin: 0; line-height: 1.35; }
+.bild-legende .probe { flex: none; margin-top: 2px; }
+.bild-legende .probe + .probe { margin-left: -3px; }
 .bericht-bild { position: relative; width: 100%; background: #f1f5f9; border: 1px solid #000000; overflow: hidden; }
 .bericht-bild img, .bericht-bild svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .bericht-ohne-bild { position: absolute; left: 8px; top: 6px; color: #475569; }
 .bericht-block { break-inside: auto; }
 .bericht-block h2, .bericht-block h3 { break-after: avoid; page-break-after: avoid; }
+/* Firefox beachtet break-after nicht (Probe 06.11.2026); was zusammenbleiben soll, steht in einem Block */
+.druck-block { break-inside: avoid; page-break-inside: avoid; }
+.bericht-kennung { display: none; }
 .bericht-tabelle tr { break-inside: avoid; page-break-inside: avoid; }
 .bericht-fuss { margin-top: 14px; padding-top: 6px; border-top: 1px solid #000000; font-size: 8.5pt; }
 .bericht-fuss p { margin: 3px 0; }
@@ -239,8 +246,14 @@ button.aktiv { background: var(--accent); color: #ffffff; }
   .bericht { position: static; overflow: visible; background: #ffffff; }
   .bericht-seite { max-width: none; margin: 0; padding: 0 12mm; box-shadow: none; }
   .bericht-rand-oben { height: 12mm; }
+  .bericht-kennung { display: block; padding-top: 5mm; font-size: 7.5pt; color: #64748b; text-align: right; }
   .bericht-rand-unten { height: 14mm; }
   .bericht-neue-seite { break-before: page; page-break-before: always; }
+  /* Legende eng, damit Kopf, Karte und Legende auf Seite 1 passen (der Block Karte und Legende wird nicht getrennt) */
+  .bericht-karte figcaption { font-size: 7.5pt; }
+  .bericht-seite ul.bild-legende { grid-template-columns: repeat(3, 1fr); gap: 1px 10px; }
+  .bericht-seite .bild-legende li { gap: 5px; line-height: 1.25; }
+  .bild-legende .probe { width: 22px; height: 10px; margin-top: 1px; }
   .bericht-neue-seite > td > .bericht-block:first-child > h2 { margin-top: 0; }
 }
 

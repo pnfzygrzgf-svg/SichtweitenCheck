@@ -211,6 +211,12 @@ describe('E1: erforderliche Sichtweite an einer Hauptverkehrsstrasse', () => {
     expect(rechne(hvs({ 'lanes:forward': '2', 'lanes:backward': '1' })).strasse).toMatchObject({ ungunst: { fahrstreifen: true },
       fahrstreifenQuelle: 'OSM lanes:forward=2, lanes:backward=1' })
     expect(rechne(hvs({ lanes: '3', 'lanes:forward': '1', 'lanes:backward': '1' })).strasse.ungunst.fahrstreifen).toBe(false)
+    // zwei Fahrstreifen nur in einer Richtung: nur diese Richtung gilt als ungünstig (Weg läuft von West nach Ost: forward = von links zum Knoten)
+    const e1 = rechne(hvs({ 'lanes:forward': '2', 'lanes:backward': '1' }))
+    expect([seite(e1, 'links').massgebend, seite(e1, 'rechts').massgebend]).toEqual([seite(e1, 'links').erforderlichOben, seite(e1, 'rechts').zwischenwert])
+    expect(e1.strasse.fahrstreifenJe).toEqual({ links: { mehr: true, text: 'lanes:forward=2' }, rechts: { mehr: false, text: 'lanes:backward=1' } })
+    expect(e1.annahmen.join(' | ')).toContain('mehr als ein Fahrstreifen von links (OSM lanes:forward=2)')
+    expect(e1.annahmen.join(' | ')).toContain('von links wegen ungünstiger Verhältnisse der obere Wert')
     // lanes=2 ohne Einbahn: je Richtung einer -> nicht ungünstig
     expect(rechne(hvs({ lanes: '2' })).strasse.ungunst.fahrstreifen).toBe(false)
     // Schwerverkehrsanteil: 9 % -> oberer Wert mit Annahme, 8 % -> Zwischenwert; Häkchen von Hand gilt unabhängig vom Anteil
