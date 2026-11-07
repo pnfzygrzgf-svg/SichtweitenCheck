@@ -672,7 +672,8 @@ describe('K4: Sandrainstrasse, Einfahrt Sandrainstrasse', () => {
   })
 })
 
-describe('K4: Kreisel Schwarzenburgstrasse (Ringpunkt 1723270017): Velo 50 m auf einer Fahrlinie von rund 61 m', () => {
+// Rechnet den ganzen Knoten aus OSM und AV: lokal gut 1 s, auf GitHub zeitweise über die Vorgabe von 5 s
+describe('K4: Kreisel Schwarzenburgstrasse (Ringpunkt 1723270017): Velo 50 m auf einer Fahrlinie von rund 61 m', { timeout: 20_000 }, () => {
   const lesen = (n: string) => JSON.parse(readFileSync(new URL(`./testdaten/${n}`, import.meta.url), 'utf8'))
   const osm = osmParsen(lesen('kreisel_1723270017_osm.json'))
   const av = avParsen(lesen('kreisel_1723270017_av.json') as GeoJson)
