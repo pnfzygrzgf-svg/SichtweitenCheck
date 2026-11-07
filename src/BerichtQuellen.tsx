@@ -11,6 +11,8 @@ import type { Fall } from './fall'
 import type { QuellenStand } from './berichtbild'
 import { regionalDienst } from './daten/anbieter/gemeinsam/regionalDienste'
 import { zhStandText } from './daten/anbieter/gemeinsam/zuerich'
+import { LUZERN_NAME } from './daten/ersatzLuzern'
+import { istZhParkId, ZH_PARK_LIZENZ, ZH_PARK_SCHLUESSEL } from './daten/anbieter/gemeinsam/parkZuerich'
 import { BERN_DTM_KURZ } from './daten/bernDtm'
 
 const SWISSTOPO_LIZENZ = 'frei, Quellenangabe «© swisstopo»'
@@ -29,6 +31,7 @@ const urlVon = (z: Zeile): { url?: string } => {
   const url = z.quelle.startsWith('Luftbild') ? 'https://www.swisstopo.admin.ch/de/orthobilder-swissimage-10-cm'
     : z.quelle.includes('swissALTI3D') ? 'https://www.swisstopo.admin.ch/de/hoehenmodell-swissalti3d'
     : z.quelle.startsWith('Amtliche Vermessung') ? 'https://www.geodienste.ch/' : z.quelle.startsWith('OpenStreetMap') ? 'https://www.openstreetmap.org/'
+    : z.anbieter.includes('Stadt Luzern') ? 'https://map.stadtluzern.ch/' : z.anbieter.includes('Kanton Luzern') ? 'https://public.geo.lu.ch/ogd/rest/services/managed/GEBHOHEN_DS_V5_MP/MapServer'
     : z.anbieter.includes('Stadt Bern') ? 'https://map.bern.ch/' : z.anbieter.includes('Stadt Zürich') ? 'https://www.stadt-zuerich.ch/geodaten/' : undefined
   return url ? { url } : {}
 }
@@ -38,7 +41,7 @@ export function berichtQuellenZeilen({ fall, quellen, kantone, luftbild, avFuer,
   /** Datenstand und Zusatz aus dem Ladestand einer Quelle */
   const aus = (k: string) => { const q = quellen[k]
     return { stand: q?.datenstand || 'unbekannt', zusatz: `${q?.zeit ? `Abgerufen ${iso(q.zeit)}; ` : ''}Vollständigkeit ${q?.vollstaendigkeit || 'unbekannt'}` } }
-  const lizenzVon = (anbieter: string) => (anbieter.includes('Stadt Bern') ? BERN_LIZENZ : 'gemäss Anbieter')
+  const lizenzVon = (anbieter: string) => (anbieter.includes('Stadt Bern') ? BERN_LIZENZ : anbieter.includes('Stadt Luzern') ? 'Open Government Data, Quellenangabe Pflicht' : 'gemäss Anbieter')
   const z: Zeile[] = []
   if (luftbild) z.push({ quelle: 'Luftbild SWISSIMAGE 10 cm', fuer: 'Kartenbild', anbieter: 'swisstopo',
     stand: luftbild.flugjahr ? `Flugjahr ${luftbild.flugjahr}` : 'unbekannt',
@@ -46,10 +49,15 @@ export function berichtQuellenZeilen({ fall, quellen, kantone, luftbild, avFuer,
   const dtm = !!quellen.hoehenBern || !!fall.quellen.hoehen?.startsWith(BERN_DTM_KURZ)
   if (fall.quellen.hoehen || luftbild) z.push({ quelle: dtm ? BERN_DTM_KURZ : 'Höhenmodell swissALTI3D', fuer: 'Längsneigung', anbieter: dtm ? 'Geodaten Stadt Bern' : 'swisstopo',
     ...(fall.quellen.hoehen ? aus(dtm ? 'hoehenBern' : 'hoehen') : { stand: 'nicht geladen', zusatz: '' }), lizenz: dtm ? BERN_LIZENZ : SWISSTOPO_LIZENZ })
-  z.push({ quelle: 'Amtliche Vermessung (Bodenbedeckung)', fuer: avFuer, anbieter: `Kanton ${kantone.join(', ') || '–'} über geodienste.ch`, ...aus('av'), lizenz: AV_LIZENZ })
+  if (fall.quellen.av === LUZERN_NAME) {
+    z.push({ quelle: 'Strassenflächen (Ersatz der AV)', fuer: avFuer, anbieter: 'Stadt Luzern', ...aus('av'), lizenz: 'Open Government Data, Quellenangabe Pflicht' })
+    z.push({ quelle: 'Blockmodelle Gebäude (Ersatz der AV)', fuer: 'Gebäude', anbieter: 'Kanton Luzern', ...aus('av'), lizenz: 'Freie Nutzung (opendata.swiss)' })
+  } else z.push({ quelle: 'Amtliche Vermessung (Bodenbedeckung)', fuer: avFuer, anbieter: `Kanton ${kantone.join(', ') || '–'} über geodienste.ch`, ...aus('av'), lizenz: AV_LIZENZ })
   z.push({ quelle: 'OpenStreetMap (Overpass)', fuer: osmFuer, anbieter: 'OpenStreetMap', ...aus('osm'), lizenz: OSM_LIZENZ })
   if (fall.quellen.parkkataster) { const [name, anbieter] = teile(fall.quellen.parkkataster)
     z.push({ quelle: name, fuer: 'Parkfelder', anbieter, ...aus('parkkataster'), lizenz: lizenzVon(anbieter) }) }
+  if (fall.hindernisse.some(h => istZhParkId(h.id))) z.push({ quelle: 'Öffentlich zugängliche Parkplätze', fuer: 'Parkfelder (bestätigte Vorschläge)',
+    anbieter: 'Stadt Zürich, Dienstabteilung Verkehr', ...aus(ZH_PARK_SCHLUESSEL), lizenz: ZH_PARK_LIZENZ })
   if (fall.quellen.baumkataster) { const [name, anbieter] = teile(fall.quellen.baumkataster)
     z.push({ quelle: name, fuer: 'Bäume', anbieter, ...aus('baumkataster'), lizenz: lizenzVon(anbieter) }) }
   if (fall.quellen.vsig) { const [name, anbieter] = teile(fall.quellen.vsig)

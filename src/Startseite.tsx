@@ -80,7 +80,7 @@ export default function Startseite({ onStart }: { onStart: () => void }) {
             PDF-Bericht werden lokal gespeichert, ohne Upload.</li>
           <li>Für Karte, Rechnung und Bericht fragt die App den Kartenausschnitt bei swisstopo, geodienste.ch, OpenStreetMap
             (Overpass), in Bern bei map.bern.ch und gisapp.bern.ch, in Zürich bei den Geodatendiensten der Stadt und des Kantons
-            (www.ogd.stadt-zuerich.ch, data.stadt-zuerich.ch, maps.zh.ch) und in St. Gallen bei daten.stadt.sg.ch ab; gesendet
+            (www.ogd.stadt-zuerich.ch, data.stadt-zuerich.ch, maps.zh.ch), in Luzern bei map.stadtluzern.ch und public.geo.lu.ch und in St. Gallen bei daten.stadt.sg.ch ab; gesendet
             werden nur Koordinaten. Den Suchbegriff der Ortssuche erhält swisstopo; der eigene Standort bleibt im Browser. Die Dienste sehen technisch die IP-Adresse.
             Die Links «Street View ↗» öffnen Google Maps erst auf Klick; dabei gehen die Koordinaten an Google. Beim Wechsel zu einem anderen
             Rechner gehen nur Lage und OSM-Id mit. Die vollständige Liste der Dienste steht in der App unter «Datenschutz».</li>

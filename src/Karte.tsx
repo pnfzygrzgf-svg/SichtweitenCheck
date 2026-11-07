@@ -1,15 +1,28 @@
+import { REGIONAL_DIENSTE } from './daten/anbieter/gemeinsam/regionalDienste'
+import { QuelleLink, UNFALL_EBENE, UnfallLegende, ebenenQuelleUrl, objektFenster, objektHtml, objektQuelleUrl, unfallKacheln, type Stelle } from './kartenbaustein/quellenLink'
+import { UNFALL_HINWEIS, unfallEbenen, unfallHtml } from './kartenbaustein/unfaelle'
+import { useUnfaelle } from './kartenbaustein/unfaelleKarte'
+import { EbenenFenster, EbenenZeile, Legende, useFensterLage } from './kartenbaustein/EbenenFenster'
+import { AUSSCHNITT_HINWEIS, HALTESTELLEN_BERN, useBundEbenen, VERKEHRSMODELL_NPVM } from './kartenbaustein/ebenenAusschnitt'
+import { orthofotoBern } from './kartenbaustein/hintergrund'
+import { kartenHover } from './kartenbaustein/hover'
+import { trefferObjekt } from './kartenbaustein/treffer'
+import { avErsatz, LUZERN_NAME } from './daten/ersatzLuzern'
+import type { EbeneDef } from './quellenEbenen'
 import { useHoehenkurven } from './hoehenkurven/Karte'
 import { HoehenkurvenWahl } from './hoehenkurven/Wahl'
-import { AvEbenenWahl } from './AvEbenenWahl'
+import { AvEbenenWahl } from './kartenbaustein/AvEbenenWahl'
+import { PruefGruppe } from './kartenbaustein/PruefGruppe'
 import { EbenenGruppe, HoehenprofilAnsicht } from './hoehenprofil/Ansicht'
 import { profilObjekteWaehlen, standardProfil } from './hoehenprofil/modell'
-import { avKartenStil, avArtSichtbar, avArtenLesen } from './daten/anbieter/gemeinsam/avKarte'
+import { AV_LEGENDE, avKartenStil, avArtSichtbar, avArtenLesen } from './daten/anbieter/gemeinsam/avKarte'
 import { swcSichtMasse } from './sichtMasse'
 import type { ZufahrtEntwurf } from './zufahrtEntwurf'
 import { strassenRichtung, zufahrtWinkel, ZUFAHRT_HERKUNFT } from './rechner/grundstueck'
 import { useSichtWahl, sichtZeigen, sichtMassZeigen, richtungSichtId, kreiselSichtId, type SichtArt } from './Sichtfelder'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import L from 'leaflet'
+import './kartenbaustein/tooltipRand'
 import 'leaflet/dist/leaflet.css'
 import type { AvFlaeche } from './daten/av'
 import { KREISEL_TAG, type OsmKnoten, type Strassenname } from './daten/osm'
@@ -22,6 +35,7 @@ import { wgs, lv95, add, dist, dot, sub, einheit, rechts, winkelGrad, type P } f
 import { querlinie, lageAnAchse, B_INNERORTS_M, FAHRERSITZ_M } from './rechner/beobachtung'
 import { TUE_BREITE_KURZ, f2 } from './texte'
 import { hindernisRing, artText, quelleText, type Hindernis } from './rechner/hindernisse'
+import type { Vorschlag } from './rechner/vorschlaege'
 import Ortssuche from './Ortssuche'
 import { ortZoom, type Ort } from './daten/ortssuche'
 import { autoUmriss, autoScheibe, fbLage, fbVeloLage, faLage, faAnzeige, veloLage, veloTeile, kreiselFahrzeug, PW_LAENGE_M, LENKER_VOR_FRONT_M, VELO_LAENGE_M, VELO_BREITE_M } from './rechner/fahrzeug'
@@ -275,6 +289,8 @@ export default function Karte(props: {
   strassennamen: Strassenname[]
   gewaehlt: number | null
   rechnung: Rechnung | null
+  /** Parkfelder als Vorschlag ausserhalb der Rechnung (Stadt Zürich): gestrichelt, zählen erst bestätigt */
+  parkVorschlaege?: readonly Vorschlag[]
   zufahrt: string | null
   hindernisse: Hindernis[]                           // Eingaben des Falls (von Hand, bestätigte Vorschläge)
   werkzeug: Werkzeug
@@ -344,34 +360,14 @@ export default function Karte(props: {
   const [qOffen, setQOffen] = useState(false)
   const [profilAuswahl, setProfilAuswahl] = useState<string | null>(null)
   const [alleGelaendeProfile, setAlleGelaendeProfile] = useState(false)
-  const [qPos, setQPos] = useState<{ x: number; y: number } | null>(() => {
-    try { const v = JSON.parse(localStorage.getItem('swc.quellenPos') ?? 'null'); return v && Number.isFinite(v.x) && Number.isFinite(v.y) ? v : null } catch { return null }
-  })
+  const qLage = useFensterLage('swc.quellenPos', qOffen)
   const [qZoom, setQZoom] = useState(18)
-  const qFensterRef = useRef<HTMLDivElement>(null)
+  const unfaelle = useUnfaelle(hkMap, unfallEbenen(qAn), lv95)
+  const ausschnitt = useBundEbenen(hkMap, [VERKEHRSMODELL_NPVM, HALTESTELLEN_BERN].filter(e => qAn.has(e.id as EbeneId)))
   const quellenRef = useRef<L.LayerGroup | null>(null)
-  const qTrefferRef = useRef<((p: P, tolM: number) => string | null) | null>(null)
-  const qZiehen = (e: React.PointerEvent<HTMLDivElement>) => {
-    const fenster = qFensterRef.current, rahmen = fenster?.parentElement
-    if (!fenster || !rahmen || (e.target as HTMLElement).closest('button')) return
-    e.preventDefault()
-    const r = rahmen.getBoundingClientRect(), f = fenster.getBoundingClientRect(), dx = e.clientX - f.left, dy = e.clientY - f.top
-    let zuletzt: { x: number; y: number } | null = null
-    const bewegen = (ev: PointerEvent) => {
-      zuletzt = { x: Math.round(Math.min(Math.max(0, ev.clientX - r.left - dx), Math.max(0, r.width - f.width))),
-        y: Math.round(Math.min(Math.max(0, ev.clientY - r.top - dy), Math.max(0, r.height - 40))) }
-      setQPos(zuletzt)
-    }
-    const los = () => {
-      window.removeEventListener('pointermove', bewegen); window.removeEventListener('pointerup', los); window.removeEventListener('pointercancel', los)
-      if (zuletzt) try { localStorage.setItem('swc.quellenPos', JSON.stringify(zuletzt)) } catch { /* nur für diese Sitzung */ }
-    }
-    window.addEventListener('pointermove', bewegen); window.addEventListener('pointerup', los); window.addEventListener('pointercancel', los)
-  }
-  useEffect(() => {
-    const fenster = qFensterRef.current, rahmen = fenster?.parentElement
-    if (qOffen && qPos && fenster && rahmen && (qPos.x + 60 > rahmen.clientWidth || qPos.y + 60 > rahmen.clientHeight)) setQPos(null)
-  }, [qOffen])   // eslint-disable-line react-hooks/exhaustive-deps
+  const qObjekteRef = useRef<EbenenObjekt[]>([])
+  const qDefRef = useRef(new Map<EbenenObjekt, EbeneDef>())
+  const kartenMitte = (): Stelle | null => { const c = kartenRef.current?.getCenter(); if (!c) return null; const [e, n] = lv95(c.lat, c.lng); return { lat: c.lat, lon: c.lng, e, n } }
   const markerRef = useRef(new Map<number, { k: OsmKnoten; m: L.CircleMarker }>())
   const namenRef = useRef<{ s: Strassenname; m: L.Marker | null }[]>([])
   // Nummernschilder der Arme: Abstand vom Knoten je Zoom (NR_MIN_PX)
@@ -449,22 +445,23 @@ export default function Karte(props: {
     qPane.style.pointerEvents = 'none'
     const qWert = map.createPane(Q_WERT_PANE); qWert.style.zIndex = '610'; qWert.style.pointerEvents = 'none'
     quellenRef.current = L.layerGroup().addTo(map)
-    const qTip = L.tooltip({ direction: 'top', offset: [0, -12] })
-    let qRaf = 0
-    map.on('mousemove', (e: L.LeafletMouseEvent) => {
-      if (qRaf) return
-      qRaf = requestAnimationFrame(() => {
-        qRaf = 0
-        const ziel = e.originalEvent.target as Element | null
-        const frei = !ziel?.closest?.('.leaflet-interactive, .leaflet-marker-icon, .leaflet-control')
-        const m = 7 * 40075016 * Math.cos(e.latlng.lat * Math.PI / 180) / (256 * 2 ** map.getZoom())
-        const x = frei && qTrefferRef.current ? qTrefferRef.current(lv95(e.latlng.lat, e.latlng.lng), m) : null
-        if (!x) { map.closeTooltip(qTip); return }
-        qTip.setContent(esc(x)); qTip.setLatLng(e.latlng)
-        if (!map.hasLayer(qTip)) map.openTooltip(qTip)
-      })
+    // Klick auf ein Objekt einer Kartenebene: Kurzinfo mit Link zur Quelle (die Tooltips lassen sich nicht anklicken); Werkzeuge gehen vor
+    map.on('click', (e: L.LeafletMouseEvent) => {
+      const ziel = e.originalEvent.target as Element | null
+      if (cb.current.werkzeug || cb.current.knotenWerkzeug || ziel?.closest?.('.leaflet-interactive, .leaflet-marker-icon, .leaflet-control')) return
+      const hier = unfaelle.bei(map, e.containerPoint)
+      if (hier.length) { L.popup({ maxWidth: 280, maxHeight: 300 }).setLatLng(e.latlng).setContent(unfallHtml(hier, true)).openOn(map); return }
+      const [ost, nord] = lv95(e.latlng.lat, e.latlng.lng), m = 7 * 40075016 * Math.cos(e.latlng.lat * Math.PI / 180) / (256 * 2 ** map.getZoom())
+      const o = trefferObjekt(qObjekteRef.current, [ost, nord], m), def = o && qDefRef.current.get(o)
+      if (!o || !def) return
+      const url = objektQuelleUrl(o, def.id, ebenenQuelleUrl(def.id, `${o.quelle ?? ''} ${def.quelle} ${o.text}`, REGIONAL_DIENSTE.find(d => `regional.${d.id}` === def.id)?.url), { lat: e.latlng.lat, lon: e.latlng.lng, e: ost, n: nord })
+      if (url) L.popup({ maxWidth: 280 }).setLatLng(e.latlng).setContent(objektFenster(o.text, url)).openOn(map)
     })
-    map.on('mouseout', () => map.closeTooltip(qTip))
+    kartenHover(map, [
+      s => { const hier = unfaelle.bei(map, s.bild); return hier.length ? { schluessel: `u:${hier.map(u => u.id).join()}`, html: unfallHtml(hier, false) } : null },
+      s => { const o = trefferObjekt(qObjekteRef.current, s.p, s.tolM, s.ueberObjekt); return o ? { schluessel: `e:${o.id}`, html: objektHtml(o.text) } : null },
+      s => { const k = hk.bei(s.ort.lat, s.ort.lng, s.tolM); return k ? { schluessel: `k:${k}`, html: objektHtml(k) } : null },
+    ])
     map.on('zoomend', () => setQZoom(map.getZoom()))
     map.createPane(TREFFER_PANE).style.zIndex = '420'
     map.createPane(OBEN_PANE).style.zIndex = '430'
@@ -475,10 +472,8 @@ export default function Karte(props: {
       arme: L.layerGroup().addTo(map), knoten: L.layerGroup().addTo(map), namen: L.layerGroup().addTo(map), standort: L.layerGroup().addTo(map),
       zeichnen: L.layerGroup().addTo(map), zufahrtVorschau: L.layerGroup().addTo(map), fahrzeug: L.layerGroup().addTo(map),
     }
-    L.control.layers({ 'Luftbild (SWISSIMAGE)': luftbild, 'Landeskarte (swisstopo)': landeskarte }, {
-      'Knoten (OSM)': eb.knoten, 'Strassennamen (OSM)': eb.namen, 'Fahrzeuge und Personen': eb.fahrzeug, 'Hindernisse': eb.hind,
-      'Verdecker im Sichtdreieck': eb.treffer, 'Arme': eb.arme },
-    { collapsed: true }).addTo(map)
+    const hintergrundWahl = L.control.layers({ 'Luftbild (SWISSIMAGE)': luftbild, 'Landeskarte (swisstopo)': landeskarte }, {}, { collapsed: true }).addTo(map)
+    orthofotoBern(map, hintergrundWahl, luftbild)
     L.control.scale({ imperial: false }).addTo(map)
     const standortKnopf = new L.Control({ position: 'topleft' })
     standortKnopf.onAdd = () => {
@@ -556,7 +551,7 @@ export default function Karte(props: {
       L.polygon(f.ringe.map(r => r.map(ll)), { color: farbe, weight: 1, fillColor: farbe, fillOpacity: deckkraft, interactive: false })
         .addTo(eb.av)
     }
-    const text = `Amtliche Vermessung, Kanton ${kantone.join(', ') || '?'}, geodienste.ch`
+    const text = avErsatz(av) ? LUZERN_NAME : `Amtliche Vermessung, Kanton ${kantone.join(', ') || '?'}, geodienste.ch`
     map.attributionControl.addAttribution(text)
     return () => { map.attributionControl.removeAttribution(text) }
   }, [av, kantone, kartenRef, avAn, avArten])
@@ -1003,7 +998,7 @@ export default function Karte(props: {
         .bindTooltip(esc(hindernisText(h)) + (aus ? ' – nicht sichtbehindernd' : '') + zusatz(h.id) + '<br><i>Klick: wählen</i>', { sticky: true })
         .on('click', klick(h.id)).addTo(eb.hind)
     }
-    for (const v of stand?.vorschlaege ?? []) {
+    for (const v of [...(stand?.vorschlaege ?? []), ...(props.parkVorschlaege ?? [])]) {
       const farbe = hindernisFarbe(v.hindernis)
       hindernisEbene(v.hindernis, { color: farbe, weight: v.id === bearbeiten ? 4 : 2, dashArray: STRICH_VORSCHLAG, fillColor: farbe, fillOpacity: 0.12 })
         .bindTooltip(`Vorschlag: ${esc(v.hindernis.name ?? 'Hindernis')}<br>${esc(v.grund)}<br><i>Klick: wählen, im Panel bestätigen oder verwerfen</i>`,
@@ -1033,7 +1028,7 @@ export default function Karte(props: {
           .addTo(eb.hind)
       })
     }
-  }, [hindernisse, rechnung, bearbeiten])
+  }, [hindernisse, rechnung, props.parkVorschlaege, bearbeiten])
 
   // Verdecker im Sichtdreieck (bis A) hervorheben: voll rot, Palisade gelb, Hinweis violett gestrichelt
   useEffect(() => {
@@ -1147,14 +1142,16 @@ export default function Karte(props: {
     const g = quellenRef.current
     if (!g) return
     g.clearLayers()
-    const daten = props.quellenEbenen ?? {}
+    const daten: EbenenDaten = { ...props.quellenEbenen, npvm: (ausschnitt.objekte.npvm ?? []) as EbenenObjekt[], haltestellen: (ausschnitt.objekte.haltestellen ?? []) as EbenenObjekt[] }
     const profilId = standardProfil((daten.gelaende ?? []).flatMap(o => o.hoehenprofil ? [o.hoehenprofil] : []), profilAuswahl)?.id
-    const aktiv: { o: EbenenObjekt; farbe: string; symbol: string }[] = []
-    for (const def of EBENEN) if (def.id !== 'av' && qAn.has(def.id))
+    const aktiv: { o: EbenenObjekt; farbe: string; symbol: string; def: EbeneDef }[] = []
+    for (const def of EBENEN) if (def.id !== 'av' && !UNFALL_EBENE[def.id] && qAn.has(def.id))
       for (const o of def.id === 'gelaende' ? profilObjekteWaehlen(daten.gelaende ?? [], profilAuswahl, alleGelaendeProfile) : daten[def.id] ?? [])
-        aktiv.push({ o, farbe: ebenenFarbe(def, o.klasse), symbol: ebenenSymbol(def, o.klasse) })
+        aktiv.push({ o, farbe: ebenenFarbe(def, o.klasse), symbol: ebenenSymbol(def, o.klasse), def })
     const marke = (p: P, text: string, farbe: string) => L.marker(ll(p), { pane: Q_WERT_PANE, interactive: false, keyboard: false,
       icon: L.divIcon({ className: 'q-wert', iconSize: [0, 0], html: `<span style="border-color:${farbe}">${esc(text)}</span>` }) }).addTo(g)
+    for (const [id, layer] of Object.entries(UNFALL_EBENE)) if (qAn.has(id as EbeneId))
+      L.tileLayer(unfallKacheln(layer), { pane: Q_PANE, maxZoom: 22, maxNativeZoom: 18, attribution: '© ASTRA' }).addTo(g)
     for (const { o, farbe, symbol } of aktiv) {
       if (o.ringe) L.polygon(o.ringe.map(r => r.map(ll)), { pane: Q_FLAECHE_PANE, interactive: false, color: farbe, weight: 1.5, fillColor: farbe, fillOpacity: o.deckkraft ?? 0.3 }).addTo(g)
       if (o.linien) {
@@ -1174,27 +1171,12 @@ export default function Karte(props: {
         if (qZoom >= BESCHRIFT_ZOOM && o.wert) marke(o.punkt, o.wert, farbe)
       }
     }
-    const abst = (p: P, l: P[]) => {
-      let d = Infinity
-      for (let i = 1; i < l.length; i++) {
-        const a = l[i - 1], b = l[i], vx = b[0] - a[0], vy = b[1] - a[1], q = vx * vx + vy * vy
-        const t = q ? Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / q)) : 0
-        d = Math.min(d, Math.hypot(p[0] - a[0] - t * vx, p[1] - a[1] - t * vy))
-      }
-      return d
-    }
-    const innen = (p: P, r: P[]) => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if ((yi > p[1]) !== (yj > p[1]) && p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi) c = !c } return c }
-    qTrefferRef.current = aktiv.length ? (p, tol) => {
-      let best: { d: number; t: string } | null = null
-      const nimm = (d: number, t: string) => { if (d <= tol && (!best || d < best.d)) best = { d, t } }
-      for (const { o } of aktiv) if (o.punkt) nimm(Math.hypot(p[0] - o.punkt[0], p[1] - o.punkt[1]) * 0.7, o.text)
-      if (best) return (best as { t: string }).t
-      for (const { o } of aktiv) for (const l of o.linien ?? []) nimm(abst(p, l), o.text)
-      if (best) return (best as { t: string }).t
-      for (const { o } of aktiv) if (o.ringe?.[0] && innen(p, o.ringe[0])) return o.text
-      return null
-    } : null
-  }, [props.quellenEbenen, qAn, qZoom, profilAuswahl, alleGelaendeProfile])
+    // Die amtliche Vermessung zeichnet ein eigener Effekt; im Treffertest zählt sie wie jede Ebene, wenn ihre Art sichtbar ist
+    const avDef = EBENEN.find(e => e.id === 'av')!
+    const avObjekte = (daten.av ?? []).filter(o => avArtSichtbar(o.id.slice(o.id.lastIndexOf(':') + 1), avAn, avArten))
+    qObjekteRef.current = [...aktiv.map(x => x.o), ...avObjekte]
+    qDefRef.current = new Map([...aktiv.map(x => [x.o, x.def] as const), ...avObjekte.map(o => [o, avDef] as const)])
+  }, [props.quellenEbenen, ausschnitt.objekte, qAn, qZoom, profilAuswahl, alleGelaendeProfile, avAn, avArten])
 
   return (
     <div className="kartenrahmen" style={{ '--karte-h': `${stufe}dvh` } as CSSProperties}>
@@ -1209,26 +1191,22 @@ export default function Karte(props: {
         Kartenebenen{(() => { const k = (hk.an ? 1 : 0) + ebenenSichtbar(props.quellenEbenen ?? {}).zeigen.filter(e => e.id === 'av' ? avAn && (props.quellenEbenen?.av ?? []).some(o => avArten.has(o.klasse)) : qAn.has(e.id)).length; return k ? ` (${k})` : '' })()} ▴
       </button>
       {qOffen && (() => {
-        const { zeigen, ohne, laedt, fehler } = ebenenSichtbar(props.quellenEbenen ?? {})
+        const { zeigen, ohne, laedt, fehler } = ebenenSichtbar(props.quellenEbenen ?? {}), pruefEbenen = ebenenRef.current
         return (
-          <div className="q-fenster" role="group" aria-label="Kartenebenen" ref={qFensterRef}
-               style={qPos ? { left: qPos.x, top: qPos.y, bottom: 'auto', maxHeight: `calc(100% - ${qPos.y + 10}px)` } : undefined}>
-            <div className="q-kopf" onPointerDown={qZiehen} title="An dieser Zeile ziehen, um das Fenster zu verschieben (Doppelklick: zurück an den Ursprung)"
-                 onDoubleClick={() => { setQPos(null); try { localStorage.removeItem('swc.quellenPos') } catch { /* egal */ } }}>
-              <span><span className="griff" aria-hidden="true">⠿</span> Kartenebenen</span>
-              <button type="button" onClick={() => setQOffen(false)} aria-label="Schliessen">×</button>
-            </div>
+          <EbenenFenster lage={qLage} schliessen={() => setQOffen(false)}>
+            {pruefEbenen && <PruefGruppe map={kartenRef.current} gruppen={[
+              { name: 'Knoten (OSM)', ebene: pruefEbenen.knoten }, { name: 'Strassennamen (OSM)', ebene: pruefEbenen.namen }, { name: 'Fahrzeuge und Personen', ebene: pruefEbenen.fahrzeug },
+              { name: 'Hindernisse', ebene: pruefEbenen.hind }, { name: 'Verdecker im Sichtdreieck', ebene: pruefEbenen.treffer }, { name: 'Arme', ebene: pruefEbenen.arme }]} />}
             {[...zeigen.map(e => ({ id: e.id as string, titel: e.titel })), { id: 'hoehenkurven', titel: hk.titel }].sort((a,b)=>a.titel.localeCompare(b.titel,'de-CH')).map(eintrag => {
-              if (eintrag.id === 'hoehenkurven') return <HoehenkurvenWahl key={eintrag.id} an={hk.an} setzen={hk.setzen} stand={hk.stand} klasse="q-ebene" />
+              if (eintrag.id === 'hoehenkurven') return <HoehenkurvenWahl key={eintrag.id} an={hk.an} setzen={hk.setzen} stand={hk.stand} klasse="q-ebene" link={<QuelleLink url={ebenenQuelleUrl('hoehenkurven', 'swisstopo')} mitte={kartenMitte} />} />
               const e = zeigen.find(e => e.id === eintrag.id)!
-              return e.id === 'av' ? <AvEbenenWahl key={e.id} quelle={e.quelle} objekte={props.quellenEbenen?.av ?? []}
-              an={avAn} setzen={setAvAn} arten={avArten} artSetzen={avArtSetzen} /> : (
-              <EbenenGruppe key={e.id} mitProfil={e.id === 'gelaende'} titel={e.titel}><label className="q-ebene" title={e.quelle}>
-                <input type="checkbox" checked={qAn.has(e.id)} onChange={x => qSchalten(e.id, x.target.checked)} />
-                <span><b>{e.titel}</b> <small className="zahl">{(props.quellenEbenen?.[e.id] ?? []).length} im Ausschnitt</small><small>{e.quelle}</small>
-                  {qAn.has(e.id) && <span className="q-legende">{e.legende.map(([k, farbe, text, symbol]) => <span key={k}>{symbol ? <i className="sym" style={{ background: farbe }}>{symbol}</i> : <i style={{ background: farbe }} />}{text}</span>)}</span>}
-                </span>
-              </label>
+              return e.id === 'av' ? <AvEbenenWahl key={e.id} link={<QuelleLink url={ebenenQuelleUrl('av', e.quelle)} mitte={kartenMitte} />} quelle={e.quelle} objekte={props.quellenEbenen?.av ?? []}
+              an={avAn} setzen={setAvAn} arten={avArten} artSetzen={avArtSetzen} legende={AV_LEGENDE} /> : (
+              <EbenenGruppe key={e.id} mitProfil={e.id === 'gelaende'} titel={e.titel}><EbenenZeile titel={e.titel} hinweis={e.quelle} an={qAn.has(e.id)} setzen={an => qSchalten(e.id, an)}
+                zahl={UNFALL_EBENE[e.id] ? undefined : e.id === 'npvm' || e.id === 'haltestellen' ? ausschnitt.stand[e.id] : `${(props.quellenEbenen?.[e.id] ?? []).length} im Ausschnitt`}><small>{UNFALL_EBENE[e.id] && unfaelle.datenstand ? e.quelle.replace(/Datenstand [^;]*/, `Datenstand ${unfaelle.datenstand}`) : e.quelle}</small>{UNFALL_EBENE[e.id] && <small>{(qAn.has(e.id) && unfaelle.stand) || UNFALL_HINWEIS}</small>}{(e.id === 'npvm' || e.id === 'haltestellen') && !ausschnitt.stand[e.id] && <small>{AUSSCHNITT_HINWEIS}</small>}<QuelleLink url={ebenenQuelleUrl(e.id, e.quelle, REGIONAL_DIENSTE.find(d => `regional.${d.id}` === e.id)?.url)} mitte={kartenMitte} />
+                {Object.keys(UNFALL_EBENE).find(id => qAn.has(id as EbeneId)) === e.id && <UnfallLegende />}
+                  {qAn.has(e.id) && !UNFALL_EBENE[e.id] && <Legende eintraege={e.legende} />}
+                </EbenenZeile>
               {e.id === 'gelaende' && <HoehenprofilAnsicht profile={(props.quellenEbenen?.gelaende ?? []).flatMap(o => o.hoehenprofil ? [o.hoehenprofil] : [])}
                 onAuswahl={id => { setProfilAuswahl(id); if (id) qSchalten('gelaende', true) }} kartenAlle={alleGelaendeProfile}
                 onKartenAlle={an => { setAlleGelaendeProfile(an); if (an) qSchalten('gelaende', true) }} />}
@@ -1237,8 +1215,8 @@ export default function Karte(props: {
             {laedt.length > 0 && <p className="q-fuss" role="status">Lädt: {laedt.map(e => e.titel).join(', ')}.</p>}
             {fehler.length > 0 && <p className="q-fuss" role="status">Fehler beim Laden: {fehler.map(e => e.titel).join(', ')}. Einzelheiten unter «Datenquellen und Ladezustand».</p>}
             {ohne.length > 0 && <p className="q-fuss">Ohne Daten im Ausschnitt: {ohne.map(e => e.titel).join(', ')}.</p>}
-            <p className="q-fuss">Gezeigt wird, was beim Laden gelesen wurde; ab Zoomstufe {BESCHRIFT_ZOOM} mit dem Wert. Überfahren zeigt die Angaben.</p>
-          </div>
+            <p className="q-fuss">Gezeigt wird, was beim Laden gelesen wurde; ab Zoomstufe {BESCHRIFT_ZOOM} mit dem Wert. Kurz stillhalten zeigt die Angaben, ein Klick die Quelle.</p>
+          </EbenenFenster>
         )
       })()}
       <div className="kartenkopf">

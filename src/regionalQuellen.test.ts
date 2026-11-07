@@ -27,7 +27,7 @@ async function laden(app: 'fgs' | 'swc', erfolg: string | null) {
   vi.mocked(ladeRegional).mockImplementation(async d => {
     if (d.id !== erfolg) throw new Error('Testausfall')
     return { daten: { id: d.id, url: d.url, abgerufen: '2026-11-03T12:00:00Z', datenstand: '03.11.2026', roh: {}, objekte: [
-      { id: 'a', name: 'Originalobjekt', hinweis: d.hinweis, tempo: d.art === 'tempo' ? 30 : null, zone: null, bestaetigen: false, stand: null, ...(d.id.startsWith('e6.') ? { kontext: d.art } : {}) },
+      { id: 'a', name: 'Originalobjekt', hinweis: d.hinweis, tempo: d.art === 'tempo' ? 30 : null, zone: null, bestaetigen: false, stand: null },
     ] }, ms: 1, bytes: 100, quelle: new URL(d.url).host }
   })
   const hook = useRegionalQuellen(setFall, (k, z) => quellen.set(k, z), app)
@@ -35,22 +35,15 @@ async function laden(app: 'fgs' | 'swc', erfolg: string | null) {
   await Promise.resolve(); await Promise.resolve()
   return { quellen, fall: fall as Fall | null, rechnen: speicher[0].wert, daten: speicher[1].wert }
 }
-it.each(['fgs', 'swc'] as const)('%s: Beleuchtung bleibt Kartenkontext mit passendem Erfolgs- und Fehlertext', async app => {
+it.each(['fgs', 'swc'] as const)('%s: Beleuchtung, taktile Rillen und Wegnetz werden nicht mehr geladen', async app => {
   const r = await laden(app, 'e6.zh.licht')
-  const text = r.quellen.get('regional.e6.zh.licht')!.objekte!
-  expect(text).toContain('1 Leuchtenstandort'); expect(text).toContain('nur Kartenkontext')
-  expect(text).not.toContain('fachlich relevante')
-  expect(r.quellen.get('regional.e6.zh.netz')!.fehler).toContain('Kartenkontext nicht verfügbar')
-  expect(r.quellen.get('regional.e6.zh.netz')!.fehler).not.toContain('Zuordnung offen')
+  const ids = vi.mocked(ladeRegional).mock.calls.map(([d]) => d.id)
+  expect(ids.length).toBeGreaterThan(0)
+  expect(ids.filter(id => id.startsWith('e6.'))).toEqual([])
+  expect([...r.quellen.keys()].filter(k => k.startsWith('regional.e6.'))).toEqual([])
   expect(r.rechnen).toBeNull()
-  expect((r.daten as RegionalSnapshot).teile.map(t => t.id)).toEqual(['e6.zh.licht'])
+  expect(r.daten).toBeNull()
   expect(r.fall?.eigeneAngabe).toBe(42)
-})
-it.each(['fgs', 'swc'] as const)('%s: Netzlinien und taktile Standorte haben eigene Objekttexte', async app => {
-  const n = await laden(app, 'e6.zh.netz')
-  expect(n.quellen.get('regional.e6.zh.netz')!.objekte).toContain('1 Netzobjekt; nur Kartenkontext')
-  const t = await laden(app, 'e6.zh.taktil')
-  expect(t.quellen.get('regional.e6.zh.taktil')!.objekte).toContain('1 Rillenstandort; nur Kartenkontext')
 })
 it.each(['fgs', 'swc'] as const)('%s: rechenwirksame Quellen behalten ihre Zuordnung und ihre Fehlerhinweise', async app => {
   const r = await laden(app, 'ktzh.tempo')
@@ -65,7 +58,8 @@ it('D2: E6 nach Ausschnitt, Tempo/Zonen/Signale/LSA nur nach tatsächlicher Geme
  hook.starten([2683000,1252000],[{bfs:261,kanton:'ZH',name:'Zürich'},{bfs:52,kanton:'ZH',name:'Bassersdorf'},{bfs:351,kanton:'BE',name:'Bern'}],1,new AbortController().signal,[{bfs:351,kanton:'BE',name:'Bern'}])
  await Promise.resolve(); await Promise.resolve()
  const ids=vi.mocked(ladeRegional).mock.calls.map(([d])=>d.id)
- expect(ids).toContain('e6.zh.licht')
+ expect(ids).toContain('bedarf.zh.volksschule')
+ expect(ids.filter(id => id.startsWith('e6.'))).toEqual([])
  expect(ids).not.toContain('ktzh.tempo')
  expect(ids).not.toContain('zh.lsa')
 })

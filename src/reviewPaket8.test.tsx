@@ -3,11 +3,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { DatenQuellen, Datenschutz } from './Hilfe'
 import Startseite from './Startseite'
 import { E6_DIENSTE } from './daten/anbieter/gemeinsam/e6'
-it('nennt alle fünf Kontextdienste mit Lizenz und Abgrenzung in der Datenhilfe',()=>{
- const html=renderToStaticMarkup(<DatenQuellen />)
- for(const d of E6_DIENSTE){expect(html).toContain(d.name);expect(html).toContain(d.lizenz)}
- expect(html).toMatch(/nur Kartenkontext/i)
- expect(html).toContain('kein Beleuchtungsnachweis')
+it('nennt Beleuchtung, taktile Rillen und Wegnetz nicht mehr in der Datenhilfe und im Datenschutz',()=>{
+ const html=renderToStaticMarkup(<DatenQuellen />)+renderToStaticMarkup(<Datenschutz />)
+ for(const d of E6_DIENSTE){expect(html).not.toContain(d.name)}
+ expect(html).not.toContain('kein Beleuchtungsnachweis')
+ expect(html).not.toContain('Beleuchtungsstandorte')
 })
 it('nennt Kanton Zürich und St. Gallen als Empfänger bereits auf der Startseite',()=>{
  const html=renderToStaticMarkup(<Startseite onStart={()=>{}} />)

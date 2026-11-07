@@ -566,7 +566,7 @@ export function eingabenListe(fall: Fall, e: Ergebnis): string[] {
 }
 
 /** Hinweise: Rechnung, je Richtung (Auto, Velo), Trottoir, Meldungen, offene Vorschläge */
-export function hinweisListe(e: Ergebnis, meldungen: string[]): string[] {
+export function hinweisListe(e: Ergebnis, meldungen: string[], parkOffen = 0): string[] {
   const aus: string[] = [...e.hinweise]
   for (const r of e.richtungen) {
     for (const h of r.hinweise) aus.push(h.toLowerCase().startsWith(lageText(r).toLowerCase()) ? h : `${lageText(r)}: ${h}`)
@@ -576,13 +576,16 @@ export function hinweisListe(e: Ergebnis, meldungen: string[]): string[] {
   for (const t of e.trottoirPruefung?.richtungen ?? []) for (const h of t.hinweise) aus.push(`Trottoir ${lageKurz(t)}: ${h}`)
   const offen = e.hindernis.vorschlaege.length
   if (offen) aus.push(`${offen} Vorschläge (OSM-Parkierung, Baumkataster) nicht bestätigt: zählen nicht.`)
+  if (parkOffen) aus.push(`${parkOffen} Parkfelder der Stadt Zürich nicht bestätigt: zählen nicht.`)
   if (e.hindernis.inD.length) aus.push(`D liegt in ${e.hindernis.inD.join(', ')} (nicht gerechnet).`)
   aus.push(...meldungen)
   return [...new Set(aus.filter(x => x.trim()))]
 }
 
-export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern, schliessen }: {
+export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern, schliessen, parkVorschlaegeOffen = 0 }: {
   fall: Fall; rechnung: Rechnung; av: AvFlaeche[]; kantone: string[]; quellen: Record<string, QuellenStand>
+  /** Parkfelder als Vorschlag, die noch nicht bestätigt sind (Stadt Zürich) */
+  parkVorschlaegeOffen?: number
   aendern: (f: (x: Fall) => Fall) => void; schliessen: () => void
 }) {
   const e = rechnung.ergebnis!, kn = rechnung.knoten
@@ -610,7 +613,7 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
   }, [ort[0], ort[1]])
   const heute = new Date()
   const eingaben = eingabenListe(fall, e)
-  const hinweise = hinweisListe(e, rechnung.meldungen)
+  const hinweise = hinweisListe(e, rechnung.meldungen, parkVorschlaegeOffen)
   // Bezeichnung: lokal tippen, erst beim Verlassen des Felds (bzw. Enter, Escape) in den Fall übernehmen (Speichern im Browser)
   const [bez, setBez] = useState(fall.ort.bezeichnung ?? '')
   const bezUebernehmen = () => {

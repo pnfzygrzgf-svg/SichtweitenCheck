@@ -1,32 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import { ebenenAusDaten, ebenenSichtbar } from './quellenEbenen'
 import type { OsmDaten, OsmWeg } from './daten/osm'
-import { regionalLesen, type RegionalSnapshot } from './daten/anbieter/gemeinsam/regional'
 import { regionalDienst } from './daten/anbieter/gemeinsam/regionalDienste'
-import { e6Stand } from './daten/anbieter/gemeinsam/e6'
-import { readFileSync } from 'node:fs'
+import { UNFALL_EBENE, objektQuelleUrl } from './kartenbaustein/quellenLink'
+
+// Die Unfall-Ebenen stehen immer in der Liste: Ihr Kartenbild gilt überall, nicht nur um den Prüfpunkt
+const ohneUnfaelle = <T extends { id: string }>(l: T[]) => l.filter(e => !UNFALL_EBENE[e.id] && e.id !== 'npvm' && e.id !== 'haltestellen')
+
+// Fehlt ein Vorsatz in quellenLink.tsx, landet das Objekt still auf dem Kartenausschnitt statt beim Objekt
+const ohneObjektlink = (d: object) => Object.entries(d).flatMap(([ebene, liste]) => (Array.isArray(liste) ? liste as { id: string; text: string; quelle?: string; profil?: true }[] : [])
+  .filter(o => `${o.quelle ?? ''} ${o.text}`.includes('OpenStreetMap') && !o.profil)
+  .filter(o => !/openstreetmap\.org\/(node|way|relation)\/\d+/.test(objektQuelleUrl(o, ebene, 'https://www.openstreetmap.org/', { lat: 47, lon: 7, e: 2600000, n: 1200000 }) ?? ''))
+  .map(o => o.id))
 
 const weg = (id: number, tags: Record<string, string>): OsmWeg => ({ id, tags, knoten: [1, 2], geom: [[46.95, 7.44], [46.95, 7.441]] })
 const osm = (x: Partial<OsmDaten>): OsmDaten => ({ wege: [], tram: [], uebergaenge: [], ampeln: [], relationen: [], querungen: [], vortritt: [], ...x })
 const leer = { osm: null, vsig: null, park: null, baeume: null, av: null, profile: [], hoehen: null }
 
-it('E6-Kontext hat Originalpunkte/-linien, Datum und Anbieter; vorhandenes Tempo bleibt erhalten', () => {
-  const teile = ['zh.licht', 'zh.taktil', 'zh.netz'].map(id => {
-    const f = JSON.parse(readFileSync(new URL(`./daten/anbieter/gemeinsam/testdaten/e6/${id}.json`, import.meta.url), 'utf8'))
-    const d = regionalDienst('e6.' + id)!
-    return { id: d.id, roh: f.roh, meta: f.meta, objekte: regionalLesen(d, f.roh), url: d.url, abgerufen: '2026-11-03T00:00:00Z', datenstand: e6Stand(f.meta) }
-  })
-  const regional: RegionalSnapshot = { version: 1, mitte: [2683000, 1252000], radiusM: 200, teile }
-  const d = ebenenAusDaten({ ...leer, regional, osm: osm({ wege: [weg(1, { maxspeed: '30' })] }) })
-  expect(d['regional.e6.zh.licht']).toHaveLength(15)
-  expect(d['regional.e6.zh.taktil']?.every(o => o.punkt && !o.ringe)).toBe(true)
-  expect(d['regional.e6.zh.netz']?.[0].linien).toBeDefined()
+it('E6-Kontext (Beleuchtung, Wegnetz, Rillen) erscheint nicht als Ebene; vorhandenes Tempo bleibt erhalten', () => {
+  const d = ebenenAusDaten({ ...leer, osm: osm({ wege: [weg(1, { maxspeed: '30' })] }) })
   expect(d.tempo?.[0]).toMatchObject({ wert: '30', gestrichelt: true })
-  const menu = ebenenSichtbar(d).zeigen.filter(e => e.id.startsWith('regional.e6.'))
-  expect(menu.map(e => e.titel)).toEqual(['Beleuchtung (Stadt Zürich)', 'Fuss- und Velowegnetz (Stadt Zürich)', 'Taktile Rillen an VBZ-Haltestellen (Zürich)'])
-  expect(menu.every(e => e.quelle.includes('Stadt Zürich'))).toBe(true)
-  expect(menu[1].quelle).toContain('19.10.2022')
-  expect(ebenenSichtbar(ebenenAusDaten(leer)).ohne.some(e => e.id.startsWith('regional.e6.'))).toBe(false)
+  const menu = ebenenSichtbar(d)
+  expect([...menu.zeigen, ...menu.ohne, ...menu.laedt, ...menu.fehler].filter(e => e.id.startsWith('regional.e6.'))).toEqual([])
 })
 
 describe('quellenEbenen (SichtweitenCheck)', () => {
@@ -47,11 +42,18 @@ describe('quellenEbenen (SichtweitenCheck)', () => {
     expect(d.velofuss!.map(o => o.klasse)).toEqual(['rad', 'fuss'])
     expect(d.tram!.map(o => o.klasse)).toEqual(['tram', 'uebergang'])
   })
+  it('jedes OSM-Objekt führt zu seinem Objekt in OpenStreetMap', () => {
+    const knoten = (id: number, tags: Record<string, string>) => ({ id, tags, lat: 46.95, lon: 7.44 })
+    const d = ebenenAusDaten({ ...leer, osm: { wege: [weg(1, { highway: 'residential', maxspeed: '30', priority_road: 'designated' })], tram: [weg(2, { railway: 'tram' })],
+      querungen: [weg(3, { highway: 'footway' })], vortritt: [knoten(4, { highway: 'stop' })], ampeln: [knoten(5, {})], uebergaenge: [knoten(6, {})] } } as never)
+    for (const ebene of ['tempo', 'vortritt', 'lsa', 'velofuss', 'strassentyp', 'tram'] as const) expect(d[ebene]!.length).toBeGreaterThan(0)
+    expect(ohneObjektlink(d)).toEqual([])
+  })
   it('Profile mit Neigung; Menü nur mit Daten', () => {
     const d = ebenenAusDaten({ ...leer, profile: [{ key: 'links', linie: [[0, 0], [30, 0]] }, { key: 'zufahrt', linie: [] }],
       hoehen: { links: { i: 7.2, quelle: 'swissALTI3D', laenge: 30, punkte: 20, hinweis: null } } })
     expect(d.steigung!.map(o => [o.klasse, o.wert])).toEqual([['n6', '7,2 %']])
-    expect(ebenenSichtbar(d).zeigen.map(e => e.id)).toEqual(['steigung'])
+    expect(ohneUnfaelle(ebenenSichtbar(d).zeigen).map(e => e.id)).toEqual(['steigung'])
   })
 })
 
@@ -84,26 +86,25 @@ describe('Ladezustand regionaler Kartenquellen', () => {
   it('trennt laufende, fehlgeschlagene und vollständig leere Abfragen', () => {
     const menu = ebenenSichtbar({
       'regional.bund.tram': [],
-      metadaten: { 'regional.ge.signal': {}, 'regional.e6.sg.licht': { fehler: 'Dienst nicht erreichbar' } },
+      metadaten: { 'regional.ge.signal': {}, 'regional.sz.signal': { fehler: 'Dienst nicht erreichbar' } },
     })
     expect(menu.laedt.map(e => e.id)).toEqual(['regional.ge.signal'])
-    expect(menu.fehler.map(e => e.id)).toEqual(['regional.e6.sg.licht'])
+    expect(menu.fehler.map(e => e.id)).toEqual(['regional.sz.signal'])
     expect(menu.ohne.map(e => e.id).filter(id => id.startsWith('regional.'))).toEqual(['regional.bund.tram'])
-    expect(menu.zeigen.some(e => e.id === 'regional.e6.sg.licht')).toBe(false)
+    expect(menu.zeigen.some(e => e.id === 'regional.sz.signal')).toBe(false)
   })
   it('führt auch bei alten Objekten einen aktuellen Fehler nicht als erfolgreichen Abruf', () => {
     const o = { id: 'alt', punkt: [2600000,1200000] as [number,number], klasse: 'lampe', text: 'alt' }
-    const menu = ebenenSichtbar({ 'regional.e6.sg.licht': [o], metadaten: { 'regional.e6.sg.licht': { fehler: 'nicht erreichbar' } } })
-    expect(menu.fehler.map(e => e.id)).toContain('regional.e6.sg.licht')
-    expect(menu.zeigen.map(e => e.id)).not.toContain('regional.e6.sg.licht')
-    expect(menu.ohne.map(e => e.id)).not.toContain('regional.e6.sg.licht')
+    const menu = ebenenSichtbar({ 'regional.sz.signal': [o], metadaten: { 'regional.sz.signal': { fehler: 'nicht erreichbar' } } })
+    expect(menu.fehler.map(e => e.id)).toContain('regional.sz.signal')
+    expect(menu.zeigen.map(e => e.id)).not.toContain('regional.sz.signal')
+    expect(menu.ohne.map(e => e.id)).not.toContain('regional.sz.signal')
   })
-  it('zeigt den Diensthinweis im tatsächlichen E6-Tooltip genau einmal', async () => {
+  it('zeigt den Diensthinweis im tatsächlichen Tooltip genau einmal', async () => {
     const { ebenenBeschriften } = await import('./quellenEbenen')
-    const d = regionalDienst('e6.zh.licht')!
-    const text = ebenenBeschriften({ 'regional.e6.zh.licht': [{ id: 'a', klasse: 'lampe', text: `Leuchte; ${d.hinweis}` }] })['regional.e6.zh.licht']![0].text
+    const d = regionalDienst('sz.signal')!
+    const text = ebenenBeschriften({ 'regional.sz.signal': [{ id: 'a', klasse: 'signal', text: `Vortrittssignal; ${d.hinweis}` }] })['regional.sz.signal']![0].text
     expect(text.split(d.hinweis)).toHaveLength(2)
-    expect(text).toContain('Stadt Zürich')
     expect(text).toContain('Datenstand')
   })
 })

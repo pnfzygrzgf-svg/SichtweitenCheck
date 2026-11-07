@@ -24,7 +24,7 @@ export function useRegionalQuellen<F extends RegionalFall>(setFall: React.Dispat
   const starten = useCallback((mitte: P, gemeinden: readonly Gemeinde[], ladeNr: number, signal: AbortSignal, amOrt: readonly Gemeinde[] = gemeinden) => {
     const id = nr.current, leer: RegionalSnapshot = { version: 1, mitte, radiusM: 200, teile: [] }
     const zustaendig = new Set(regionalFuer(amOrt).map(d => d.id))
-    const dienste = regionalFuer([...gemeinden, ...amOrt]).filter(d => (!d.apps || d.apps.includes(app)) && (!rechenArt(d) || zustaendig.has(d.id)))
+    const dienste = regionalFuer([...gemeinden, ...amOrt]).filter(d => !kontextArt(d) && (!d.apps || d.apps.includes(app)) && (!rechenArt(d) || zustaendig.has(d.id)))
     rechenErlaubt.current = zustaendig
     const behalten = (t: RegionalSnapshot['teile'][number]) => {
       const d = regionalDienst(t.id)

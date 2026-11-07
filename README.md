@@ -66,6 +66,7 @@ ohne Speicherung der IP-Adresse. Die vollständige Liste der Dienste steht in de
 
 ## Grenzen
 
+- Stadt Luzern: Statt der Amtlichen Vermessung rechnet die App mit den Strassenflächen der Stadt und den Gebäudegrundrissen des Kantons; Einzelobjekte fehlen.
 - Amtliche Vermessung: LU, VD, NE, NW, OW und JU sind nur mit Freigabe zugänglich, das Wallis nur teilweise. Dort rechnet die App nicht.
 - Gerechnet wird in der Ebene: Höhe der Hindernisse und Höhenbereich sind vor Ort zu prüfen.
 - Die Längsneigung ist eine mittlere Neigung aus dem Geländemodell, auf Brücken und in Unterführungen ist sie von Hand einzugeben.

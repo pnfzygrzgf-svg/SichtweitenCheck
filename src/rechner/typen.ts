@@ -323,7 +323,7 @@ export interface VerdeckerEintrag {
   id: string
   name: string
   art: string                 // z. B. «Gebäude», «Parkfeld Auto», «Baum»
-  quelle: string              // z. B. «AV», «amtlich (Parkkataster)», «von Hand»
+  quelle: string              // z. B. «AV», «amtlich (Parkkataster)», «Stadt Zürich, Fläche angenommen», «von Hand»
   wirkung: Wirkung            // voll, Palisade, nur Hinweis
   sErst: number               // erster verdeckter Zielpunkt [m ab K]
   strecke: number             // verdeckte Strecke entlang der Achse bis A [m]

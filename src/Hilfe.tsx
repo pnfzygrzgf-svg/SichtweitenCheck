@@ -1,4 +1,3 @@
-import { E6_DIENSTE } from './daten/anbieter/gemeinsam/e6'
 // ── Einstiegshilfe, Datenschutz und Fusszeile (E4a, Vorlage fgsCheck Hilfe.tsx) ──
 
 import { Fragment } from 'react'
@@ -81,17 +80,20 @@ export function DatenQuellen() {
       Stadt, Geodaten Stadt Bern (gisapp.bern.ch), bei Ausfall swissALTI3D.</li>
     <li>Höhenkurven: © swisstopo, swissALTI3D; 1-m-Höhenkurven aus dem 2-m-Raster, neueste passende Ausgabe über STAC v1 (data.geo.admin.ch). Zuschaltbarer Kartenkontext ab Zoom 18; verändert keine Sichtrechnung. Ausgabe, Bereitstellung und Abruf getrennt, örtliches Aufnahmejahr nicht automatisch bekannt.</li>
     <li>Luftbild: {LUFTBILD_QUELLE} (Kartenkacheln und Bild des Berichts).</li>
+    <li>Verkehrsmenge: © ARE, Nationales Personenverkehrsmodell (NPVM), über api3.geo.admin.ch. Modellwerte, keine Verkehrszählung; zuschaltbarer Kartenkontext ab Zoom 17; verändert keine Sichtrechnung.</li>
+    <li>ÖV-Haltestellen Stadt Bern: Geodaten Stadt Bern (map.bern.ch), je Haltekante ein Punkt; zuschaltbarer Kartenkontext ab Zoom 17; verändert keine Sichtrechnung.</li>
     <li>Haltestellen des öffentlichen Verkehrs: © BAV, freie Nutzung mit Quellenangabe, über api3.geo.admin.ch. Aktive Bus-/Tramhaltestellen,
-      nur Kartenanzeige; keine Haltekanten, keine Wirkung auf die Rechnung; Datenstand der Ebene je Ausschnitt; Vollständigkeit unbekannt.</li>
+      mit Haltekanten, nur Kartenanzeige, keine Wirkung auf die Rechnung; Datenstand der Ebene je Ausschnitt; Vollständigkeit unbekannt.</li>
     <li>Gebietsbestimmung: Gemeindegrenzen swissBOUNDARIES3D © swisstopo, aktueller Jahresstand, Ladepunkt und Ausschnitt getrennt;
       freie Nutzung mit Quellenangabe. Benötigt keine AV.</li>
     {PARKKATASTER.map(q => <li key={q.id}>{q.name}: {q.quellenangabe} (WFS map.bern.ch).</li>)}
+    <li>Hintergrund Luftbild Stadt Bern 2026: Orthofoto vom 19. März 2026, Geodaten Stadt Bern (map.bern.ch), wählbar im Gemeindegebiet; nur Kartenbild.</li>
+    <li>Stadt Luzern, Ersatz der Amtlichen Vermessung: Strassenflächen und öffentliche Parkplätze der Stadt (map.stadtluzern.ch, Open Government Data, Quellenangabe Pflicht), Gebäudegrundrisse aus den Blockmodellen des Kantons (public.geo.lu.ch, freie Nutzung). Einzelobjekte wie Mauern fehlen, die Strassenflächen enden an der Stadtgrenze.</li>
     {BAUMKATASTER.map(q => <li key={q.id}>{q.name}: {q.quellenangabe} (WFS map.bern.ch, zuschaltbar).</li>)}
     <li>Amtliche Streifen-, Ampel- und Signalinventare stehen als getrennte Kartenebenen bereit. Bei «Amtliche Signale zuordnen» werden Treffer im Umkreis angeboten: erst die Bestätigung verbindet ein Signal mit Knoten und Zufahrt. Eigene Regelung geht vor. Ein leeres Inventar belegt keine fehlende Anlage.</li>
     <li>Regionale Tempodienste: Kanton Zürich, Basel-Stadt, Genève, Uri, Solothurn, Schwyz, Fribourg und Jura; Verkehrsberuhigungszonen der Städte Luzern, St. Gallen und Lausanne. Nur passende amtliche Linien mit Strassenname werden automatisch übernommen. Sonstige räumliche Treffer und Zonen in den Kartenebenen prüfen und Eingabe bestätigen. Datenstand ist vom Abrufdatum getrennt.</li>
+    <li>Parkfelder Stadt Zürich: öffentlich zugängliche Parkplätze der Dienstabteilung Verkehr (ogd.stadt-zuerich.ch, CC0, Stadt Zürich). Der Dienst führt nur Punkte und Linien, die Flächen sind angenommen: Vorschlag, zählt erst nach «bestätigen».</li>
     <li>Tempo und Verkehrszonen Stadt Zürich: heutiger Zustand (IST), Dienstabteilung Verkehr, CC0. Nur bei passender Strasse, Richtung, Lage und widerspruchsfreier Zone vor OSM; Fahrverbot ist kein Tempo 0.</li>
-    {E6_DIENSTE.map(d => <li key={d.id}>{d.name}: {d.anbieter}; {d.lizenz}. {d.hinweis} Nur Kartenkontext;
-      keine automatische Normantwort oder Hindernisprüfung{d.art === 'beleuchtung' ? '; kein Beleuchtungsnachweis' : ''}.</li>)}
     <li>Tempo Stadt Bern: {VSIG_QUELLENANGABE} (Geoportal Stadt Bern, map.bern.ch; vor OSM).</li>
   </ul>
 }
@@ -141,7 +143,7 @@ export function Datenschutz() {
         <li>Keine Anmeldung, kein eigener Server: gerechnet wird im Browser (Web Worker). Nicht gesendet werden Eingaben,
           Bezeichnung, Zahlen und Status; die Dienste erhalten nur Koordinaten bzw. Ausschnitte (siehe unten).</li>
         <li>Die Links unter «In anderen Rechnern prüfen» öffnen einen anderen Rechner; dabei gehen nur Lage und OSM-Id mit, keine Eingaben. Die
-          Angaben stehen hinter dem # der Adresse und gehen nicht an den Webserver.</li>
+          Angaben stehen hinter dem # der Adresse und gehen nicht an den Webserver; einzig die Knotennummer für den SichtweitenCheck steht davor.</li>
         <li>Eingaben (Hindernisse, Regelung, Halte- oder Wartelinie, D, Tempo, Neigung, Häkchen, Bezeichnung) bleiben im Browser: je Knoten bzw.
           Grundstückzufahrt mit Eingaben ein Eintrag im lokalen Speicher (localStorage, Schlüssel «SichtweitenCheck.fall.» und Nummer
           des Knotens bzw. «z» und Koordinaten des Zufahrtspunkts), sonst nur in der Fall-Datei, wenn du sie speicherst. Die zuletzt gesehene Kartenansicht (Mitte und Zoom) steht unter
@@ -156,6 +158,8 @@ export function Datenschutz() {
               Höhendienst (api3.geo.admin.ch); in der Stadt Bern gehen diese Linien (nur Koordinaten) stattdessen an gisapp.bern.ch
               (Geodaten Stadt Bern, DTM 2023) und nur bei dessen Ausfall an swisstopo.</li>
             <li>swissTLM3D (Tram und Strassenklassen), ARE-Bauzonen und ASTRA-Unfälle über api3.geo.admin.ch: Rechteck ±200 m, bei dichten Beständen in Teilrechtecken; aktuelle öffentliche Ebenenmetadaten. Nur bestätigte Zuordnungen wirken auf Strassentyp und Innerortslage; Unfälle bleiben Kartenkontext.</li>
+            <li>Verkehrsmodell NPVM über api3.geo.admin.ch: nur bei eingeschalteter Ebene der sichtbare Ausschnitt ab Zoom 17.</li>
+            <li>ÖV-Haltestellen über map.bern.ch: nur bei eingeschalteter Ebene und in Bern der sichtbare Ausschnitt ab Zoom 17.</li>
             <li>BAV-Haltestellen und Gemeindegrenzen über api3.geo.admin.ch: Rechteck ±200 m bzw. Ladepunkt für Haltestellen
               und unabhängige Gebietsbestimmung, auch ohne verfügbare AV. Haltestellen nur zur Kartenanzeige; beim Wiederöffnen werden wie bei den übrigen Quellen neue Daten geladen.
               Datenstand und Vollständigkeit werden angezeigt, bestätigte Eingaben bleiben erhalten.</li>
@@ -164,10 +168,10 @@ export function Datenschutz() {
             <li>Overpass (OpenStreetMap): Kartenausschnitt (Knoten und Strassennamen) mit Rand bzw. Umkreis {OSM_RADIUS_M} m um den
               Knoten; Server {erster} (Swiss OpenStreetMap Association), bei Störung ersatzweise {weitere.join(', ')}.</li>
             <li>Regionale Geoportale: im jeweiligen Gebiet Rechteck ±200 m für Tempoabschnitte bzw. Verkehrszonen, Trefferzahl und öffentliche Metadaten: maps.zh.ch, data.bs.ch, vector.sitg.ge.ch, geo.ur.ch, geo.so.ch, map.geo.sz.ch, maps.fr.ch, geo.jura.ch, public.geo.lu.ch, map.stadtluzern.ch, daten.stadt.sg.ch, services.geo.zg.ch und map.lausanne.ch.</li>
-            <li>ogd.stadt-zuerich.ch und data.stadt-zuerich.ch: in und nahe der Stadt Zürich Rechteck ±200 m für heutigen Tempo-/Zonenbestand und Trefferzahl; öffentliche Katalogmetadaten. Datenstand und Abrufzeit getrennt.</li>
-            <li>Kartenkontext: im jeweiligen Gebiet Rechteck ±200 m für Beleuchtungsstandorte (Stadt/Kanton Zürich, Stadt St. Gallen), VBZ-Rillenpunkte und das Zürcher Fuss-/Velowegnetz; Trefferzahlen und aktuelle Dienst-/Katalogmetadaten über www.ogd.stadt-zuerich.ch, data.stadt-zuerich.ch, maps.zh.ch und daten.stadt.sg.ch. Nur Kartenkontext, keine automatische Normantwort oder Hindernisprüfung.</li>
+            <li>ogd.stadt-zuerich.ch und data.stadt-zuerich.ch: in und nahe der Stadt Zürich Rechteck ±200 m für heutigen Tempo-/Zonenbestand und Trefferzahl, Rechteck ±{KATASTER_RADIUS_M} m für die Parkfelder (ogd.stadt-zuerich.ch); öffentliche Katalogmetadaten. Datenstand und Abrufzeit getrennt.</li>
             <li>map.bern.ch (Geodaten Stadt Bern), nur in der Stadt Bern: Rechteck ±{KATASTER_RADIUS_M} m für die öffentlichen Parkfelder,
-              die signalisierte Höchstgeschwindigkeit und, wenn zugeschaltet, das Baumkataster.</li>
+              die signalisierte Höchstgeschwindigkeit und, wenn zugeschaltet, das Baumkataster; beim Hintergrund «Luftbild Stadt Bern 2026» die Kartenbilder des Ausschnitts.</li>
+            <li>map.stadtluzern.ch und public.geo.lu.ch, nur in der Stadt Luzern: Rechteck ±{AV_RADIUS_M} m für Strassenflächen und Gebäudegrundrisse (statt geodienste.ch), Rechteck ±{KATASTER_RADIUS_M} m für die öffentlichen Parkfelder.</li>
           </ul>
           Der eigene Standort (Standort-Knopf) wird nur im Browser ermittelt und angezeigt, nicht gespeichert und nicht gesendet.</li>
         <li>Street View: die Links «Street View ↗» öffnen Google Maps erst auf Klick in einem neuen Fenster; dabei gehen die
