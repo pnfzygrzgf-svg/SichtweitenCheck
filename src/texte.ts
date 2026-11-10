@@ -1,3 +1,4 @@
+import { OFFEN_A_TEXT, UEBER_TAB1_TEXT } from './rechner/sichtweite'
 // ── Textbausteine zum Status (Panel und Bericht, E4a) ──
 //
 // Aus App.tsx herausgelöst, damit Panel und Bericht dieselben Wörter brauchen. Der Bericht setzt vor jeden Status ein Zeichen
@@ -12,11 +13,12 @@ export const fi = (x: number) => (x > 0 ? '+' : x < 0 ? '−' : '±') + String(M
 
 export const STATUS_TEXT: Record<string, string> = {
   erfuellt: 'erfüllt (≥ oberer Wert)', massgebend: 'massgebender Wert erfüllt', nicht_erfuellt: 'nicht erfüllt', keine_zufahrt: 'kein Verkehr von dieser Seite',
+  nicht_beurteilbar: UEBER_TAB1_TEXT, offen: OFFEN_A_TEXT,
 }
 /** Rechtsvortritt (E3c): Status der Richtung nach Abb. 6 */
 export const STATUS_RV: Record<string, string> = {
   erfuellt: 'erfüllt (anzustrebender Zustand)', massgebend: 'bedingt (zulässig als Ausnahme, Abb. 6)',
-  nicht_erfuellt: 'nicht erfüllt (zu sanieren)',
+  nicht_erfuellt: 'nicht erfüllt (zu sanieren)', offen: OFFEN_A_TEXT,
 }
 /** Rechtsvortritt (E3c): «nicht erfüllt» nur wegen des Sichtfelds nach Abb. 5 (Abb. 6 nicht «zu sanieren») */
 export const nurAbb5 = (r: RichtungErgebnis) => !!r.rv && r.statusZusatz.includes('Sichtfeld nach Abb. 5 nicht frei') &&
@@ -25,7 +27,7 @@ export const rvStatusText = (r: RichtungErgebnis, st: string) =>
   (st === 'nicht_erfuellt' && nurAbb5(r) ? 'nicht erfüllt (Sichtfeld nach Abb. 5)' : STATUS_RV[st])
 export const RV_STATUS_TEXT: Record<RvStatus, string> = { erfuellt: 'erfüllt', bedingt: 'bedingt', nicht_erfuellt: 'nicht erfüllt', keine: 'keine Prüfung' }
 /** Status einer Sicht von D bzw. D' (Velo, Trottoir; E3b) */
-export const STATUS_TEXT_TEIL: Record<string, string> = { erfuellt: 'erfüllt', nicht_erfuellt: 'nicht erfüllt' }
+export const STATUS_TEXT_TEIL: Record<string, string> = { erfuellt: 'erfüllt', nicht_erfuellt: 'nicht erfüllt', offen: 'offen (Sicht bei A vor Ort prüfen)' }
 
 /** Trottoirüberfahrt (K0): Herkunft der Breite kurz und Status einer Phase (Panel und Bericht) */
 export const TUE_BREITE_KURZ: Record<TueBreiteQuelle, string> = {
@@ -52,5 +54,6 @@ export function statusMarke(status: string, rv = false): string {
   if (status === 'massgebend') return rv ? '(✓)' : '✓'
   if (status === 'bedingt') return '(✓)'
   if (status === 'nicht_erfuellt') return '✗'
+  if (status === 'nicht_beurteilbar' || status === 'offen') return '?'
   return '–'
 }

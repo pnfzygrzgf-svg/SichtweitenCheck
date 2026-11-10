@@ -178,11 +178,11 @@ describe('E1: erforderliche Sichtweite an einer Hauptverkehrsstrasse', () => {
     expect(e.richtungen.map(x => x.massgebend)).toEqual([50, 50])
     expect(e.annahmen.some(a => a.includes('Die Vortrittsstrasse gilt als'))).toBe(false)
   })
-  it('ES mit Neigung: links −6 % -> Anhaltesichtweite 52 m massgebend; rechts +6 % -> 46 m < 50 m, Tab. 1 bleibt', () => {
+  it('ES mit Neigung: links −6 % -> Anhaltesichtweite 54 m massgebend; rechts +6 % -> 47 m < 50 m, Tab. 1 bleibt', () => {
     const e = rechne(hvs(), eg({ typ: 'es', neigung: { links: -6, rechts: 6 } }))
     const l = seite(e, 'links'), r = seite(e, 'rechts')
-    expect([l.neigung, l.anhalte?.meter, l.anhalteAngewendet, l.massgebend, l.massgebendText]).toEqual([-6, 52, true, 52, 'Anhaltesichtweite bei −6 %'])
-    expect([r.neigung, r.anhalte?.meter, r.massgebend, r.massgebendText]).toEqual([6, 46, 50, 'unterer Wert, Erschliessungsstrasse'])
+    expect([l.neigung, l.anhalte?.meter, l.anhalteAngewendet, l.massgebend, l.massgebendText]).toEqual([-6, 54, true, 54, 'Anhaltesichtweite bei −6 %'])
+    expect([r.neigung, r.anhalte?.meter, r.massgebend, r.massgebendText]).toEqual([6, 47, 50, 'unterer Wert, Erschliessungsstrasse'])
     // |i| > 5 %: Häkchen «grosse Längsneigung» als Vorgabe gesetzt, bei ES nur Hinweis
     expect(e.strasse.ungunst.neigung).toBe(true)
     expect(e.hinweise.some(h => h.startsWith('Ungünstige Verhältnisse an einer Erschliessungs'))).toBe(true)

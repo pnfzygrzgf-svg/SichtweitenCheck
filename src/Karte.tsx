@@ -60,7 +60,7 @@ export { AV_FARBEN } from './daten/anbieter/gemeinsam/avKarte'
 
 export const KNOTEN_FARBE = '#0ea5e9'
 export const STATUS_FARBE: Record<string, string> = {
-  erfuellt: '#15803d', massgebend: '#ca8a04', nicht_erfuellt: '#dc2626', keine_zufahrt: '#64748b',
+  erfuellt: '#15803d', massgebend: '#ca8a04', nicht_erfuellt: '#dc2626', keine_zufahrt: '#64748b', nicht_beurteilbar: '#7c3aed', offen: '#7c3aed',
 }
 export const FREI_FARBE = '#22c55e'
 export const VERDECKT_FARBE = '#dc2626'

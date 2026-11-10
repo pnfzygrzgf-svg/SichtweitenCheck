@@ -44,7 +44,8 @@ export interface Palisade {
   strecken: [number, number][] // verdeckte Strecken [von, bis] (s der Zielpunkte, ganze Achse bis sMax)
   zaehlt: boolean             // eine Strecke misst innerhalb von A ≥ PALISADE_MIN_M und beginnt vor der ersten vollen Verdeckung
   hinterVoll: boolean         // eine solche Strecke liegt erst hinter der ersten vollen Verdeckung (ohne Wirkung)
-  beiA: boolean | null        // Zielpunkt bei A durch einen Baum verdeckt (null: A ausserhalb der Achse)
+  beiA: boolean | null        // Zielpunkt bei A durch einen Baum verdeckt (null: A ausserhalb der Achse); liegt A zwischen zwei feinen
+                              // Punkten, zählt jeder der beiden (SW-04, 10.11.2026)
 }
 
 export interface SichtErgebnis {
@@ -134,6 +135,9 @@ export function sichtEntlang(D: P, achse: P[], sMax: number, flaechen: Verdecken
   const kandidaten = kBisA ? alle.filter(f => boxSchnitt(f.box, boxPunkte([D, ...feinP.slice(0, kBisA)]))) : []
   const treffer = new Map<Verdeckend, { erst: number; n: number }>()
   const palVerdeckt: Verdeckend[] = []        // je feinem Zielpunkt der verdeckende Baum (bzw. undefined)
+  // SW-03 (Prüfung 10.11.2026): erster feiner Zielpunkt, den ein volles Hindernis verdeckt; schmale Hindernisse können zwischen
+  // zwei Punkten des groben Rasters liegen und dürfen trotzdem nicht als freie Sicht enden
+  let feinVoll = -1, feinVollV: Verdeckend | null = null
   feinP.forEach((Z, k) => {
     const segBox: Box = [Math.min(D[0], Z[0]), Math.min(D[1], Z[1]), Math.max(D[0], Z[0]), Math.max(D[1], Z[1])]
     if (k < kBisA) for (const f of kandidaten) {
@@ -141,12 +145,22 @@ export function sichtEntlang(D: P, achse: P[], sMax: number, flaechen: Verdecken
       const t = treffer.get(f.v)
       if (t) t.n++; else treffer.set(f.v, { erst: fein[k], n: 1 })
       if (f.v.wirkung === 'palisade' && !palVerdeckt[k]) palVerdeckt[k] = f.v
+      if ((f.v.wirkung ?? 'voll') === 'voll' && feinVoll < 0) { feinVoll = k; feinVollV = f.v }
     }
-    else if (pal.length) { const v = verdeckt(D, Z, pal); if (v) palVerdeckt[k] = v }
+    else {
+      if (pal.length) { const v = verdeckt(D, Z, pal); if (v) palVerdeckt[k] = v }
+      if (feinVoll < 0 && voll.length) { const v = verdeckt(D, Z, voll); if (v) { feinVoll = k; feinVollV = v } }
+    }
   })
+  // volle Treffer der feinen Prüfung vor der groben Grenze: Sicht endet am letzten freien feinen Zielpunkt davor
+  if (feinVoll >= 0 && fein[feinVoll] < sVoll - 1e-9) {
+    sVoll = feinVoll === 0 ? 0 : fein[feinVoll - 1]
+    sVerdeckt = fein[feinVoll]; verdecker = feinVollV
+    if (erster < 0) erster = Math.max(0, abstaende.findIndex(a => a >= fein[feinVoll] - 1e-9))
+  }
   const liste = [...treffer.entries()].map(([v, t]) => ({ v, sErst: t.erst, strecke: t.n * FEIN_M })).sort((a, b) => a.sErst - b.sErst)
 
-  let vorhanden = sVoll, bisEnde = erster < 0, palisade: Palisade | null = null
+  let vorhanden = sVoll, bisEnde = erster < 0 && feinVoll < 0, palisade: Palisade | null = null
   if (palVerdeckt.some(x => x)) {
     const strecken: [number, number][] = [], laeufe: [number, number][] = []
     for (let k = 0; k < fein.length; k++) {
@@ -164,9 +178,11 @@ export function sichtEntlang(D: P, achse: P[], sMax: number, flaechen: Verdecken
     const zaehlt = !!lang && sPal < sVoll
     if (zaehlt) { vorhanden = sPal; bisEnde = false; verdecker = palVerdeckt[lang![0]]; sVerdeckt = fein[lang![0]] }
     const nA = palVerdeckt.slice(0, kBisA).filter(x => x).length
-    const kA = A <= ende + 1e-9 ? Math.min(fein.length - 1, Math.round(A / FEIN_M)) : -1
+    // Zielpunkt bei A (SW-04): auf einer Rastergrenze der Punkt selbst, dazwischen beide Nachbarn (der Schatten kann A treffen)
+    const imA = A <= ende + 1e-9
+    const kA0 = Math.min(fein.length - 1, Math.floor(A / FEIN_M + 1e-9)), kA1 = Math.min(fein.length - 1, Math.ceil(A / FEIN_M - 1e-9))
     palisade = { anteil: kBisA ? nA / kBisA : 0, laengste: Math.max(...laeufe.map(laengeA)), strecken, zaehlt, hinterVoll: !!lang && !zaehlt,
-      beiA: kA < 0 ? null : !!palVerdeckt[kA] }
+      beiA: imA ? !!palVerdeckt[kA0] || !!palVerdeckt[kA1] : null }
   }
   return { punkte, abstaende, sichtbar, vorhanden, bisEnde, verdecker, sVerdeckt, liste, palisade }
 }

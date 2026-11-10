@@ -157,7 +157,8 @@ export default function KreiselBlock({ kn, setTyp, zufahrt, zufahrtWaehlen, setB
 }
 
 /** Status eines Teils am Kreisel in Worten (Az: Regelfall / nur Minimal / nicht erfüllt) */
-export const kreiselStatusText = (t: KreiselSichtTeil, az = false): string => az ?
+export const kreiselStatusText = (t: KreiselSichtTeil, az = false): string =>
+  t.status === 'offen' ? 'offen (Fahrzeug bei A im Schatten eines Stamms, vor Ort prüfen)' : t.status === 'nicht_beurteilbar' ? 'nicht beurteilbar' : az ?
   (t.status === 'erfuellt' ? 'Regelfall erfüllt' : t.status === 'massgebend' ? 'nur Minimalwert erfüllt' : 'nicht erfüllt') :
   t.status === 'erfuellt' ? (t.oben > t.A ? 'erfüllt (≥ oberer Wert)' : 'erfüllt') : t.status === 'massgebend' ? 'massgebender Wert erfüllt' : 'nicht erfüllt'
 const vorhandenText = (t: KreiselSichtTeil) => `${f1(t.vorhanden)} m${t.bisEnde ? ' (bis zum Ende der Linie frei)' : ''}`

@@ -105,6 +105,18 @@ describe('E3a: Neigung in der Rechnung', () => {
   const rechne = (hoehen: Parameters<typeof rechneKnoten>[2]['hoehen'], eg: Partial<Eingaben> = {}) =>
     rechneKnoten(osm, [fahrbahn], { knoten: 12, zufahrt: null, hoehen, eingaben: { ...KEINE_ALLE_EINGABEN, ...eg } }).ergebnis!
   const seite = (e: ReturnType<typeof rechne>, r: string) => e.richtungen.find(x => x.richtung === r)!
+  it('SW-05: Profillinien hängen nicht von der gemessenen Neigung ab (keine Rückkopplung Neigung → A → Linie)', () => {
+    const linien = (e: ReturnType<typeof rechne>) => [e.richtungen.map(r => r.profilLinie), e.zufahrtProfil, e.trottoirProfil]
+    const ohne = rechne(null), steil = rechne({ links: gemessen(-10), rechts: gemessen(9) }), flach = rechne({ links: gemessen(0), rechts: gemessen(0) })
+    expect(linien(steil)).toEqual(linien(ohne))
+    expect(linien(flach)).toEqual(linien(ohne))
+    // die Linie reicht mindestens bis A (bei −10 % höher als eben)
+    const laenge = (l: [number, number][]) => l.slice(1).reduce((x, p, i) => x + Math.hypot(p[0] - l[i][0], p[1] - l[i][1]), 0)
+    for (const r of steil.richtungen) expect(laenge(r.profilLinie)).toBeGreaterThanOrEqual(Math.min(r.massgebend, laenge(r.achse)) - 1e-6)
+    // Tempo von Hand ändert A und damit die Linie (neuer Abruf nötig)
+    const t80 = rechne(null, { tempo: { links: { art: 'signalisiert', wert: 80, begruendung: '' }, rechts: null } })
+    expect(seite(t80, 'links').profilLinie).not.toEqual(seite(ohne, 'links').profilLinie)
+  })
   it('Vorgabe aus dem Höhenmodell: −6,9 / +7,2 %; Anhaltesichtweite und «grosse Längsneigung» (oberer Wert) als Vorgabe', () => {
     const e = rechne({ links: gemessen(-6.9), rechts: gemessen(7.2), zufahrt: gemessen(-7.5) })
     const l = seite(e, 'links'), r = seite(e, 'rechts')
@@ -140,18 +152,18 @@ describe('E3a: Neigung in der Rechnung', () => {
     expect(seite(rechne({ rechts: gemessen(3) }), 'links').neigungQuelle).toBe('ohne Profil: unbekannt, strengster Wert')
   })
   it('Neigung unbekannt nach dem Laden: Anhaltesichtweite bei −12 % angewendet, Tab. 3 Spalte ≤ −4', () => {
-    // ES 50 km/h: Abb. 2 bei −12 % 57 m > 50 m; Velo über 30 km/h 55 m; «grosse Längsneigung» bleibt aus
+    // ES 50 km/h: Abb. 2 bei −12 % 58 m > 50 m; Velo über 30 km/h 55 m; «grosse Längsneigung» bleibt aus
     const fehler = neigungMessung(new Error('HTTP 500'))
     for (const hoehen of [{}, { links: fehler, rechts: fehler }]) {
       const e = rechne(hoehen, { typ: 'es' })
       for (const r of e.richtungen) {
         expect([r.neigung, r.neigungUnbekannt, r.anhalteAngewendet, r.anhalte?.i, r.anhalte?.meter, r.massgebend, r.massgebendText])
-          .toEqual([0, true, true, -12, 57, 57, 'Anhaltesichtweite, Neigung unbekannt (strengster Wert bei −12 %)'])
+          .toEqual([0, true, true, -12, 58, 58, 'Anhaltesichtweite, Neigung unbekannt (strengster Wert bei −12 %)'])
         expect([r.velo?.A, r.velo?.neigungUnbekannt, r.velo?.text]).toEqual([55, true, 'Tab. 3, über 30 km/h, Spalte ≤ −4 % (Neigung unbekannt: strengster Wert)'])
       }
       expect(e.strasse.ungunst.neigung).toBe(false)
     }
-    // HVS (tertiary): Zwischenwert 60 m bleibt über 57 m; Hinweis zur Vorgabe «grosse Längsneigung»
+    // HVS (tertiary): Zwischenwert 60 m bleibt über 58 m; Hinweis zur Vorgabe «grosse Längsneigung»
     const h = rechne({})
     expect(h.richtungen.map(r => [r.massgebend, r.typStufe, r.anhalteAngewendet])).toEqual([[60, 'zwischen', true], [60, 'zwischen', true]])
     expect(h.hinweise.join(' | ')).toContain('Längsneigung unbekannt: die automatische Einstufung «grosse Längsneigung» (ungünstige Verhältnisse) bleibt aus')
@@ -161,7 +173,7 @@ describe('E3a: Neigung in der Rechnung', () => {
     const l = seite(e, 'links'), r = seite(e, 'rechts')
     expect([l.neigung, l.neigungHand, l.neigungUnbekannt, l.neigungVorgabeUnbekannt, l.anhalteAngewendet, l.massgebend, l.velo?.A])
       .toEqual([1, true, false, true, false, 50, 45])
-    expect([r.neigungUnbekannt, r.massgebend, r.velo?.A]).toEqual([true, 57, 55])
+    expect([r.neigungUnbekannt, r.massgebend, r.velo?.A]).toEqual([true, 58, 55])
     expect(e.annahmen.join(' | ')).toContain('Längsneigung von rechts unbekannt (kein Höhenprofil)')
     // lädt: 0 %, nicht angewendet, Tab. 3 Spalte 0
     const n = rechne(null, { typ: 'es' })

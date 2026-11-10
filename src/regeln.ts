@@ -24,7 +24,7 @@ import { BAUM_STAMM_M, LINIE_PUFFER_M, LAENGS_BREITE_M } from './rechner/hindern
 import { TUE_GEHLINIE_M, TUE_BREITE_ANNAHME_M, TUE_BREITE_Z16 } from './rechner/trottoirueberfahrt'
 import { HALTELINIE_SCHRITT_M, HALTELINIE_MIN_M, SPIEGEL_ABSTAND_M, SPIEGEL_TEMPO_MAX } from './rechner/massnahmen'
 import { PROFIL_MIN_M, ZUFAHRT_STEIL_PROZENT } from './rechner/neigung'
-import { ANHALTESICHT_I_MIN } from './rechner/anhaltesicht'
+import { ANHALTESICHT_I_MIN, ANHALTESICHT_ABLESUNG } from './rechner/anhaltesicht'
 import { TEMPO_ERSATZ } from './rechner/tempo'
 import { GEGENUEBER_GRAD } from './rechner/lage'
 import { TEILUNG_WINKEL_GRAD, TEILUNG_KREISEL_M } from './rechner/knoten'
@@ -405,7 +405,7 @@ const EINTRAEGE: readonly RegelEintrag[] = [
   { id: 'V090-A2', werk: '40090', ordnung: 7, fundstelle: 'Abb. 2, S. 5', titel: 'Anhaltesichtweite bei Gefälle und Steigung',
     wirkung: 'rechnet mit', thema: 'neigung', gilt: e => e.richtungen.some(r => r.anhalteAngewendet && r.status !== 'keine_zufahrt'),
     prueft: 'Bergab braucht ein Fahrzeug länger zum Anhalten. Bei stärkerer Neigung nimmt die App darum mindestens die Anhaltesichtweite.',
-    werte: `aus dem Diagramm abgelesen (±2 m); erst über ±${NEIGUNG_EBEN_PROZENT} %; unter 30 km/h nicht (keine Kurve); unbekannte ` +
+    werte: `aus dem Diagramm ${ANHALTESICHT_ABLESUNG}; erst über ±${NEIGUNG_EBEN_PROZENT} %; unter 30 km/h nicht (keine Kurve); unbekannte ` +
       `Neigung: Wert bei ${proz(ANHALTESICHT_I_MIN)}`,
     daten: 'Tempo, Höhenmodell swissALTI3D bzw. deine Eingabe im Panel' },
   // ── VSS 40 242 ──

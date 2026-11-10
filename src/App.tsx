@@ -61,9 +61,9 @@ import { AV_RADIUS_M, OSM_RADIUS_M, KATASTER_RADIUS_M, avNachladen, REGELUNG_TEX
 import { zufahrtspunktKey, zufahrtspunktLesen } from './rechner/grundstueck'
 import { armText, nachNr, keineZufahrt } from './rechner/knoten'
 import { lageText, lageNach, lageKurz } from './rechner/lage'
-import { TAB1, ZIEL_FAKTOR, STRASSENTYP_TEXT, UNGUNST_TEXT, NEIGUNG_GROSS_PROZENT, NEIGUNG_EBEN_PROZENT, SCHWERVERKEHR_PROZENT,
+import { ZIEL_FAKTOR, STRASSENTYP_TEXT, UNGUNST_TEXT, NEIGUNG_GROSS_PROZENT, NEIGUNG_EBEN_PROZENT, SCHWERVERKEHR_PROZENT,
   UNGUNST_MASSE_TEXT, ZWISCHENWERT_TEXT, neigungLesen, type Strassentyp, type Ungunst } from './rechner/sichtweite'
-import { ANHALTESICHT_STUFEN, ANHALTESICHT_I_MIN } from './rechner/anhaltesicht'
+import { ANHALTESICHT_STUFEN, ANHALTESICHT_I_MIN, ANHALTESICHT_ABLESUNG } from './rechner/anhaltesicht'
 import { FAHRERSITZ_M, B_INNERORTS_M, TROTTOIR_BIS_M, TROTTOIR_MAX_M } from './rechner/beobachtung'
 import { D_MFZ_M } from './rechner/hauptachsen'
 import { Anleitung, Datenschutz, Fusszeile, RechnungGrundlagen, DatenQuellen, QuellenTabelle, BegriffeListe, BegriffText } from './Hilfe'
@@ -149,8 +149,22 @@ const GRUND_OHNE_LADEN_M = 50
 const datenKey = (d: Daten) => (d.nid !== null ? `k${d.nid}` : `z${zufahrtspunktKey(d.ort)}`)
 /** Längsneigung aus dem Höhenmodell (E3a): Messungen und wofür (Daten, Zufahrtspunkt, Zufahrt); vorschlag: Zufahrt war nicht gewählt */
 interface HoehenStand { sig: string; arme: string; vorschlag: boolean; stand: HoehenVorgabe; profile?: Partial<Record<keyof HoehenVorgabe, HoehenProfil>>
+  /** Prüfsumme der abgefragten Linien und der Dienste (hoehenGeo): der Stand gilt nur für diese Geometrie (SW-05) */
+  geo: string
   /** Schlüssel des benutzten Höhendienstes in «Geladene Quellen» (hoehen bzw. hoehenBern) */
   schluessel: string }
+/** Linien der Höhenprofile einer Rechnung: je Richtung entlang der Fahrstreifenachse, die Zufahrt und das Trottoir (E3a, E3b) */
+const hoehenLinien = (e: Pick<Ergebnis, 'richtungen' | 'zufahrtProfil' | 'trottoirProfil'>): [keyof HoehenVorgabe, P[]][] =>
+  ([['links', e.richtungen.find(r => r.richtung === 'links')?.profilLinie ?? []], ['rechts', e.richtungen.find(r => r.richtung === 'rechts')?.profilLinie ?? []],
+    ['zufahrt', e.zufahrtProfil], ['trottoir', e.trottoirProfil]] as [keyof HoehenVorgabe, P[]][]).filter(([, l]) => l.length >= 2)
+/** Prüfsumme der Profillinien (Lage auf 0,1 m) und der Höhendienste (SW-05, Prüfung 10.11.2026): ändert sich die gerechnete
+ *  Geometrie (Fahrlinie oder F_B von Hand, A über Tempo und Strassentyp) oder der Dienst, gilt der geladene Stand nicht mehr */
+const hoehenGeo = (linien: readonly [keyof HoehenVorgabe, P[]][], dienste: readonly { id: string }[]): string => {
+  const text = `${dienste.map(d => d.id).join('>')}|${linien.map(([k, l]) => `${k}:${l.map(p => `${Math.round(p[0] * 10)},${Math.round(p[1] * 10)}`).join(';')}`).join('|')}`
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193)
+  return (h >>> 0).toString(16)
+}
 const zpSig = (z: ZufahrtspunktEingabe | null) => (z ? `${zufahrtspunktKey(z.p)}:${z.richtung ? z.richtung.join(',') : '-'}:${z.herkunft ?? ''}` : '')
 /** LV95 auf cm (Eingaben von der Karte) */
 const cm = (p: P): P => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]
@@ -328,7 +342,8 @@ const rvNichtGeprueft = (r: RichtungErgebnis) => r.status === 'keine_zufahrt' &&
 function autoStand(r: RichtungErgebnis): TeilStand {
   if (r.status === 'keine_zufahrt') return rvNichtGeprueft(r) ? { feld: 'Auto nicht geprüft', kurz: 'nicht geprüft', farbe: GRAU } :
     { feld: 'keine Autos', kurz: 'keine Autos', farbe: GRAU }
-  const kurz = r.status === 'erfuellt' ? 'erfüllt' : r.status === 'massgebend' ? (r.rv ? 'bedingt' : 'massgebend erfüllt') : 'nicht erfüllt'
+  const kurz = r.status === 'erfuellt' ? 'erfüllt' : r.status === 'massgebend' ? (r.rv ? 'bedingt' : 'massgebend erfüllt')
+    : r.status === 'offen' ? 'offen (bei A prüfen)' : r.status === 'nicht_beurteilbar' ? 'nicht beurteilbar' : 'nicht erfüllt'
   return { feld: `Auto ${kurz}`, kurz, farbe: STATUS_FARBE[r.status] }
 }
 function veloStand(r: RichtungErgebnis): TeilStand {
@@ -425,9 +440,7 @@ function RichtungZeile({ r, t, mitTrottoir, achseQuelle, velo, gehlinie = false,
                 {!r.rv && <li>Anhaltesichtweite (VSS 40 090b Abb. 2): {r.anhalte ? <>bei {fi(r.anhalte.i)} %{r.neigungUnbekannt ?
                   ' (Neigung unbekannt: strengster Wert)' : ''}: {r.anhalte.meter} m (VP{' '}
                   {r.anhalte.stufe} km/h{r.anhalteAngewendet ? '' : `; nicht angewendet, |i| bis ${NEIGUNG_EBEN_PROZENT} %`}
-                  {r.anhalte.unsicher ? `; Kurve ${r.anhalte.verlaengert ? 'verlängert' : 'gestrichelt'}, unsicher` : ''}{r.anhalte.abweichung !== 0 ? `; Diagramm ` +
-                  `${Math.ceil(r.anhalte.roh - 1e-9)} m, auf Tab. 1 verschoben: bei 0 % ${TAB1[r.anhalte.stufe][0] + r.anhalte.abweichung} ` +
-                  `statt ${TAB1[r.anhalte.stufe][0]} m` : ''})</> : `unter ${ANHALTESICHT_STUFEN[0]} km/h keine Kurve`}.</li>}
+                  {r.anhalte.unsicher ? `; Kurve ${r.anhalte.verlaengert ? 'verlängert' : 'gestrichelt'}, unsicher` : ''}; {ANHALTESICHT_ABLESUNG})</> : `unter ${ANHALTESICHT_STUFEN[0]} km/h keine Kurve`}.</li>}
                 {r.rv && <li>{r.typText}.</li>}
                 <li>Erforderliche Sichtweite A{r.rv ? ', mindestens (nicht zu sanieren)' : ', massgebend'}: {r.massgebend} m
                   ({r.massgebendText}).</li>
@@ -1330,8 +1343,12 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     if (!hoehen || !daten || !ziel) return null
     const basis = `${datenKey(daten)}|${zpSig(ziel.zufahrtspunkt)}|`
     if (!hoehen.sig.startsWith(basis)) return null
-    return (ziel.zufahrt === null ? hoehen.vorschlag : ziel.zufahrt === hoehen.sig.slice(basis.length)) ? hoehen.stand : null
-  }, [hoehen, daten, ziel])
+    if (!(ziel.zufahrt === null ? hoehen.vorschlag : ziel.zufahrt === hoehen.sig.slice(basis.length))) return null
+    // SW-05: nur für die Linien, entlang der die Profile geholt wurden; sonst «Neigung unbekannt» bis zum neuen Profil
+    const e = rechnung?.ergebnis
+    if (e && hoehenGeo(hoehenLinien(e), hoehenDienstFuer(!!vsigKat)) !== hoehen.geo) return null
+    return hoehen.stand
+  }, [hoehen, daten, ziel, rechnung, vsigKat])
   useEffect(() => { if (daten && ziel) rechnen(daten, ziel, eingaben, hindEingaben, hoehenVorgabe, tempoAmtlich) },
     [daten, ziel, eingaben, hindEingaben, hoehenVorgabe, tempoAmtlich, rechnen])
   // andere Zufahrt: andere Vortrittsstrasse und andere Achse, die Eingaben (E1, E2b) gelten nicht mehr
@@ -1790,21 +1807,19 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
     const sig = `${datenKey(d)}|${zpSig(z.zufahrtspunkt)}|${e.zufahrt}`
     // dazu die Arme links und rechts: beim Rechtsvortritt (E3c) können sie für dieselbe Zufahrt andere sein; K0: mit dem Häkchen
     // «Trottoirüberfahrt» kommt bzw. geht das Profil des Trottoirs (Gehlinie) für dieselbe Zufahrt
-    const arme = e.vortritt.join(',') + (e.trottoirProfil.length >= 2 ? '|trottoir' : ''), lauf = `${sig}#${arme}`
-    if ((hoehen?.sig === sig && hoehen.arme === arme) || hoehenLaeuft.current === lauf) return
+    const arme = e.vortritt.join(',') + (e.trottoirProfil.length >= 2 ? '|trottoir' : '')
+    // Dienste in der Reihenfolge des Rückfalls und die Linien gehören zum Schlüssel (SW-05)
+    const dienste = hoehenDienstFuer(!!vsigKat), letzter = dienste[dienste.length - 1]
+    const linien = hoehenLinien(e), geo = hoehenGeo(linien, dienste), lauf = `${sig}#${arme}#${geo}`
+    if ((hoehen?.sig === sig && hoehen.arme === arme && hoehen.geo === geo) || hoehenLaeuft.current === lauf) return
     if (suche.current.ctrl || umkreisVorrang.laeuft()) {                            // Overpass läuft: später
       const t = setTimeout(() => setHoehenTakt(x => x + 1), 500)
       return () => clearTimeout(t)
     }
     hoehenLaeuft.current = lauf
-    const linien = ([['links', e.richtungen.find(r => r.richtung === 'links')?.profilLinie ?? []],
-      ['rechts', e.richtungen.find(r => r.richtung === 'rechts')?.profilLinie ?? []], ['zufahrt', e.zufahrtProfil],
-      ['trottoir', e.trottoirProfil]] as
-      [keyof HoehenVorgabe, P[]][]).filter(([, l]) => l.length >= 2)
     // Dienste in der Reihenfolge des Rückfalls (daten/hoehenDienst.ts): in der Stadt Bern (Zuständigkeit wie das amtliche Tempo,
     // vsigKat) das DTM 2023 der Stadt, dann swissALTI3D; alle Profile eines Falls mit demselben Dienst. Beim Berner Dienst ist ein
     // fehlendes Profil ein Rückfallgrund, beim letzten Dienst gibt ein Fehler «nicht verfügbar» (Neigung unbekannt)
-    const dienste = hoehenDienstFuer(!!vsigKat), letzter = dienste[dienste.length - 1]
     setzeQuelle(dienste[0].schluessel, { name: hoehenName(dienste[0]) })
     mitRueckfall(dienste, async dn => {
       const res = await Promise.all(linien.map(([k, l]) => ladeNeigungMit(dn, l, ctrl.signal).then(r => [k, r] as const)))
@@ -1826,7 +1841,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
         linie: profilEcken(linien.find(([key]) => key === k)![1]), punkte: a.daten,
         quelle: `${dn.anbieter}; Höhenprofil ${dn.kurz}${dn.id === 'swissalti' ? '/Kombinationsmodell' : ' (25 cm)'}`, datenstand: a.datenstand, abgerufen: new Date().toISOString(),
       }]]))
-      setHoehen({ sig, arme, vorschlag: z.zufahrt === null, stand, profile, schluessel: dn.schluessel })
+      setHoehen({ sig, arme, geo, vorschlag: z.zufahrt === null, stand, profile, schluessel: dn.schluessel })
       const ok = res.filter(([, [, a]]) => typeof a !== 'string'), fehler = res.filter(([, [, a]]) => typeof a === 'string')
       const name = (k: string) => (k === 'zufahrt' ? 'Zufahrt' : k === 'trottoir' ? 'Trottoir' : `von ${k}`)
       const abrufe = ok.map(([, [, a]]) => a as Exclude<typeof a, string>)
