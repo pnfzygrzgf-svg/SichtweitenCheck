@@ -1,8 +1,8 @@
 {
   "quelle": "fgsCheck/fgsCheckWeb",
   "bereich": "src/daten/anbieter/gemeinsam",
-  "erzeugt": "2026-11-10T11:02:43.978Z",
-  "commit": "2f2970a34f3691bb7484903e1240529c7c1bbf1a",
+  "erzeugt": "2026-11-10T11:35:12.082Z",
+  "commit": "1db3aa22174c87180d6b4f99e9cb68fdf2ed0149",
   "mitLokalenAenderungen": false,
   "hinweis": "Commit bezeichnet die Basis; Prüfsummen bezeichnen die tatsächlich übernommene Fassung. Nur im fgsCheck ändern und erneut übernehmen.",
   "dateien": {
