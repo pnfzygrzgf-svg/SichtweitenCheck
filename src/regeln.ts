@@ -236,7 +236,7 @@ const EINTRAEGE: readonly RegelEintrag[] = [
     wirkung: 'rechnet mit', thema: 'motorfahrzeuge', gilt: mitAuto,
     prueft: 'Fahrzeuge mit Vortritt fahren mit der Wagenmitte in festem Abstand zum rechten Fahrbahnrand. Wird am Rand parkiert oder ' +
       'liegt dort ein Radstreifen, rückt die Linie entsprechend zur Strassenmitte.',
-    werte: `${m(D_MFZ_M)} m vom rechten Fahrbahnrand; mit Parkierung ${m(PARKSTREIFEN)} m weiter innen; neben einem Radstreifen ` +
+    werte: `${m(D_MFZ_M)} m vom rechten Fahrbahnrand; mit Parkierung ${m(PARKSTREIFEN)} m (Kanton Zürich 2,00 m) weiter innen; neben einem Radstreifen ` +
       `${m(D_MFZ_M)} m neben diesem`,
     daten: 'amtliche Vermessung (Fahrbahn), Parkfelder' },
   { id: 'V273-10b', werk: '40273', ordnung: 10.1, fundstelle: 'Ziffer 10, S. 7', titel: 'Fahrlinie der Velos', wirkung: 'rechnet mit',
@@ -606,7 +606,7 @@ const EINTRAEGE: readonly RegelEintrag[] = [
     thema: 'wartend',
     prueft: 'Wo das wartende Fahrzeug steht, misst die App an vielen Stellen quer über die Fahrbahn der Zufahrt. Wird entlang der Zufahrt ' +
       'parkiert, rückt das Fahrzeug zur Mitte.',
-    werte: `Mitte der rechten Fahrbahnhälfte (Einbahn: Mitte der Fahrbahn); Parkierung ${m(PARKSTREIFEN)} m abgezogen; ohne amtliche ` +
+    werte: `Mitte der rechten Fahrbahnhälfte (Einbahn: Mitte der Fahrbahn); Parkierung ${m(PARKSTREIFEN)} m (Kanton Zürich 2,00 m) abgezogen; ohne amtliche ` +
       `Vermessung ${m(LAGE_ERSATZ)} m rechts der Strassenlinie von OpenStreetMap`,
     daten: 'amtliche Vermessung (Fahrbahn), OpenStreetMap (Strassen), Parkfelder' },
   { id: 'A-Ortslage', werk: 'ANNAHME', ordnung: 6, fundstelle: 'Annahme', titel: 'Innerorts oder ausserorts', wirkung: 'rechnet mit',
@@ -623,9 +623,9 @@ const EINTRAEGE: readonly RegelEintrag[] = [
   { id: 'A-Parkierung', werk: 'ANNAHME', ordnung: 8, fundstelle: 'Annahme', titel: 'Parkierung entlang der Fahrlinie', wirkung: 'rechnet mit',
     thema: 'motorfahrzeuge',
     prueft: 'Ob entlang der Strasse mit Vortritt parkiert wird, erkennt die App an Prüfpunkten knapp innerhalb des Fahrbahnrands, die auf ' +
-      'Parkfeldern liegen, auch auf Velo- und Motorradfeldern.',
+      'Parkflächen liegen, auch auf Velo- und Motorradfeldern und Parkverbotsfeldern. Ergänzte Prüfflächen und Katasterumrisse sind getrennt ausgewiesen.',
     werte: `Prüfpunkte ${m(PARK_SONDE_M)} m innerhalb des Rands, alle 2 m; Parkierung ab ${PARK_MIN_TREFFER} Treffern an 2 Feldern bzw. ` +
-      `${PARK_EIN_FELD_TREFFER} an einem Feld (Abstand bis ${m(PARK_SONDE_RADIUS_M, 1)} m); dann ${m(PARKSTREIFEN)} m abgezogen`,
+      `${PARK_EIN_FELD_TREFFER} an einem Feld (Abstand bis ${m(PARK_SONDE_RADIUS_M, 1)} m); dann ${m(PARKSTREIFEN)} m (Kanton Zürich 2,00 m) abgezogen`,
     daten: 'Parkfelder (amtlich, von Hand, bestätigte Vorschläge)' },
   { id: 'A-Strassentyp', werk: 'ANNAHME', ordnung: 9, fundstelle: 'Annahme', titel: 'Strassentyp aus OpenStreetMap', wirkung: 'rechnet mit',
     thema: 'motorfahrzeuge', gilt: e => nichtRv(e) && !e.strasse.typGewaehlt,

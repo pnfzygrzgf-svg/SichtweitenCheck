@@ -1,3 +1,5 @@
+import type { Hindernis } from './rechner/hindernisse'
+import { parkQuellenIds } from './rechner/parkEinfluss'
 import { swcSichtMasse } from './sichtMasse'
 import { MassBild, useSichtWahl, sichtZeigen, sichtBildText, kreiselSichtId } from './Sichtfelder'
 import { BerichtQuellenTabelle, berichtQuellenZeilen } from './BerichtQuellen'
@@ -86,7 +88,9 @@ function Skizze({ kn, fall }: { kn: KnotenInfo; fall: Fall }) {
   )
 }
 
-export default function KreiselBericht({ fall, kn, kantone, quellen, aendern, schliessen }: { fall: Fall; kn: KnotenInfo; kantone: string[]
+export default function KreiselBericht({ fall, kn, kantone, quellen, aendern, schliessen, parkFelder = [] }: { fall: Fall; kn: KnotenInfo; kantone: string[]
+  /** gerechnete Parkflächen (Rechnung.parkPruefflaechen): Grundlagen nur der Flächen mit Ergebnisbeitrag */
+  parkFelder?: readonly Hindernis[]
   quellen: Record<string, QuellenStand>; aendern: (f: (x: Fall) => Fall) => void; schliessen: () => void }) {
   const k = kn.kreisel!, v = k.vermessung, s = k.sicht!, z = k.zufahrt!
   const arm = k.arme.find(a => a.key === s.arm)!
@@ -214,7 +218,7 @@ export default function KreiselBericht({ fall, kn, kantone, quellen, aendern, sc
         </section>
         <section className="bericht-block">
           <h2>Quellen</h2>
-          <BerichtQuellenTabelle zeilen={berichtQuellenZeilen({ fall, quellen, kantone, avFuer: 'Fahrbahn, Insel, Gebäude', osmFuer: 'Kreisel, Arme, Velobypässe, Tram' })}>
+          <BerichtQuellenTabelle zeilen={berichtQuellenZeilen({ fall, quellen, kantone, parkQuellen: parkQuellenIds(parkFelder, s), avFuer: 'Fahrbahn, Insel, Gebäude', osmFuer: 'Kreisel, Arme, Velobypässe, Tram' })}>
             <ul className="klein"><li>Normen: VSS 40 263 (Kreisel), VSS 40 273 (Sichtverhältnisse); nur Fundstellen und Zahlenwerte, der Text ist im Original nachzulesen.</li></ul>
           </BerichtQuellenTabelle>
         </section>

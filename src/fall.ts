@@ -1,3 +1,4 @@
+import { parkAnordnungLesen } from './rechner/parkgeometrie'
 import { bundBelegLesen } from './daten/anbieter/gemeinsam/bundBelege'
 import { signalEntscheideLesen, type SignalEntscheid } from './daten/anbieter/gemeinsam/regionalSignale'
 import { regionalSnapshotLesen, regionalSnapshotSchreiben, type RegionalSnapshot } from './daten/anbieter/gemeinsam/regional'
@@ -293,7 +294,8 @@ export function hindernisPruefen(h: unknown): Hindernis | null {
   switch (o.art) {
     case 'parkfeld':
       return istPs(o.ring, 3) ? mitName({ id: o.id, art: 'parkfeld', klasse: KLASSEN.includes(o.klasse as ParkKlasse) ? o.klasse as ParkKlasse : 'auto',
-        ring: o.ring, quelle }) : null
+        ring: o.ring, quelle, ...(typeof o.katasterTyp === 'string' ? { katasterTyp: o.katasterTyp } : {}),
+        ...(parkAnordnungLesen(o.parkAnordnung) ? { parkAnordnung: parkAnordnungLesen(o.parkAnordnung) } : {}) }) : null
     case 'laengsparkierung':
       return istPs(o.linie, 2) ? mitName({ id: o.id, art: 'laengsparkierung', linie: o.linie,
         breite: zahl(o.breite) && o.breite > 0.5 && o.breite < 8 ? o.breite : 2.0, quelle }) : null

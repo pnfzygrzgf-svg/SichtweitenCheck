@@ -1,3 +1,6 @@
+import { BAUM_ANNAHME } from './rechner/baumAnnahme'
+import { ParkAnnahmen } from './ParkAnnahmen'
+import { parkEinfluesse } from './rechner/parkEinfluss'
 import { zustaendigkeitAmOrt, istZuerichAmOrt, gemeindeText } from './daten/anbieter/gemeinsam/gebiet'
 import { useHoehenkurvenQuelle } from './hoehenkurven/stand'
 import { SichtGesamtTaste, MassWahl, SichtTaste, richtungSichtId, type SichtArt } from './Sichtfelder'
@@ -766,6 +769,7 @@ function HindernisAbschnitt(p: {
             if (!f.baumkataster) delete f.quellen.baumkataster
             return f
           })} /> {baumKat.quelle.name}</label>
+          <p>{BAUM_ANNAHME}</p>
           <Info titel={baumKat.quelle.name}>
             <p>{baumKat.quelle.quellenangabe}. Bäume bis zur Reichweite der Prüfung erscheinen als Vorschlag (gestrichelt, Stamm{' '}
               {f1(BAUM_STAMM_M)} m) und zählen erst nach «bestätigen»; einzelne auf der Karte anklicken.</p></Info>
@@ -1150,6 +1154,15 @@ const kurzQuelle = (q: string) => q.replace(/\s*\([^()]*\)\s*$/, '') || q
 const dWarnungen = (e: Ergebnis) => e.hinweise.filter(h => h.startsWith('D liegt '))
 /** «von Hand» im Stand einer Zeile (braun wie die Annahmen) */
 const Hand = () => <span className="hand">von Hand</span>
+
+/** Panel «Parkflächen: Annahmen»: nur Felder, die zählen (von Hand bzw. bestätigt, amtlich in Reichweite) oder das Ergebnis beeinflussen;
+ *  nicht der ganze geladene Katasterausschnitt */
+function parkPanelFelder(alle: readonly Hindernis[] | undefined, eigene: readonly Hindernis[], stand: { amtlich: { id: string }[] } | null,
+  ergebnis: unknown): Hindernis[] | undefined {
+  if (!alle) return undefined
+  const ids = new Set([...eigene.map(h => h.id), ...(stand?.amtlich ?? []).map(v => v.id), ...parkEinfluesse(ergebnis).map(x => x.id)])
+  return alle.filter(h => ids.has(h.id))
+}
 
 export default function App({ onStartseite }: { onStartseite?: () => void } = {}) {
   const kartenRef = useRef<L.Map | null>(null)
@@ -2151,6 +2164,8 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
             </>}
             <Block titel={`Hindernisse (${eigeneZahl + zhZahl + amtlichZahl})`} stand={hindStand} offen={offen.hindernisse}
               setOffen={o => setOffen('hindernisse', o)}>
+              <ParkAnnahmen felder={parkPanelFelder(rechnung?.ergebnis?.parkPruefflaechen ?? rechnung?.parkPruefflaechen, fall?.hindernisse ?? [],
+                erg?.hindernis ?? kn?.kreisel?.sicht?.hindernis ?? null, rechnung?.ergebnis ?? kn?.kreisel?.sicht ?? null)} anordnungSetzen={h => aendern(f => ({ ...f, hindernisse: [...f.hindernisse.filter(x => x.id !== h.id), h] }))} />
               <HindernisAbschnitt fall={fall} aendern={aendern} stand={erg?.hindernis ?? kn?.kreisel?.sicht?.hindernis ?? null} parkZh={parkZh.stand} parkZhErneut={parkZh.erneut} zhVorschlaege={zhVorschlaege} werkzeug={werkzeug}
                 werkzeugWaehlen={werkzeugWaehlen} zeichnung={zeichnung} fertig={fertig} abbrechen={() => { setZeichnung([]); zeichnungRef.current = []; setWerkzeug(null) }}
                 bearbeiten={bearbeiten} setBearbeiten={setBearbeiten} klasse={klasse} setKlasse={setKlasse} breite={breite} setBreite={setBreite}
@@ -2347,7 +2362,7 @@ export default function App({ onStartseite }: { onStartseite?: () => void } = {}
       </aside>
       {berichtOffen && fall && rechnung?.ergebnis && av && <Bericht parkVorschlaegeOffen={zhVorschlaege.length} fall={fall} rechnung={rechnung} av={av} kantone={kantone} quellen={{...quellen,...hkQuellen}}
         aendern={aendern} schliessen={berichtSchliessen} />}
-      {berichtOffen && fall && rechnung?.knoten?.kreisel?.sicht && <KreiselBericht fall={fall} kn={rechnung.knoten} kantone={kantone}
+      {berichtOffen && fall && rechnung?.knoten?.kreisel?.sicht && <KreiselBericht fall={fall} kn={rechnung.knoten} parkFelder={rechnung.parkPruefflaechen} kantone={kantone}
         quellen={{...quellen,...hkQuellen}} aendern={aendern} schliessen={berichtSchliessen} />}
     </div>
   )

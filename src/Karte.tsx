@@ -1,3 +1,5 @@
+import { baumStammText } from './rechner/baumAnnahme'
+import { parkDarstellung, parkPruefText } from './rechner/parkgeometrie'
 import { REGIONAL_DIENSTE } from './daten/anbieter/gemeinsam/regionalDienste'
 import { QuelleLink, UNFALL_EBENE, UnfallLegende, ebenenQuelleUrl, objektFenster, objektHtml, objektQuelleUrl, unfallKacheln, type Stelle } from './kartenbaustein/quellenLink'
 import { UNFALL_HINWEIS, unfallEbenen, unfallHtml } from './kartenbaustein/unfaelle'
@@ -115,7 +117,7 @@ const STRICH_VERWORFEN = '2 4'
 /** Hindernis als Text (Liste, Tooltip): «Art – Name (Quelle)» */
 export function hindernisText(h: Hindernis): string {
   const art = artText(h)
-  return `${h.name && h.name !== art ? `${art}: ${h.name}` : art} (${quelleText(h)})`
+  return `${h.name && h.name !== art ? `${art}: ${h.name}` : art} (${quelleText(h)})` + (h.art === 'baum' ? `; ${baumStammText(h)}` : '')
 }
 
 /** Hinweis über der Karte (Stand der Knotensuche); erneut: Knopf «erneut suchen» (nur nach einem Fehler) */
@@ -333,7 +335,7 @@ export default function Karte(props: {
   const [hkMap, setHkMap] = useState<L.Map | null>(null)
   const hk = useHoehenkurven(hkMap, av)
   const [avAn, setAvAn] = useState(true)
-  const [avArten, setAvArten] = useState(() => { try { return avArtenLesen(localStorage.getItem('swc.avArten')) } catch { return avArtenLesen(null) } })
+  const [avArten, setAvArten] = useState(() => { try { return avArtenLesen(localStorage.getItem('swc.avArten2')) } catch { return avArtenLesen(null) } })
   const avArtSetzen = (art: string, an: boolean) => setAvArten(alt => { const neu = new Set(alt); if (an) neu.add(art); else neu.delete(art); return neu })
 
   const sichtKlick = (art: SichtArt, id?: string) => {
@@ -541,7 +543,7 @@ export default function Karte(props: {
     const map = kartenRef.current, eb = ebenenRef.current
     if (!map || !eb) return
     eb.av.clearLayers()
-    try { localStorage.setItem('swc.avArten', JSON.stringify([...avArten])) } catch { /* Sitzung */ }
+    try { localStorage.setItem('swc.avArten2', JSON.stringify([...avArten])) } catch { /* Sitzung */ }
     if (avAn && !map.hasLayer(eb.av)) eb.av.addTo(map)
     else if (!avAn && map.hasLayer(eb.av)) map.removeLayer(eb.av)
     if (!av) return
@@ -979,6 +981,22 @@ export default function Karte(props: {
     const eb = ebenenRef.current
     if (!eb) return
     eb.hind.clearLayers()
+    const gerechnet = (rechnung?.ergebnis?.parkPruefflaechen ?? rechnung?.parkPruefflaechen)
+    const info = (h: Hindernis) => {
+      const x = gerechnet?.find(p => p.id === h.id)
+      return x ? `<br>${esc(parkPruefText(x))}` : ''
+    }
+    const pruefEbene = (h: Hindernis, stil: L.PathOptions): L.Path => {
+      if (!gerechnet || (h.art !== 'parkfeld' && h.art !== 'laengsparkierung')) return hindernisEbene(h, stil) as L.Path
+      const teile = parkDarstellung([h], gerechnet)
+      // Rechnung noch nicht nachgeführt (eben gezeichnet): Umriss aus dem Fall
+      if (!teile.length) return hindernisEbene(h, stil) as L.Path
+      const original = teile.find(p => p.art === 'parkfeld' && p.parkPruefung?.status === 'ergaenzt')
+      if (original?.art === 'parkfeld') L.polygon(original.parkPruefung!.original.map(ll), {
+        color: '#64748b', weight: 2, dashArray: '3 4', fill: false, interactive: false }).addTo(eb.hind)
+      return L.polygon(teile.flatMap(p => p.art === 'parkfeld' ? [[p.ring.map(ll)]] : p.art === 'laengsparkierung' ? [[hindernisRing(p).map(ll)]] : []), stil)
+    }
+
     const ks = rechnung?.knoten?.kreisel?.sicht ?? null
     const stand = rechnung?.ergebnis?.hindernis ?? ks?.hindernis
     // Tooltip-Zusatz: verdeckt in welcher Richtung ab wo (am Kreisel je Teil: Ak, Velo, Az)
@@ -994,8 +1012,8 @@ export default function Karte(props: {
     for (const h of hindernisse) {
       const farbe = hindernisFarbe(h)
       const aus = (h.art === 'hecke' || h.art === 'mauer' || h.art === 'uebrige') && !h.sichtbehindernd
-      hindernisEbene(h, { color: farbe, weight: h.id === bearbeiten ? 4 : 2, fillColor: farbe, fillOpacity: aus ? 0.1 : 0.4, opacity: aus ? 0.6 : 1 })
-        .bindTooltip(esc(hindernisText(h)) + (aus ? ' – nicht sichtbehindernd' : '') + zusatz(h.id) + '<br><i>Klick: wählen</i>', { sticky: true })
+      pruefEbene(h, { color: farbe, weight: h.id === bearbeiten ? 4 : 2, fillColor: farbe, fillOpacity: aus ? 0.1 : 0.4, opacity: aus ? 0.6 : 1 })
+        .bindTooltip(esc(hindernisText(h)) + info(h) + (aus ? ' – nicht sichtbehindernd' : '') + zusatz(h.id) + '<br><i>Klick: wählen</i>', { sticky: true })
         .on('click', klick(h.id)).addTo(eb.hind)
     }
     for (const v of [...(stand?.vorschlaege ?? []), ...(props.parkVorschlaege ?? [])]) {
@@ -1007,8 +1025,8 @@ export default function Karte(props: {
     }
     for (const v of stand?.amtlich ?? []) {
       const farbe = hindernisFarbe(v.hindernis)
-      hindernisEbene(v.hindernis, { color: farbe, weight: v.id === bearbeiten ? 4 : 1.5, fillColor: farbe, fillOpacity: 0.35 })
-        .bindTooltip(`${esc(hindernisText(v.hindernis))}${zusatz(v.id)}<br><i>Klick: wählen, im Panel verwerfen</i>`, { sticky: true })
+      pruefEbene(v.hindernis, { color: farbe, weight: v.id === bearbeiten ? 4 : 1.5, fillColor: farbe, fillOpacity: 0.35 })
+        .bindTooltip(`${esc(hindernisText(v.hindernis))}${info(v.hindernis)}${zusatz(v.id)}<br><i>Klick: wählen, im Panel verwerfen</i>`, { sticky: true })
         .on('click', klick(v.id)).addTo(eb.hind)
     }
     for (const v of stand?.amtlichVerworfen ?? []) {

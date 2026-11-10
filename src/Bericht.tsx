@@ -1,3 +1,6 @@
+import { ParkBerichtDetails } from './ParkBericht'
+import { parkBerichtFelder, parkQuellenIds, parkAbzugAngewendet } from './rechner/parkEinfluss'
+import { parkDarstellung, parkRegel } from './rechner/parkgeometrie'
 import { swcSichtMasse, massBildPunkte } from './sichtMasse'
 import { ZUFAHRT_HERKUNFT } from './rechner/grundstueck'
 import { MassBild, useSichtWahl, sichtZeigen, sichtMassZeigen, richtungSichtId, type SichtArt, type SichtWahl } from './Sichtfelder'
@@ -101,7 +104,7 @@ const vorhandenText = (vorhanden: number, bisEnde: boolean) => `${bisEnde ? '≥
 
 /** Hindernisse für das Bild: Eingaben des Falls und die zählenden amtlichen Parkfelder */
 function bildHindernisse(fall: Fall, e: Ergebnis): Hindernis[] {
-  return [...fall.hindernisse, ...e.hindernis.amtlich.map(v => v.hindernis)]
+  return parkBerichtFelder(parkDarstellung([...fall.hindernisse, ...e.hindernis.amtlich.map(v => v.hindernis)], e.parkPruefflaechen), e)
 }
 
 const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBereit }: { e: Ergebnis; kn: KnotenInfo | null; av: AvFlaeche[]
@@ -247,6 +250,8 @@ const BerichtKarte = memo(function BerichtKarte({ e, kn, av, hindernisse, onBere
           {e.trottoirueberfahrt && <polyline points={linie([e.trottoirueberfahrt.vorderkante, e.trottoirueberfahrt.hinterkante])} fill="none"
             stroke={TROTTOIR_FARBE} strokeWidth={6} strokeOpacity={0.8} />}
           {/* Hindernisse in den Kartenfarben */}
+          {parkBerichtFelder(e.parkPruefflaechen ?? [], e).map(h => h.art === 'parkfeld' && h.parkPruefung?.status === 'ergaenzt' &&
+            <path key={'kataster' + h.id} d={pfad([h.parkPruefung.original])} fill="none" stroke="#64748b" strokeWidth={2} strokeDasharray="3 4" />)}
           {hind.map(({ h, ring }) => <path key={'h' + h.id} d={pfad([ring])} fill={hindernisFarbe(h)} fillOpacity={0.4}
             stroke={hindernisFarbe(h)} strokeWidth={2} />)}
           {/* Verdecker im Sichtdreieck bis A: Rand rot (verdeckt), gelb (Palisade), violett gestrichelt (nur Hinweis) */}
@@ -556,7 +561,7 @@ export function eingabenListe(fall: Fall, e: Ergebnis): string[] {
   if (g.wahrnehmbarkeit) aus.push(`Wahrnehmbarkeit des Knotens: ${WAHRNEHMBARKEIT_TEXT[g.wahrnehmbarkeit]}`)
   if (g.alleArme) aus.push('Rechtsvortritt: alle Arme geprüft')
   if (g.markierungRv) aus.push('Besondere Markierung «Rechtsvortritt» vorhanden (VSS 40 851; ohne Wirkung auf die Rechnung)')
-  for (const h of fall.hindernisse) aus.push(`Hindernis: ${hindernisText(h)}` + ((h.art === 'hecke' || h.art === 'mauer' || h.art === 'uebrige') ?
+  for (const h of parkBerichtFelder(fall.hindernisse, e)) aus.push(`Hindernis: ${hindernisText(h)}` + ((h.art === 'hecke' || h.art === 'mauer' || h.art === 'uebrige') ?
     (h.sichtbehindernd ? ', sichtbehindernd' : ', nicht sichtbehindernd') : ''))
   const verworfen = Object.keys(fall.vorschlaege).length
   if (verworfen) aus.push(`${verworfen} Vorschläge bzw. amtliche Parkfelder verworfen (zählen nicht)`)
@@ -710,6 +715,7 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
         <section className="bericht-block">
           {rv && <h3>Velo und Trottoir</h3>}
           <ErgebnisTabelle e={e} />
+          <ParkBerichtDetails titel="Parkflächen mit Einfluss auf die Prüfung" felder={e.parkPruefflaechen} ergebnis={e} />
         </section>
 
         <section className="bericht-block druck-block">
@@ -754,6 +760,7 @@ export default function Bericht({ fall, rechnung, av, kantone, quellen, aendern,
         <section className="bericht-block druck-block">
           <h2>Quellen</h2>
           <BerichtQuellenTabelle zeilen={berichtQuellenZeilen({ fall, quellen, kantone, luftbild: { flugjahr, geladen: bild === 'ok', abgerufen: datum(heute) },
+            parkQuellen: [...parkQuellenIds(e.parkPruefflaechen ?? [], e), ...(parkAbzugAngewendet(e) ? [parkRegel(av, rechnung.knoten?.p).quellenId] : [])],
             avFuer: 'Fahrbahn, Trottoir, Gebäude', osmFuer: 'Strassennetz, Tempo, Veloführung' })}>
             {(fall.signalEntscheide?.length ?? 0) > 0 && <ul className="klein">{fall.signalEntscheide!.map((x, i) => <li key={`signal:${i}`}>{signalText(x)}</li>)}</ul>}
           </BerichtQuellenTabelle>

@@ -1,3 +1,4 @@
+import { PARK_SN, PARK_ZH, PARK_BE_AUTO, PARK_BE_VELO } from './rechner/parkgeometrie'
 // ── Quellen im Bericht: Tabelle Quelle | Für | Anbieter | Stand | Lizenz, nur die genutzten Quellen (wie fgsCheck, BerichtQuellenTabelle) ──
 //
 // Quellen, die nur auf der Karte als Kontext liegen (Unfälle, Bauzonen, BAV-Punkte, Gebietsbestimmung), stehen nicht im Bericht.
@@ -36,13 +37,21 @@ const urlVon = (z: Zeile): { url?: string } => {
   return url ? { url } : {}
 }
 
-export function berichtQuellenZeilen({ fall, quellen, kantone, luftbild, avFuer, osmFuer }: { fall: Fall; quellen: Record<string, QuellenStand>; kantone: string[]
+export function berichtQuellenZeilen({ fall, quellen, kantone, luftbild, avFuer, osmFuer, parkQuellen = [] }: { fall: Fall; quellen: Record<string, QuellenStand>; kantone: string[]
+  /** Parkplatz-Grundlagen (ParkRegel.quellenId), die ins Ergebnis eingegangen sind; ohne Beitrag keine Zeile */
+  parkQuellen?: readonly string[]
   luftbild?: { flugjahr: string; geladen: boolean; abgerufen: string }; avFuer: string; osmFuer: string }): Zeile[] {
   /** Datenstand und Zusatz aus dem Ladestand einer Quelle */
   const aus = (k: string) => { const q = quellen[k]
     return { stand: q?.datenstand || 'unbekannt', zusatz: `${q?.zeit ? `Abgerufen ${iso(q.zeit)}; ` : ''}Vollständigkeit ${q?.vollstaendigkeit || 'unbekannt'}` } }
   const lizenzVon = (anbieter: string) => (anbieter.includes('Stadt Bern') ? BERN_LIZENZ : anbieter.includes('Stadt Luzern') ? 'Open Government Data, Quellenangabe Pflicht' : 'gemäss Anbieter')
   const z: Zeile[] = []
+  const park: Record<string, Zeile> = {
+    'norm.park.be.auto': { quelle: PARK_BE_AUTO, fuer: 'Auto-/Parkverbotsfelder in Bern, 1,90 m', anbieter: 'Stadt Bern, Bern baut', stand: 'revidiert März 2019', zusatz: '', lizenz: 'Fachliche Grundlage' },
+    'norm.park.be.zweirad': { quelle: PARK_BE_VELO, fuer: 'Velo-/Motorradflächen; ausserhalb Berns als Modellannahme', anbieter: 'Stadt Bern, Bern baut', stand: 'revidiert April 2011', zusatz: '', lizenz: 'Fachliche Grundlage' },
+    'norm.park.sn': { quelle: PARK_SN, fuer: 'Längsparkflächen und Parkstreifenabzug, Tab. 2 A/B, Modellannahme', anbieter: 'VSS', stand: 'gültig ab 1.2.2006', zusatz: '', lizenz: 'Geschützte Norm; kein Normtext eingebunden' },
+    'norm.park.zh': { quelle: PARK_ZH, fuer: 'Kap. 4.1, 2,00 m; kantonsweite Modellannahme', anbieter: 'Kanton Zürich, Tiefbauamt', stand: 'Version 1.0, 1.11.2022', zusatz: '', lizenz: 'Grundlage der Modellannahme' },
+  }
   if (luftbild) z.push({ quelle: 'Luftbild SWISSIMAGE 10 cm', fuer: 'Kartenbild', anbieter: 'swisstopo',
     stand: luftbild.flugjahr ? `Flugjahr ${luftbild.flugjahr}` : 'unbekannt',
     zusatz: `${luftbild.geladen ? `Abgerufen ${luftbild.abgerufen}` : 'Nicht geladen, Kartenbild ohne Luftbild'}; Vollständigkeit unbekannt`, lizenz: SWISSTOPO_LIZENZ })
@@ -68,6 +77,7 @@ export function berichtQuellenZeilen({ fall, quellen, kantone, luftbild, avFuer,
   for (const k of ['tempo', 'zonen'] as const) { const q = fall.zuerich?.[k]
     if (q) z.push({ quelle: `${k === 'tempo' ? 'Signalisierte Geschwindigkeiten' : 'Verkehrszonen'} (${q.objekte.length} Objekte)`, fuer: 'Tempo',
       anbieter: 'Stadt Zürich, Dienstabteilung Verkehr', stand: zhStandText(q), zusatz: `Abgerufen ${iso(q.abgerufen)}; Vollständigkeit unbekannt`, lizenz: 'CC0, Stadt Zürich' }) }
+  for (const id of Object.keys(park)) if (parkQuellen.includes(id)) z.push(park[id])
   return z.map(x => ({ ...x, ...urlVon(x) }))
 }
 

@@ -1,3 +1,4 @@
+import { ParkGrundlagen, ParkQuellen } from './ParkAnnahmen'
 // ── Einstiegshilfe, Datenschutz und Fusszeile (E4a, Vorlage fgsCheck Hilfe.tsx) ──
 
 import { Fragment } from 'react'
@@ -68,6 +69,7 @@ export function RechnungGrundlagen() {
       Darstellung (Personenwagen {f1(PW_LAENGE_M)} × {f1(PW_BREITE_M)} m, Fahrer*innenauge {f1(LENKER_VOR_FRONT_M)} m hinter der Front; Velo{' '}
       {f1(VELO_LAENGE_M)} × {f1(VELO_BREITE_M)} m). Wo ein Werk kein Mass nennt, gilt eine <WerkVerweis w="ANNAHME">Annahme der App</WerkVerweis>{' '}
       bzw. ein <WerkVerweis w="ENTSCHEID">Projektentscheid</WerkVerweis>; alle Regeln stehen im Abschnitt «Regeln».</p>
+    <ParkGrundlagen />
   </>
 }
 
@@ -114,6 +116,7 @@ export function QuellenTabelle() {
         <td className="zahl-zelle"><a href={`#${regelWerkAnker(w)}`} className="werk-link" title="diese Regeln im Abschnitt «Regeln» zeigen"
           onClick={e => { e.preventDefault(); regelnWerkZeigen(w) }}>{n.get(w) ?? 0}</a></td></tr>)}</tbody>
     </table></div>
+    <ParkQuellen />
   </div>
 }
 

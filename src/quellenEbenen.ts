@@ -79,7 +79,7 @@ export const EBENEN: readonly EbeneDef[] = [
   { id: 'strassentyp', titel: 'Strassentyp', quelle: 'OpenStreetMap highway',
     legende: [['haupt', '#dc2626', 'Hauptstrasse'], ['verbindung', '#ea580c', 'Verbindungsstrasse'], ['sammel', '#ca8a04', 'Sammelstrasse'],
       ['erschliessung', '#16a34a', 'Quartier-/Erschliessungsstrasse'], ['andere', '#64748b', 'übrige']] },
-  { id: 'parkfelder', titel: 'Parkfelder', quelle: 'Katasteranbieter nicht geladen',
+  { id: 'parkfelder', titel: 'Parkfelder (Originalumrisse)', quelle: 'Katasteranbieter nicht geladen',
     legende: [['auto', '#1d4ed8', 'Auto'], ['velo', '#0e7490', 'Velo'], ['motorrad', '#7c2d12', 'Motorrad']] },
   { id: 'parkZuerich', titel: 'Parkfelder Stadt Zürich (Vorschlag)', quelle: `${ZH_PARK_QUELLE}; ${ZH_PARK_LIZENZ}; ganzer geladener Ausschnitt, zählt erst nach Bestätigung`,
     legende: [['auto', '#1d4ed8', 'Auto'], ['velo', '#0e7490', 'Velo'], ['motorrad', '#7c2d12', 'Motorrad']] },
@@ -183,7 +183,7 @@ export function ebenenAusDaten(x: QuellenEingang): EbenenDaten {
   d.strassentyp = wege.filter(w => w.tags.highway).map(w => ({ id: `hw:${w.id}`, linien: [wegLinie(w)],
     klasse: HW_KLASSE[w.tags.highway.replace('_link', '')] ?? 'andere', text: `highway=${w.tags.highway}${name(w)} (OpenStreetMap)` }))
   d.parkfelder = (x.park ?? []).filter(f => f.ring.length >= 3).map(f => ({ id: `pk:${f.id}`, quelle: x.parkQuelle || 'Katasteranbieter unbekannt', quellenSchluessel: 'parkkataster', ringe: [f.ring], klasse: f.klasse, deckkraft: 0.4,
-    text: `${f.name || 'Parkfeld'} (Kataster)` }))
+    text: `${f.name || 'Parkfeld'} (Kataster: Originalumriss; Prüfflächen siehe Hindernisse)` }))
   d.baeume = (x.baeume ?? []).map(b => ({ id: `bm:${b.id}`, quelle: x.baumQuelle || 'Baumkatasteranbieter unbekannt', quellenSchluessel: 'baumkataster', punkt: b.p, klasse: 'baum', text: `${b.name || 'Baum'} (Baumkataster)` }))
   d.av = (x.av ?? []).filter(f => f.ringe[0]?.length >= 3).map((f, k) => ({ id: `av:${k}:${f.art}`, quelle: f.qualitaet === LUZERN_QUALITAET ? LUZERN_NAME : `Amtliche Vermessung Kanton ${f.kanton || 'unbekannt'} über geodienste.ch`, quellenSchluessel: 'av', ringe: f.ringe, klasse: avKlasse(f.art),
     deckkraft: 0.3, text: f.qualitaet === LUZERN_QUALITAET ? `${f.art.replace(/_/g, ' ')}; Ersatz der amtlichen Vermessung, Stadt Luzern` : `AV: ${f.art.replace(/_/g, ' ')}` }))

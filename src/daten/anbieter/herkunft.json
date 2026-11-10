@@ -1,13 +1,13 @@
 {
   "quelle": "fgsCheck/fgsCheckWeb",
   "bereich": "src/daten/anbieter/gemeinsam",
-  "erzeugt": "2026-11-07T17:56:38.733Z",
-  "commit": "84fc65998fed1ca3352882dbeec9c61c62481cfe",
-  "mitLokalenAenderungen": true,
+  "erzeugt": "2026-11-10T11:02:43.978Z",
+  "commit": "2f2970a34f3691bb7484903e1240529c7c1bbf1a",
+  "mitLokalenAenderungen": false,
   "hinweis": "Commit bezeichnet die Basis; Prüfsummen bezeichnen die tatsächlich übernommene Fassung. Nur im fgsCheck ändern und erneut übernehmen.",
   "dateien": {
-    "avKarte.test.ts": "2667a283c04e3eb21e1df563e9efdd7fdb36f9043099d2344649c19c371d16ce",
-    "avKarte.ts": "a271a96ada8c937566dd809f703ad2798f583b50308f4dffa7804c67f8d26873",
+    "avKarte.test.ts": "3f5d914fe67157af258ebfddcde64f5e83573666e8e5d8ff9f9bb2aafed96a5e",
+    "avKarte.ts": "211284656094a8e9b72e7efab30ef722bd5a36c666a324be479f8336458552fe",
     "bav.ts": "31e0568ace93a4ecf1ac19e4300a7e33d46ef417593fb86588280b3afad2178c",
     "bedarfOrte.test.ts": "459245038b359162aa6eda7596a8bfce3d782d3099e73ef9825d829cd7f1fc79",
     "bedarfOrte.ts": "66aa741ffdcffc86e40c181e8b5c9d9f11a2eb37d4ca3f22366a69f4ed4bcacb",
