@@ -343,9 +343,8 @@ export function abzugAusOsm(netz: OsmNetz, punkte: [P, P][]): AbzugQuelle {
 /**
  * fahrstreifenmitte: seitliche Lage der Fahrstreifenmitte relativ zur Referenzspur (rechts positiv).
  * Abzüge (Parkierung/Velostreifen) aus OSM-Tags (abzug(k), Anteil wie PARK_MIN_TREFFER), sonst wie Python.
- * fahrbahn: nur sehne wird gebraucht (A7: die Zufahrt reicht Sehnen aus dem AV-Bord herein, senkrecht zum Bord).
  */
-export function fahrstreifenmitte(ref: RefPunkt[], art: string, fahrbahn: Pick<Fahrbahn, 'sehne'>, abzug: AbzugQuelle | null, teilbreite: number,
+export function fahrstreifenmitte(ref: RefPunkt[], art: string, fahrbahn: Fahrbahn, abzug: AbzugQuelle | null, teilbreite: number,
   fso: Fso | null = null, idx: number[] | null = null, abzugVonHand = false, park: ParkRaster | null = null): Fs | null {
   const er: number[] = [], el: number[] = []
   const parkR: number[] = [], parkL: number[] = [], veloR: number[] = [], veloL: number[] = []

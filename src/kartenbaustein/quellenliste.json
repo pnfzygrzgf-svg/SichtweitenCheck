@@ -33,14 +33,13 @@
  },
  {
   "id": "swisstopo-3d",
-  "name": "3D-Daten swisstopo (Gelände, Gebäude, Bäume) und Höhenbezug",
+  "name": "3D-Daten swisstopo (Gelände, Gebäude, Bäume)",
   "anbieter": "swisstopo",
   "gruppe": "Bund und landesweit",
   "hosts": [
-   "3d.geo.admin.ch",
-   "geodesy.geo.admin.ch"
+   "3d.geo.admin.ch"
   ],
-  "wofuer": "fgs: 3D-Ansicht (Zweig ansicht3d), nur Darstellung, keine Prüfung; REFRAME für den lokalen Höhenversatz der Bodenprofile ausserhalb Berns",
+  "wofuer": "fgs: 3D-Ansicht (Zweig ansicht3d), nur Darstellung, keine Prüfung",
   "rechner": {
    "fgs": {
     "ist": "–",

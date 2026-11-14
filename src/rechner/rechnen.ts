@@ -44,11 +44,6 @@ import { zuerichEntlang } from '../daten/anbieter/gemeinsam/zuerichZuordnung'
 //      der Gehlinie 0,50 m vor dem hinteren Rand der Überfahrt, Tab. 2), Phase Fahrbahn = ergebnis.richtungen (Auto Tab. 1, Velo
 //      Tab. 3, B ab der Bordkante).
 //
-// A7 (13.11.2026, Plan «Geometrie aus der AV statt aus der OSM-Linie»): wo die AV einen Bord zeigt, kommen Rand und Breite je Arm, der
-// Rand für B über die Einmündung, die Achse des Zufahrtsstreifens, die Fahrstreifen-, Velo- und Überholachsen, die Parkierungssonden und
-// die Armrichtungen (Einbiegewinkel) aus dem Bord (bordarm.ts, Baustein bordmodell); die OSM-Linie wählt nur Arm, Seite und Stationen.
-// In Lücken («Rand unbekannt») und ohne Bord wie bisher, mit Hinweis «aus OSM geschätzt». Handeingaben, Kreisel, Gebäude und Höhen wie bisher.
-//
 // K1 bis K3 (01.11.2026): an einem Kreisel (Ringpunkt) statt der Rechnung der Kreisel als ein Knoten mit Armen, Vermessung, gewählter
 // Einfahrt (fall.zufahrt = Schlüssel des Kreiselarms: Achse, K, D) und Ablenkungswinkel (kreisel.ts, kreiselfahrt.ts, KnotenInfo.kreisel)
 // und die Meldung, dass die Sichtprüfung später folgt; Typ und Fahrbeziehungen von Hand über eingaben.kreiselTyp, kreiselBeziehungen.
@@ -88,10 +83,7 @@ import { kreiselSicht, kreiselDreiecke } from './kreiselsicht'
 import { parkStreifen, sondenRechts, parkStreifenText, KEIN_PARKSTREIFEN, PARK_SONDE_RADIUS_M, PARK_EIN_FELD_TREFFER,
   type ParkStreifen } from './hauptachsen'
 import { armMittellinieMitEnde, muendungGeglaettet, querschnitt, fahrstreifenAchse, versetzt, versetztVariabel, mitVerlaengerung, schnittBei, lot,
-  abBogen, randLinksBei, randRechtsBei, D_MFZ_M, VERLAENGERUNG_M, SEHNE_OFFEN_ANTEIL, amRand, fahrbahnMitte, fahrbahnBreite, randOhneBord,
-  type Querschnitt, type ArmLinie } from './hauptachsen'
-import { armBord, abzweigungenAm, durchgehendeAchse, randDurchKnoten, ABZWEIG_GERADEAUS_GRAD, BORD_RICHTUNG_M, RAND_ANKER_BIS_M, type ArmBord }
-  from './bordarm'
+  abBogen, randLinksBei, randRechtsBei, D_MFZ_M, VERLAENGERUNG_M, SEHNE_OFFEN_ANTEIL, type Querschnitt } from './hauptachsen'
 import { massnahmenRechnen, type Variante, type VarianteRichtung } from './massnahmen'
 import { PROFIL_MIN_M, ZUFAHRT_STEIL_PROZENT, modellName } from './neigung'
 import { B_INNERORTS_M, B_AUSSERORTS_M, istAusserorts, beobachtungsdistanz, beobachtungspunkt, beobachtungAb, lageAnAchse, trottoirAnZufahrt, querlinie,
@@ -612,36 +604,9 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
   // spitzer Winkel: beide Arme auf einer Seite (ein Arm gegenüber zählt nicht)
   if (!rv && ((lageLR[0] === 'links' && drehung(fahrt, aL.richtung) <= 0) || (lageLR[1] === 'rechts' && drehung(fahrt, aR.richtung) >= 0)))
     hinweise.push('Die Arme der Vortrittsstrasse liegen nicht beidseits der Zufahrt (spitzer Winkel): Seiten links/rechts prüfen.')
-  // AV-Bord je Arm (Plan AV-Geometrie A7): Bordmodell auf der OSM-Linie des Arms (nur Auswahl), Abzweigungen = übrige Arme des Knotens
-  // und OSM-Wege entlang des Arms (bordarm.ts). Mittellinien der vortrittsberechtigten Arme schon hier, weil ihre Bordrichtung in den
-  // Einbiegewinkel eingeht. An einer Grundstückzufahrt hat die Zufahrt keinen eigenen Bord (Achse = Linie der Zufahrt)
-  const armeAlle = g ? [...g.arme, g.zArm] : info.arme
-  const bordAm = (a: ArmInfo, ml: P[]): ArmBord | null => armBord(k.av, ml, abzweigungenAm(netz, kp, ml,
-    armeAlle.filter(b => b.key !== a.key).map(b => b.richtung)))
-  const zBord = g ? null : bordAm(zArm, zMl)
-  const hauptLinien: ArmLinie[] = [aL, aR].map(a => g ? g.mittellinie(a, ARM_LAENGE_M) : armMittellinieMitEnde(netz, achsen, a, ARM_LAENGE_M))
-  // Nachtrag B, SK1: liegen die beiden Arme der Vortrittsstrasse höchstens ABZWEIG_GERADEAUS_GRAD neben der Geraden und beginnen am selben
-  // Punkt, läuft die Achse des Bordmodells über den Knoten in den Gegenarm (durchgehendeAchse): die Einmündung der Zufahrt liegt innerhalb
-  // der Achse; Abzweigungen dann ohne den Gegenarm
-  const hauptBord = [aL, aR].map((a, j) => {
-    const ml = hauptLinien[j].linie, gegen = [aL, aR][1 - j], mlG = hauptLinien[1 - j].linie
-    if (wdiff(a.richtung, neg(gegen.richtung)) > ABZWEIG_GERADEAUS_GRAD || ml.length < 2 || mlG.length < 2 || dist(ml[0], mlG[0]) > 0.01)
-      return bordAm(a, ml)
-    return armBord(k.av, ml, abzweigungenAm(netz, kp, durchgehendeAchse(ml, mlG).achse,
-      armeAlle.filter(b => b.key !== a.key && b.key !== gegen.key).map(b => b.richtung)), mlG)
-  })
   // Einbiegewinkel: Zufahrt gegen die Richtung der Vortrittsstrasse (Sehne von rechts nach links)
   // Rechtsvortritt: Winkel zwischen Zufahrt und rechtem Arm (ohne rechten Arm ohne Bedeutung: 90° gesetzt)
-  // A7: Armrichtungen aus dem Bord (Sehne der Führungslinie ab dem Knoten, Mittel beider Seiten), ohne Bord am Knoten aus der OSM-Linie
-  const bordRichtung = [zBord, ...hauptBord].map(b => b?.richtung() ?? null)
-  const [zRichtung, lRichtung, rRichtung] = [zArm.richtung, aL.richtung, aR.richtung].map((r, j) => bordRichtung[j] ?? r)
-  const einbiegewinkel = rv ? (rArm ? wdiff(zRichtung, rRichtung) : 90) : wdiff(zRichtung, sub(lRichtung, rRichtung))
-  if (bordRichtung.some(r => r)) {
-    const ohne = [[zArm, bordRichtung[0]], [aL, bordRichtung[1]], [aR, bordRichtung[2]]].filter(([, r]) => !r).map(([a]) => armText(a as ArmInfo))
-    herleitung.push(`Einbiegewinkel rund ${Math.round(einbiegewinkel)}°: Armrichtungen aus dem AV-Bord (Sehne der Führungslinie 0 bis ` +
-      `${BORD_RICHTUNG_M} m ab dem Knoten, Mittel beider Seiten)${ohne.length ? `; ${ohne.join(', ')} ohne Bord am Knoten: Richtung aus der ` +
-      'OSM-Linie (10-m-Sehne)' : ''}.`)
-  }
+  const einbiegewinkel = rv ? (rArm ? wdiff(zArm.richtung, rArm.richtung) : 90) : wdiff(zArm.richtung, sub(aL.richtung, aR.richtung))
   if (einbiegewinkel < SCHIEF_UNTER || einbiegewinkel > 180 - SCHIEF_UNTER)
     an.wartend.push(`Die Zufahrt mündet schräg ein (Einbiegewinkel rund ${Math.round(einbiegewinkel)}°): B wird entlang der Zufahrt ` +
       'gemessen, senkrecht zum Rand gemessen ist D darum näher als B.')
@@ -658,35 +623,27 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
   // (Verkehr zum Knoten: Fahrlinie, Velo, Überholfall, Tempo). Rand, Radweg und Trottoir auf der Seite der Zufahrt gehören zur
   // Gegenrichtung, wenn die Zufahrt rechts von u liegt (links von u ist der rechte Rand des Verkehrs zum Knoten): dort folgt die Linie
   // der wegführenden Einbahn (seiteZ; ohne Teilung dieselbe Linie)
-  // A7: Querschnitt mit dem AV-Bord des Arms (hauptBord), Rand und Breite aus dem Bord, wo er vorliegt
-  const haupt = [aL, aR].map((a, j) => {
-    const { linie: ml, ende, teilungen, abschnitte } = hauptLinien[j]
-    const qs = querschnitt(netz, fahrbahn, ml, a.wid, undefined, undefined, abschnitte, hauptBord[j])
+  const haupt = [aL, aR].map(a => {
+    const { linie: ml, ende, teilungen, abschnitte } = g ? g.mittellinie(a, ARM_LAENGE_M) : armMittellinieMitEnde(netz, achsen, a, ARM_LAENGE_M)
+    const qs = querschnitt(netz, fahrbahn, ml, a.wid, undefined, undefined, abschnitte)
     const zl = kreuz(a.richtung, zArm.richtung) > 0
     let seiteZ = { ml, qs, geteilt: zl && teilungen.length > 0 }
     if (!zl && teilungen.length) {
       const w = g ? g.mittellinie(a, ARM_LAENGE_M, 'weg') : armMittellinieMitEnde(netz, achsen, a, ARM_LAENGE_M, 'weg')
-      seiteZ = { ml: w.linie, qs: querschnitt(netz, fahrbahn, w.linie, a.wid, undefined, undefined, w.abschnitte, bordAm(a, w.linie)), geteilt: true }
+      seiteZ = { ml: w.linie, qs: querschnitt(netz, fahrbahn, w.linie, a.wid, undefined, undefined, w.abschnitte), geteilt: true }
     }
     return { arm: a, ml, qs, ende: ende ? armEnde(netz, ende) : null, teilungen, zl, seiteZ }
   })
   // nächstliegender Rand (Seite der Zufahrt) je Arm, zusammengesetzt durch den Knoten
   // Rand je Stelle aus der AV (h.qs.profil), am Knoten der Wert der ersten gültigen Stelle
-  // A7: mit Bord die Führungslinie der Seite der Zufahrt (über die Einmündung der Zufahrt gerade), in Lücken wie bisher (amRand)
   const randTeile = haupt.map(h => {
     const { ml, qs } = h.seiteZ
-    const seite = h.zl ? 'links' as const : 'rechts' as const
-    return { linie: amRand(abschneiden(ml, RAND_LAENGE_M), qs, seite, () => 0),
-      abstand: Math.abs(seite === 'links' ? randLinksBei(qs, 0) : randRechtsBei(qs, 0)), seite,
-      anker: qs.bord && qs.bordSeiten?.[seite] ? qs.bord.anker(seite, RAND_ANKER_BIS_M) : null }
+    const versatz = (s: number) => (h.zl ? randLinksBei(qs, s) : -randRechtsBei(qs, s))
+    return { linie: versetztVariabel(abschneiden(ml, RAND_LAENGE_M), versatz), abstand: Math.abs(versatz(0)) }
   })
   // Rechtsvortritt: B ab dem Rand des rechten Arms auf der Seite der Zufahrt (Abb. 4), über den Knoten hinaus verlängert
   const rvRand = rv && rArm ? mitVerlaengerung(randTeile[1].linie, RAND_LAENGE_M) : null
-  // A7: haben beide Arme nach der Einmündung einen gemessenen Bord, verbindet eine Kurve tangential an beide Borde die Anschlusspunkte
-  // (randDurchKnoten; gerade Strasse: Gerade); sonst wie bisher die Ränder beider Arme bis zum Knoten (Führungslinie bzw. Randprofil)
-  const [r0, r1] = randTeile
-  const rand = rvRand ?? (r0.anker && r1.anker ? randDurchKnoten(r0.linie, r0.anker, r1.linie, r1.anker) :
-    [...[...r0.linie].reverse(), ...r1.linie])
+  const rand = rvRand ?? [...[...randTeile[0].linie].reverse(), ...randTeile[1].linie]
   const nah = rvRand ? randTeile[1].abstand : Math.max(randTeile[0].abstand, randTeile[1].abstand)
   // Veloführung je Richtung (E3b): Eingabe, sonst Vorgabe aus OSM (Tags des Arms, Radweg daneben)
   const veloStand = haupt.map((h, j): VeloStand => {
@@ -734,7 +691,8 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
   if (radwegAussen > 0) {
     const teile = haupt.map(h => {
       const { ml, qs } = h.seiteZ
-      return amRand(abschneiden(ml, RAND_LAENGE_M), qs, h.zl ? 'links' : 'rechts', () => -radwegAussen)
+      return versetztVariabel(abschneiden(ml, RAND_LAENGE_M), s => (h.zl ? randLinksBei(qs, s) + radwegAussen :
+        -(randRechtsBei(qs, s) + radwegAussen)))
     })
     radwegRandLinie = [...[...teile[0]].reverse(), ...teile[1]]
   }
@@ -753,9 +711,6 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
   let zText: ((lageNull: number) => string) | null = null
   let zufahrtVelo: Ergebnis['zufahrtVelo'] = null
   let zTeilungText = ''
-  // A7: Querschnitt der Zufahrt mit AV-Bord und Abstand der Achse von der Führungslinie rechts (null: Achse wie bisher)
-  let zQs: Querschnitt | null = null
-  let zBordAbstand: number | null = null
   if (g) {
     // Grundstückzufahrt: Achse = Linie der Zufahrt (Mitte, einspurig angenommen), ohne Parkstreifen
     zLage = 0
@@ -775,20 +730,7 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
   if (zTeilung) zTeilungText = nachTeilung ? 'Querschnitte auf der zuführenden Einbahn (Lage als Einbahn)' : 'Querschnitte bis zur Teilung'
   const ref = punkteAufSpur(zMl, ab).map(([q, t]) => [q, links(t)] as [P, P])       // rechts des Fahrers = links von u
   const art = zArm.einbahn !== 0 || nachTeilung ? 'einbahn' : 'beide'
-  // A7: Zufahrt mit AV-Bord: «Sehnen» aus den Querschnitten des Bordmodells (gemessener Rand, Anteile auf der Achsnormalen auf die
-  // Breite senkrecht zum Bord umgerechnet), Parkierungssonden am gemessenen Rand; die Achse wird unten die Parallele zur Führungslinie
-  // rechts (aus Sicht des wartenden Fahrzeugs; links von u) im Abstand der Fahrstreifenmitte. Gilt, wenn die Führungslinie rechts und
-  // die Breite an mindestens SEHNE_MIN_PUNKTE Querschnittstellen vorliegen; sonst wie bisher aus den Sehnen quer zur OSM-Linie
-  zQs = zBord ? querschnitt(netz, fahrbahn, zMl, zArm.wid, undefined, undefined, zLinie?.abschnitte ?? [], zBord) : null
-  const bordSehnen = ab.map((s): [number, number] | null => {
-    const b = zBord?.breite(s) ?? null, l = zBord?.rand('links', s), r = zBord?.rand('rechts', s)
-    if (b === null || !l || !r || l.quer - r.quer <= 0) return null
-    const c = b / (l.quer - r.quer)
-    return [l.quer * c, -r.quer * c]
-  })
-  const zMitBord = !!zQs?.bordSeiten?.links && bordSehnen.filter(x => x).length >= SEHNE_MIN_PUNKTE &&
-    ab.filter(s => zBord!.fuehrung('links', s)).length >= SEHNE_MIN_PUNKTE
-  const sehnenRoh = ref.map(([q, r], i) => (zMitBord ? bordSehnen[i] : fahrbahn.sehne(q, r)))
+  const sehnenRoh = ref.map(([q, r]) => fahrbahn.sehne(q, r))
   // Sehnen an der Suchgrenze zählen nicht (wie querschnitt, randProfil); an mehr als SEHNE_OFFEN_ANTEIL der Stellen (Platz,
   // Kreuzungsfläche neben der Zufahrt): kein AV-Querschnitt, Lage aus OSM (Beispiel Hubelmattstrasse/Loryplatz)
   const offen = sehnenRoh.filter(sh => sh && Math.max(sh[0], sh[1]) >= SEHNE_HALB - 0.5).length
@@ -804,17 +746,14 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
   ref.forEach(([q, r], i) => {
     const sh = sehnen[i]
     if (!sh) return
-    const bl = zMitBord ? zBord!.rand('links', ab[i]) : null, br = zMitBord ? zBord!.rand('rechts', ab[i]) : null
-    if (bl && br) { sondenR.push(add(bl.p, bl.innen, PARK_SONDE_M)); sondenL.push(add(br.p, br.innen, PARK_SONDE_M)); return }
     sondenR.push(add(q, r, sh[0] - PARK_SONDE_M)); sondenL.push(add(q, r, -(sh[1] - PARK_SONDE_M)))
   })
   const zParkR = parkStreifen(sondenR, park), zParkL = parkStreifen(sondenL, park)
   const zAbzug: AbzugQuelle | null = zParkR.abzug || zParkL.abzug ?
     () => ({ r: { park: zParkR.abzug, velo: 0 }, l: { park: zParkL.abzug, velo: 0 } }) : null
-  const bordSehne = new Map(ref.map(([q], i) => [q, bordSehnen[i]]))
-  const fs = zOffen ? null : fahrstreifenmitte(ref, art, zMitBord ? { sehne: (q: P) => bordSehne.get(q) ?? null } : fahrbahn, zAbzug, 0)
+  const fs = zOffen ? null : fahrstreifenmitte(ref, art, fahrbahn, zAbzug, 0)
   // Ränder je Stelle (Ausreisser verworfen, geglättet); zu wenige gültige Stellen: feste Lage aus dem Median wie bisher
-  const rp = fs && !zMitBord ? randProfil(ab.slice(0, ref.length), sehnen) : null
+  const rp = fs ? randProfil(ab.slice(0, ref.length), sehnen) : null
   if (fs) {
     for (const id of [...(fs.abzugParkR ? zParkR.ids ?? [] : []), ...(fs.abzugParkL ? zParkL.ids ?? [] : [])])
       parkEinfluss.push({ id, grund: 'Parkstreifenabzug der Zufahrt / Lage von Achse und Beobachtungspunkt' })
@@ -822,13 +761,7 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
     const pz = [zParkR.abzug ? parkStreifenText(zParkR) : '', fs.abzugParkL ? parkStreifenText(zParkL).replace('rechts', 'links') : '']
       .filter(x => x)
     const mitteText = art === 'einbahn' ? 'Einbahn, Mitte' : 'Mitte der rechten Hälfte'
-    if (zMitBord) {
-      // A7: Parallele zur Führungslinie rechts im Abstand der Fahrstreifenmitte (senkrecht zum Bord)
-      zBordAbstand = fs.vomRand
-      zText = l => `Achse des Zufahrtsstreifens parallel zum AV-Bord rechts, ${f2(fs.vomRand)} m davon (Fahrbahn ${f1(fs.breite)} m senkrecht ` +
-        `zum Bord im Median, ${fs.nSehnen} Querschnitte, ${mitteText}; am Nullpunkt ${seiteOsm(l)}${pz.length ? `; ${pz.join('; ')}` : ''})`
-      zQuelle = zText(zLage)
-    } else if (rp) {
+    if (rp) {
       // Mündung (Knoten bis zur ersten stetigen Stelle): Abstand zum rechten AV-Rand konstant (lageMuendung)
       zProfil = lageMuendung({ s: rp.s, lage: fahrstreifenLagen(rp, fs, art) }, rp, x => {
         const pk = punkteAufSpur(zMl, [x])
@@ -868,17 +801,13 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
       const rwFest = fuehrung === 'radweg' && !!rwZ?.eigeneSeite
       zLage = rwFest ? rwZ!.versatz : fs.rechts - vomRandV
       zProfil = rp && !rwFest ? { s: rp.s, lage: rp.rechts.map(x => x - vomRandV) } : null
-      // A7: mit Bord die Parallele zur Führungslinie (aus Sicht des Autoverkehrs links) im Abstand vomRandV; Radweg aus OSM: feste Lage
-      zBordAbstand = zMitBord && !rwFest ? vomRandV : null
       lageText = fuehrung === 'misch' ? `${f2(D_VELO_M)} m vom für das Velo rechten Fahrbahnrand${fs.abzugParkR ? ' neben dem Parkstreifen' : ''} ` +
         '(Mischverkehr)' : fuehrung === 'radstreifen' ? `Mitte des Gegenverkehrsstreifens, ${f2(fs.abzugParkR + RADSTREIFEN_M / 2)} m vom ` +
         'für das Velo rechten Fahrbahnrand' : rwZ?.eigeneSeite ? `Achse des Radwegs (OSM-Weg ${rwZ.id})` :
         `Achse des Radwegs ohne OSM-Linie, ${f2(RADWEG_BREITE_M)} m breit direkt am Fahrbahnrand angenommen`
       const vgText = lageText
       zText = l => `Achse des Velogegenverkehrs auf der Zufahrt: ${vgText}, aus Sicht des Autoverkehrs am linken Fahrbahnrand (` +
-        (zBordAbstand !== null ? `parallel zum AV-Bord, Fahrbahn ${f1(fs.breite)} m senkrecht zum Bord im Median, ${fs.nSehnen} Querschnitte; ` +
-        `am Nullpunkt ${seiteOsm(l)})` :
-        zProfil ? `AV-Querschnitte der Zufahrt je Stelle, Fahrbahn ${f1(fs.breite)} m im Median, ${rp!.n} Sehnen; Lage folgt der Fahrbahn, ` +
+        (zProfil ? `AV-Querschnitte der Zufahrt je Stelle, Fahrbahn ${f1(fs.breite)} m im Median, ${rp!.n} Sehnen; Lage folgt der Fahrbahn, ` +
         `am Nullpunkt ${seiteOsm(l)})` : `AV-Querschnitt der Zufahrt, Fahrbahn ${f1(fs.breite)} m, ${fs.nSehnen} Sehnen)`)
       zQuelle = zText(zLage)
     } else {
@@ -896,11 +825,7 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
   }
   }
   const zProf = zProfil
-  // A7: mit Bord die Parallele zur Führungslinie rechts (aus Sicht des wartenden Fahrzeugs) im Abstand zBordAbstand, in Lücken des Bords
-  // aus dem Randprofil (amRand); sonst wie bisher die OSM-Linie mit der Lage je Stelle bzw. fester Lage
-  const zAbstand = zBordAbstand
-  const zAchseBerechnet = mitVerlaengerung(zAbstand !== null && zQs ? amRand(zMl, zQs, 'links', () => zAbstand) :
-    zProf ? versetztVariabel(zMl, s => profilBei(zProf.s, zProf.lage, s)) : versetzt(zMl, zLage))
+  const zAchseBerechnet = mitVerlaengerung(zProf ? versetztVariabel(zMl, s => profilBei(zProf.s, zProf.lage, s)) : versetzt(zMl, zLage))
   // F_B seitlich von Hand (Korrektur, wenn die App die Fahrlinie falsch legt, z. B. wegen einer Sperrfläche): die ganze Zufahrtsachse wandert
   // parallel, D, K und der Nullpunkt folgen, B bleibt. Die Achse läuft vom Knoten weg: links der fahrenden Person liegt rechts von ihr
   const zVersatz = ke.zufahrtVersatz ?? 0
@@ -919,16 +844,6 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
   const dSeitlich = zufahrtVelo ? 0 : FAHRERSITZ_M
   const beob = beobachtungspunkt(zAchse, rand, B, kp, VERLAENGERUNG_M + nah, dSeitlich)
   if (!beob.randGefunden) hinweise.push('Die Zufahrtsachse schneidet den Rand der Vortrittsstrasse nicht: Rand im Abstand der halben Fahrbahn angenommen.')
-  // A7: Nullpunkt bzw. D in einer Lücke des AV-Bords (Arm bzw. Zufahrt mit Bord, dort aber «Rand unbekannt»): aus OSM geschätzt; über
-  // die Einmündung zwischen zwei Anschlusspunkten (randDurchKnoten) kommt der Rand aus dem Bord beider Arme
-  else if (rvRand || !(r0.anker && r1.anker)) {
-    const j = rvRand ? 1 : dist(beob.rand, lot(randTeile[0].linie, beob.rand).p) <= dist(beob.rand, lot(randTeile[1].linie, beob.rand).p) ? 0 : 1
-    const { ml, qs } = haupt[j].seiteZ
-    if (qs.bord && randOhneBord(qs, randTeile[j].seite, Math.round(lot(ml, beob.rand).s), Math.round(lot(ml, beob.rand).s)) > 0)
-      hinweise.push(`Rand der Vortrittsstrasse (${armText(haupt[j].arm)}) an der Zufahrt ohne AV-Bord (Rand unbekannt): Nullpunkt aus OSM geschätzt.`)
-  }
-  if (zAbstand !== null && zQs && randOhneBord(zQs, 'links', Math.round(lot(zMl, beob.Dachse).s), Math.round(lot(zMl, beob.Dachse).s)) > 0)
-    hinweise.push('Rand der Zufahrt bei D ohne AV-Bord (Rand unbekannt): Achse des Zufahrtsstreifens dort aus OSM geschätzt.')
   // Trottoir zwischen Zufahrt und Vortrittsstrasse (AV): F_B wartet vor dem Trottoir, ausser es ist frei von Hindernissen
   const tr = trottoirAnZufahrt(zAchse, beob.sRand, p => k.trottoir.art(p) !== null)
   const trAt = 'sHinter' in tr ? tr : null
@@ -1203,9 +1118,8 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
   let rechtsvortritt: RechtsvortrittErgebnis | null = null
   if (rv) {
     const rr = richtungen.find(r => r.richtung === 'rechts')!
-    // A7: Breite senkrecht zum Bord, wo er vorliegt (fahrbahnBreite)
-    const breite = (q: Querschnitt) => (q.annahme ? null : fahrbahnBreite(q))
-    const qsZ = g ? null : zQs ?? querschnitt(netz, fahrbahn, zMl, zArm.wid, undefined, undefined, zLinie?.abschnitte ?? [])
+    const breite = (q: Querschnitt) => (q.annahme ? null : q.links + q.rechts)
+    const qsZ = g ? null : querschnitt(netz, fahrbahn, zMl, zArm.wid, undefined, undefined, zLinie?.abschnitte ?? [])
     const bZ = qsZ ? breite(qsZ) : null, bR = rArm ? breite(haupt[1].qs) : null
     const schmal = !!rArm && [bZ, bR].some(b => b !== null && b <= SCHMAL_M + 1e-6)
     let sichtfeld: RvArm['sichtfeld'] = null
@@ -1214,8 +1128,7 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
       // seinem Fahrstreifen: Achse des Zufahrtsstreifens bzw. Fahrstreifenachse des rechten Arms. Beide ab ihrem Schnittpunkt
       const eng = (b: number | null) => b !== null && b <= SCHMAL_M + 1e-6
       // Fahrbahnmitte je Stelle (ohne genügend AV-Querschnitte je Stelle aus dem Median)
-      // A7: mit Bord auf beiden Seiten die Mitte zwischen den Führungslinien (fahrbahnMitte)
-      const mitte = (ml: P[], q: Querschnitt) => mitVerlaengerung(fahrbahnMitte(ml, q))
+      const mitte = (ml: P[], q: Querschnitt) => mitVerlaengerung(versetztVariabel(ml, s => (randLinksBei(q, s) - randRechtsBei(q, s)) / 2))
       // Velo gegen die Einbahn auf der Zufahrt (E4): der Pfad liegt auf der Achse der Velos, nicht auf der Fahrbahnachse
       const a1 = eng(bZ) && !zufahrtVelo ? mitte(zMl, qsZ!) : zAchse, a2 = eng(bR) ? mitte(haupt[1].ml, haupt[1].qs) : mitVerlaengerung(rr.achse)
       if (zufahrtVelo) hinweise.push('Abb. 5: auf der Zufahrt fahren nur Velos gegen die Einbahn; der Pfad auf der Zufahrt liegt auf ihrer Achse.')
@@ -1386,7 +1299,7 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
       if (g0) { grund.push(`${lageKurz(r)}: ${g0}`); continue }
       const h = haupt[j]
       // Achse des Gegenfahrstreifens: D_MFZ_M vom anderen Rand, Rand je Stelle
-      const au = mitVerlaengerung(amRand(h.ml, h.qs, 'rechts', () => D_MFZ_M))
+      const au = mitVerlaengerung(versetztVariabel(h.ml, s => -(randRechtsBei(h.qs, s) - D_MFZ_M)))
       const xu = schnittBei(zAchse, au, kp)
       const achseU = abBogen(au, xu ? xu.sb : lot(au, kp).s)
       const teil = sichtTeil(D, achseU, r.sMax, [...k.gebaeude, ...hv], r.massgebend)
@@ -1555,9 +1468,7 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
   }
 
   // technische Herleitung: Achse der Zufahrt (bzw. des Velogegenverkehrs) am Nullpunkt und Längsneigung der Zufahrt (ohne Wirkung)
-  // A7: mit Bord die seitliche Lage des Nullpunkts zur OSM-Linie (positiv rechts in Fahrtrichtung zum Knoten)
-  const zufahrtLageQuelle = zText ? zText(zAbstand !== null ? -lageAnAchse(zMl, vorgabe.nullpunkt).seitlich :
-    zLageBei(lot(zMl, vorgabe.nullpunkt).s)) : zQuelle
+  const zufahrtLageQuelle = zText ? zText(zLageBei(lot(zMl, vorgabe.nullpunkt).s)) : zQuelle
   herleitung.unshift(`${zufahrtLageQuelle}.`, ...(zufahrtNeigung?.i !== null && zufahrtNeigung?.i !== undefined ? [`Längsneigung der ` +
     `Zufahrt ${fi(zufahrtNeigung.i)} % in Fahrtrichtung von F_B (${zufahrtNeigung.quelle}; ohne Wirkung` +
     `${Math.abs(zufahrtNeigung.i) > ZUFAHRT_STEIL_PROZENT ? ', steile Zufahrt' : ''}).`] : []))
@@ -1575,8 +1486,7 @@ function rechneZufahrt(k: Kontext, info: KnotenInfo, zArm: ArmInfo, vorgeschlage
     D, Dachse, Dvorgabe: vorgabe.D, Dhand: !!ke.D, Dlage, fbRichtung, fbDachse, fbHand: !!ke.fbRichtung, zufahrtVersatz: zVersatz || null, rand: beob.rand, nullpunkt: vorgabe.nullpunkt, nullpunktText,
     ...(!haltelinie && !abRadweg && (!trAt || ke.trottoirFrei || tue) && beob.randGefunden ? { bBezug: {
       linie: abschneiden(abBogen(rand, Math.max(0, lot(rand, beob.rand).s - 6)), 12),
-      quelle: `Fahrstreifenkante für B, aus ${haupt.some(h => h.seiteZ.qs.annahme) ? 'angenommener Fahrbahnbreite' :
-        haupt.every(h => h.seiteZ.qs.bord) ? 'dem AV-Bord' : 'AV-Querschnitten'} ` +
+      quelle: `Fahrstreifenkante für B, aus ${haupt.some(h => h.seiteZ.qs.annahme) ? 'angenommener Fahrbahnbreite' : 'AV-Querschnitten'} ` +
         'abgeleitet und durch die Einmündung verlängert; keine erfasste Halte- oder Wartelinie.' } } : {}),
     regelung, regelungVorgabe: rVorgabe, regelungQuelle: rQuelle, regelungGewaehlt: ke.regelung !== null, haltelinie, trottoir, trottoirGrund, B,
     ausserorts: ao.ausserorts, zufahrtAchse: abschneiden(abBogen(zAchse, Math.max(0, beob.sRand - 2)), Math.max(B, bisD) + 12),
@@ -1767,8 +1677,7 @@ function richtungRechnen(k: Kontext, richtung: Richtung, lage: Lage, a: ArmInfo,
   const jeStelle = (wert: (f: Velofuehrung) => number) => (x: number) => !vs.ab ? wert(vs.fuehrung) :
     wert(vs.fuehrung) + (wert(vs.ab.fuehrung) - wert(vs.fuehrung)) * Math.max(0, Math.min(1, (x - vs.ab.s) / VELO_WECHSEL_M))
   const veloAbzugBei = jeStelle(f => (f === 'radstreifen' ? RADSTREIFEN_M : 0))
-  // A7: mit Bord die Parallele zur Führungslinie des rechten Rands (amRand), in Lücken und ohne Bord wie bisher aus dem Randprofil
-  const faBerechnet = mitVerlaengerung(vs.ab ? amRand(ml, qs, 'links', x => D_MFZ_M + ps.abzug + veloAbzugBei(x)) :
+  const faBerechnet = mitVerlaengerung(vs.ab ? versetztVariabel(ml, x => randLinksBei(qs, x) - (D_MFZ_M + ps.abzug + veloAbzugBei(x))) :
     fahrstreifenAchse(ml, qs, D_MFZ_M + ps.abzug + veloAbzug))
   // F_A von Hand (Korrektur, wenn die App den Rand falsch erkannt hat): die Fahrlinie läuft parallel durch das Fahrzeug. Nur der seitliche
   // Versatz zählt; ml läuft vom Knoten weg, der rechte Rand des Verkehrs zum Knoten liegt links davon (Versatz positiv = näher am Rand)
@@ -1828,7 +1737,7 @@ function richtungRechnen(k: Kontext, richtung: Richtung, lage: Lage, a: ArmInfo,
       'Mitte des Gegenverkehrsstreifens') : lageText0) + '; Velo gegen die Einbahn: am für das Velo rechten, aus Sicht des Autoverkehrs ' +
       'linken Fahrbahnrand') + (vs.ab ? `; ab der Teilung der Fahrbahn nach ${Math.round(vs.ab.s)} m ${vs.ab.fuehrung === 'misch' ?
       `${f2(D_VELO_M)} m vom rechten Fahrbahnrand (Mischverkehr)` : `Mitte des Radstreifens`} (${vs.ab.quelle})` : '')
-    const vaBerechnet = mitVerlaengerung(vomRand !== null ? amRand(ml, qs, 'links', s => (vs.ab ? vomRandBei(s) : vomRand)) :
+    const vaBerechnet = mitVerlaengerung(vomRand !== null ? versetztVariabel(ml, s => randLinksBei(qs, s) - (vs.ab ? vomRandBei(s) : vomRand)) :
       versetzt(ml, versatz))
     // Veloachse von Hand (Korrektur, z. B. Parkfeld oder Rand falsch erkannt): parallel versetzt, positiv weg vom rechten Rand. ml läuft vom
     // Knoten weg, der rechte Rand dieses Verkehrs liegt links von ml: weg vom Rand = nach rechts von ml = negativer Versatz
@@ -1915,10 +1824,6 @@ function richtungRechnen(k: Kontext, richtung: Richtung, lage: Lage, a: ArmInfo,
       `Strecke bis A ${f1(pal.laengste)} m ${wertung}.` + (pal.beiA ? ' Der Zielpunkt bei A liegt im Schatten eines Stamms. ' +
       'Ziffer 11 verlangt, dass das Fahrzeug bei A sichtbar ist; das lässt sich hier nicht nachweisen: Status «offen», Sicht vor Ort prüfen.' : ''))
   }
-  // A7: Fahrlinie über Lücken des AV-Bords am rechten Rand («Rand unbekannt») bis zum Ende der Zielpunkte: dort aus OSM geschätzt
-  const ohneBord = randOhneBord(qs, 'links', 0, sMax)
-  if (ohneBord > 0) hinweise.push(`Rechter Fahrbahnrand auf ${ohneBord} m bis zum Ende der Zielpunkte ohne AV-Bord (Rand unbekannt): ` +
-    'Fahrlinie dort aus OSM geschätzt.')
   const velo = veloRechnen()
   hinweise.push(...endeHinweis(velo, A))
   return {
