@@ -17,8 +17,13 @@
 // ein einzelnes Feld von 5 m trifft bei 2 m Abstand schon 2 bis 3 Prüfpunkte und soll die Achse nicht verschieben.
 // Kreuzungspunkt K (Ziffer 4): Schnitt der Achse des Zufahrtsstreifens mit der Fahrstreifenachse; beide Achsen sind dafür über
 // den Knoten hinaus gerade verlängert (VERLAENGERUNG_M).
+// AV-Bord (Plan AV-Geometrie A7, 13.11.2026): liefert das Bordmodell (bordarm.ts) den Rand eines Arms, gilt er statt der Sehnen quer zur
+// OSM-Linie: Ränder je Stelle aus der Führungslinie, Breite senkrecht zum Bord (querschnitt mit bord); Fahrstreifen-, Velo- und
+// Überholachse sowie der Rand für B als Parallelen zur Führungslinie (amRand); Parkierungssonden am gemessenen Rand (sondenRechts).
+// In Lücken des Bords («Rand unbekannt») und ohne Bord rechnet alles wie bisher aus dem Randprofil («aus OSM geschätzt»).
 
 import { type P, add, dist, einheit, links, sub, median, segSchnitt } from '../geo'
+import { bordBis, type ArmBord, type Seite } from './bordarm'
 import type { OsmNetz } from './netz'
 import type { Fahrbahn } from './flaechen'
 import { SEHNE_HALB } from './flaechen'
@@ -196,6 +201,18 @@ export interface Querschnitt {
   /** Ränder je Stelle (Sehne nach links von u: profil.rechts = Rand links von u, profil.links = Rand rechts
    *  von u), ab QUER_VON_M bis zum Ende der Mittellinie; fehlt ohne genügend AV-Querschnitte (dann gilt der Median) */
   profil?: RandProfil
+  /** AV-Bord des Arms (A7): Führungslinie und gemessener Rand je Seite; profil dann ab dem Knoten aus der Führungslinie (Lage auf der
+   *  Achsnormalen), in Lücken zwischen den Bordstellen linear, eine Seite ganz ohne Bord aus den Sehnen wie bisher */
+  bord?: ArmBord
+  /** Seiten (links/rechts von u), deren Rand aus dem Bord kommt */
+  bordSeiten?: Record<Seite, boolean>
+  /** Fahrbahnbreite senkrecht zum Bord (Median der Querschnitte des Bordmodells von bis bis); fehlt ohne Bord auf beiden Seiten */
+  breite?: number
+}
+
+/** Fahrbahnbreite eines Querschnitts: senkrecht zum Bord, sonst Summe der Abstände zur Mittellinie */
+export function fahrbahnBreite(qs: Querschnitt): number {
+  return qs.breite ?? qs.links + qs.rechts
 }
 
 /** Abstand Mittellinie – Fahrbahnrand links von u bei der Bogenlänge s (Profil, sonst Median) */
@@ -215,9 +232,62 @@ export function randRechtsBei(qs: Querschnitt, s: number): number {
  * abschnitte (Beispiel Knoten 282773328; ArmLinie.abschnitte): ab jeder dieser Stellen ist die Fahrbahn eine andere (Teilung
  * in zwei Einbahnen, Zusammenführung): dort beginnt ein eigenes Randprofil mit eigener Bezugsbreite, sonst verwürfe es die schmalere
  * bzw. breitere Fahrbahn als Ausreisser. Abschnitte ohne Randprofil überbrückt profilBei (vor dem ersten gültigen konstant).
+ * bord (A7): AV-Bord des Arms auf derselben Mittellinie (bordarm.armBord); hat eine Seite an mindestens QUER_MIN Stellen von von bis bis
+ * eine Führungslinie, kommt ihr Rand aus dem Bord (querschnittBord).
  */
 export function querschnitt(netz: OsmNetz, fahrbahn: Fahrbahn, mittellinie: P[], wid: number, von = QUER_VON_M, bis = QUER_BIS_M,
-  abschnitte: number[] = []): Querschnitt {
+  abschnitte: number[] = [], bord: ArmBord | null = null): Querschnitt {
+  const alt = querschnittSehnen(netz, fahrbahn, mittellinie, wid, von, bis, abschnitte)
+  if (!bord) return alt
+  // Teilung der Fahrbahn: der Bord gilt bis zur ersten Teilung, dahinter wie bisher die Sehnen je Abschnitt (bordBis)
+  const teilung = abschnitte.length ? Math.min(...abschnitte) : Infinity
+  return querschnittBord(alt, bordBis(bord, teilung), mittellinie, von, bis, teilung)
+}
+
+const f1q = (x: number) => x.toFixed(1).replace('.', ',')
+/**
+ * Querschnitt aus dem AV-Bord (A7). Je Stelle ab dem Knoten (QUER_SCHRITT_M) die Lage der Führungslinie auf der Achsnormalen; in Lücken
+ * zwischen Bordstellen linear (davor und danach konstant, wie profilBei), eine Seite mit weniger als QUER_MIN Bordstellen von von bis
+ * bis ganz aus den Sehnen (alt). Breite = Median der Querschnitte des Bordmodells von von bis bis (senkrecht zum Bord, gemessener Rand).
+ * links/rechts = Median der Lagen von von bis bis (wie bisher auf der Achsnormalen). Ohne Bord auf beiden Seiten: alt.
+ */
+export function querschnittBord(alt: Querschnitt, bord: ArmBord, mittellinie: P[], von = QUER_VON_M, bis = QUER_BIS_M,
+  teilung = Infinity): Querschnitt {
+  const L = streckeLaenge(mittellinie)
+  const st: number[] = []
+  for (let s = 0; s <= L + 1e-9; s += QUER_SCHRITT_M) st.push(s)
+  if (L - st[st.length - 1] > 1e-6) st.push(L)
+  const imFenster = (s: number) => s >= von - 1e-9 && s <= bis + 1e-9
+  // Lage je Stelle: Abstand zum Rand links von u bzw. rechts von u (positiv), null ohne Führungslinie
+  const lagen = (X: Seite) => st.map(s => { const f = bord.fuehrung(X, s); return f ? Math.abs(f.quer) : null })
+  const roh: Record<Seite, (number | null)[]> = { links: lagen('links'), rechts: lagen('rechts') }
+  const ok: Record<Seite, boolean> = { links: false, rechts: false }
+  for (const X of ['links', 'rechts'] as const) ok[X] = roh[X].filter((x, i) => x !== null && imFenster(st[i])).length >= QUER_MIN
+  if (!ok.links && !ok.rechts) return alt
+  const fuellen = (X: Seite, altBei: (s: number) => number): number[] => {
+    if (!ok[X]) return st.map(altBei)
+    const s0 = st.filter((_, i) => roh[X][i] !== null), w0 = roh[X].filter((x): x is number => x !== null)
+    return st.map((s, i) => roh[X][i] ?? (s > teilung + 1e-9 ? altBei(s) : profilBei(s0, w0, s)))
+  }
+  const li = fuellen('links', s => randLinksBei(alt, s)), re = fuellen('rechts', s => randRechtsBei(alt, s))
+  const fenster = st.map((_, i) => i).filter(i => imFenster(st[i]))
+  const breiten = ok.links && ok.rechts ? fenster.map(i => bord.breite(st[i])).filter((b): b is number => b !== null) : []
+  const breite = breiten.length >= QUER_MIN ? median(breiten) : undefined
+  const nBord = st.filter((_, i) => (ok.links && roh.links[i] !== null) || (ok.rechts && roh.rechts[i] !== null)).length
+  const profil: RandProfil = { s: st, rechts: li, links: re, n: nBord, verworfen: 0, breite: breite ?? median(fenster.map(i => li[i] + re[i])) }
+  const lueckenL = ok.links ? roh.links.filter((x, i) => x === null && imFenster(st[i]) && st[i] <= teilung).length : 0
+  const lueckenR = ok.rechts ? roh.rechts.filter((x, i) => x === null && imFenster(st[i]) && st[i] <= teilung).length : 0
+  const teile = [breite !== undefined ? `Fahrbahn ${f1q(breite)} m senkrecht zum Bord, Median aus ${breiten.length} Querschnitten` : '',
+    ok.links && ok.rechts ? 'Ränder je Stelle aus dem Bord' : `ein Rand aus dem Bord, der andere ohne AV-Bord aus OSM geschätzt (${alt.quelle})`,
+    lueckenL + lueckenR ? 'Lücken im Bord (Rand unbekannt) aus der OSM-Linie geschätzt' : '',
+    teilung < Infinity ? `ab der Teilung der Fahrbahn nach ${Math.round(teilung)} m aus den AV-Sehnen wie bisher` : '', 'Lage folgt der Fahrbahn'].filter(x => x)
+  return { links: median(fenster.map(i => li[i])), rechts: median(fenster.map(i => re[i])), quelle: `AV-Bord (${teile.join('; ')})`,
+    annahme: alt.annahme && !(ok.links && ok.rechts), profil, bord, bordSeiten: ok, ...(breite !== undefined ? { breite } : {}) }
+}
+
+/** Querschnitt aus den Sehnen quer zur Mittellinie (bis A7 die einzige Rechnung; ohne Bord weiterhin) */
+function querschnittSehnen(netz: OsmNetz, fahrbahn: Fahrbahn, mittellinie: P[], wid: number, von: number, bis: number,
+  abschnitte: number[]): Querschnitt {
   const ab: number[] = []
   for (let s = von; s <= bis + 1e-9; s += QUER_SCHRITT_M) ab.push(s)
   const li: number[] = [], re: number[] = [], sGut: number[] = []
@@ -263,7 +333,52 @@ export function querschnitt(netz: OsmNetz, fahrbahn: Fahrbahn, mittellinie: P[],
 
 /** Fahrstreifenachse des Verkehrs, der auf dem Arm zum Knoten fährt: d vom rechten Rand (links von u), vom Knoten weg */
 export function fahrstreifenAchse(mittellinie: P[], qs: Querschnitt, d = D_MFZ_M): P[] {
-  return versetztVariabel(mittellinie, s => randLinksBei(qs, s) - d)
+  return amRand(mittellinie, qs, 'links', () => d)
+}
+
+/**
+ * Linie im Abstand abstand(s) vom Rand der Seite (links bzw. rechts von u) zur Fahrbahn hin, vom Knoten weg je schritt (A7): mit Bord
+ * die Parallele zur Führungslinie (Punkt der Führungslinie auf der Achsnormalen bei s plus abstand senkrecht zum Bord), in Lücken des
+ * Bords und ohne Bord wie bisher die Mittellinie, um das Randprofil weniger abstand versetzt (versetztVariabel). Ein negativer Abstand
+ * liegt ausserhalb der Fahrbahn (z. B. Aussenkante eines Radwegs).
+ * Beispiel: Rand links von u auf N 3, OSM-Linie 5° schief, abstand 1,50 → alle Punkte auf N 1,50 (nicht 3 − 1,50 / cos 5°).
+ */
+export function amRand(mittellinie: P[], qs: Querschnitt, seite: Seite, abstand: (s: number) => number, schritt = 1): P[] {
+  const sg = seite === 'links' ? 1 : -1
+  const randBei = (s: number) => (seite === 'links' ? randLinksBei(qs, s) : randRechtsBei(qs, s))
+  const bord = qs.bord && qs.bordSeiten?.[seite] ? qs.bord : null
+  if (!bord) return versetztVariabel(mittellinie, s => sg * (randBei(s) - abstand(s)), schritt)
+  const L = streckeLaenge(mittellinie)
+  const ab: number[] = []
+  for (let s = 0; s < L - 1e-9; s += schritt) ab.push(s)
+  ab.push(L)
+  return punkteAufSpur(mittellinie, ab).map(([q, t], i) => {
+    const s = ab[i], f = bord.fuehrung(seite, s)
+    return f ? add(f.p, f.innen, abstand(s)) : add(q, links(t), sg * (randBei(s) - abstand(s)))
+  })
+}
+
+/** Meter (je 1 m) von von bis bis, an denen die Linie amRand der Seite ohne AV-Bord liegt (Lücke bzw. ganze Seite «aus OSM geschätzt»);
+ *  0 ohne Bord am Arm (dann rechnet der Arm durchgehend wie bisher) */
+export function randOhneBord(qs: Querschnitt, seite: Seite, von: number, bis: number): number {
+  if (!qs.bord) return 0
+  if (!qs.bordSeiten?.[seite]) return Math.max(0, Math.floor(bis - von + 1e-9) + 1)
+  return qs.bord.luecke(seite, von, bis)
+}
+
+/** Fahrbahnmitte je Stelle: mit Bord auf beiden Seiten die Mitte der beiden Punkte der Führungslinien, sonst aus dem Randprofil */
+export function fahrbahnMitte(mittellinie: P[], qs: Querschnitt): P[] {
+  const bord = qs.bord && qs.bordSeiten?.links && qs.bordSeiten.rechts ? qs.bord : null
+  const alt = (q: P, t: P, s: number) => add(q, links(t), (randLinksBei(qs, s) - randRechtsBei(qs, s)) / 2)
+  if (!bord) return versetztVariabel(mittellinie, s => (randLinksBei(qs, s) - randRechtsBei(qs, s)) / 2)
+  const L = streckeLaenge(mittellinie)
+  const ab: number[] = []
+  for (let s = 0; s < L - 1e-9; s += 1) ab.push(s)
+  ab.push(L)
+  return punkteAufSpur(mittellinie, ab).map(([q, t], i) => {
+    const l = bord.fuehrung('links', ab[i]), r = bord.fuehrung('rechts', ab[i])
+    return l && r ? [(l.p[0] + r.p[0]) / 2, (l.p[1] + r.p[1]) / 2] as P : alt(q, t, ab[i])
+  })
 }
 
 // ---------------------------------------------------------------- Parkstreifen am rechten Rand (Abzug)
@@ -299,11 +414,16 @@ export function parkStreifen(sonden: P[], park: ParkRaster | null): ParkStreifen
     ...(streifen ? { ids: [...jeFeld.keys()] } : {}) }
 }
 
-/** Prüfpunkte am rechten Rand des Verkehrs zum Knoten (links von u, Abstand qs.links) entlang der Mittellinie von 0 bis bis */
+/** Prüfpunkte am rechten Rand des Verkehrs zum Knoten (links von u, Abstand qs.links) entlang der Mittellinie von 0 bis bis; mit Bord
+ *  (A7) PARK_SONDE_M senkrecht innerhalb des gemessenen Rands, wo er fehlt (Einmündung, Lücke) wie bisher aus dem Randprofil */
 export function sondenRechts(mittellinie: P[], qs: Querschnitt, bis: number): P[] {
   const ab: number[] = []
   for (let s = 0; s <= bis + 1e-9; s += QUER_SCHRITT_M) ab.push(s)
-  return punkteAufSpur(mittellinie, ab).map(([q, t], i) => add(q, links(t), randLinksBei(qs, ab[i]) - PARK_SONDE_M))
+  const bord = qs.bord && qs.bordSeiten?.links ? qs.bord : null
+  return punkteAufSpur(mittellinie, ab).map(([q, t], i) => {
+    const r = bord?.rand('links', ab[i])
+    return r ? add(r.p, r.innen, PARK_SONDE_M) : add(q, links(t), randLinksBei(qs, ab[i]) - PARK_SONDE_M)
+  })
 }
 
 const f2 = (x: number) => x.toFixed(2).replace('.', ',')

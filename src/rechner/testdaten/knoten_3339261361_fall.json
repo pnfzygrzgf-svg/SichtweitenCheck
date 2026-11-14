@@ -1,0 +1,25 @@
+{
+ "knoten": 3339261361,
+ "titel": "Philosophenweg, Befund S2/S3 (Browserprüfung A8, 14.11.2026)",
+ "zufahrten": [
+  null
+ ],
+ "zufahrtHerkunft": "Zufahrt = Vorschlag der App (428170764:0:1, Arm 2); vom Nutzer verwendete Zufahrt nicht überliefert, laut S2 Fahrzeug bei D auf der Seitenstrasse (Arm 2)",
+ "avZentrum": [
+  2599502.701794673,
+  1198998.4388993334
+ ],
+ "avRadius": 150,
+ "osmRadius": 300,
+ "eingaben": null,
+ "hindernisse": "knoten_3339261361_park.json (amtliche Parkfelder Stadt Bern, ±150 m, aufbereitet als KatasterFeld[] wie PARKKATASTER.bernpark.laden); wie die App: { hindernisse: [], verworfen: [], park: { felder, quellenangabe }, baeume: null }, nur wenn parkQuelleAmOrt(BFS der AV) eine Quelle liefert; Baumkataster aus (Vorgabe der App)",
+ "hoehen": null,
+ "tempoAmtlich": "knoten_3339261361_vsig.json (Geoportal Stadt Bern, Layer Signalisierte_Hoechstgeschwindigkeit, ±150 m um den Knoten, Rohantwort); wie die App: vsigRechnung(vsigAusGeoportal(roh), avZentrum, 150), nur wenn bernZustaendig(avZentrum, av)",
+ "einstellungen": "Standard der App ohne Handeingaben: KnotenFall { knoten, zufahrt, avZentrum, tempoAmtlich, hindernisse } mit avRadius; eingaben leer (KEINE_KNOTEN_EINGABEN), hoehen null. Nicht gesichert: Längsneigung (swisstopo bzw. DTM Stadt Bern, lädt die App nach der ersten Rechnung; ohne sie 0 %). Eigene Eingaben des Nutzers im Browser sind nicht bekannt.",
+ "abruf": {
+  "datum": "2026-11-14",
+  "osm": "overpass.osm.ch, overpassAbfrageKnoten(3339261361, 300) wie ladeOsmUmKnoten",
+  "av": "geodienste.ch WFS av_0 LCSF, avUrl(E, N, 150) um den Knoten (kein Nachladen nötig: avBedarf ≤ 150); Eigenschaften auf Art, Kanton, Qualitaet, BFSNr gekürzt wie die Kreisel-Testdaten"
+ },
+ "lizenz": "© OpenStreetMap-Mitwirkende (ODbL); AV Kanton Bern über geodienste.ch"
+}

@@ -1,0 +1,25 @@
+{
+ "knoten": 1021708,
+ "titel": "Dalmazi",
+ "zufahrten": [
+  "30119418:0:1"
+ ],
+ "zufahrtHerkunft": "Zufahrt aus A7",
+ "avZentrum": [
+  2600422.1845451957,
+  1199375.8350769894
+ ],
+ "avRadius": 150,
+ "osmRadius": 300,
+ "eingaben": null,
+ "hindernisse": "knoten_1021708_park.json (amtliche Parkfelder Stadt Bern, ±150 m, aufbereitet als KatasterFeld[] wie PARKKATASTER.bernpark.laden); wie die App: { hindernisse: [], verworfen: [], park: { felder, quellenangabe }, baeume: null }, nur wenn parkQuelleAmOrt(BFS der AV) eine Quelle liefert; Baumkataster aus (Vorgabe der App)",
+ "hoehen": null,
+ "tempoAmtlich": "knoten_1021708_vsig.json (Geoportal Stadt Bern, Layer Signalisierte_Hoechstgeschwindigkeit, ±150 m um den Knoten, Rohantwort); wie die App: vsigRechnung(vsigAusGeoportal(roh), avZentrum, 150), nur wenn bernZustaendig(avZentrum, av)",
+ "einstellungen": "Standard der App ohne Handeingaben: KnotenFall { knoten, zufahrt, avZentrum, tempoAmtlich, hindernisse } mit avRadius; eingaben leer (KEINE_KNOTEN_EINGABEN), hoehen null. Nicht gesichert: Längsneigung (swisstopo bzw. DTM Stadt Bern, lädt die App nach der ersten Rechnung; ohne sie 0 %). Eigene Eingaben des Nutzers im Browser sind nicht bekannt.",
+ "abruf": {
+  "datum": "2026-11-14",
+  "osm": "overpass.osm.ch, overpassAbfrageKnoten(1021708, 300) wie ladeOsmUmKnoten",
+  "av": "geodienste.ch WFS av_0 LCSF, avUrl(E, N, 150) um den Knoten (kein Nachladen nötig: avBedarf ≤ 150); Eigenschaften auf Art, Kanton, Qualitaet, BFSNr gekürzt wie die Kreisel-Testdaten"
+ },
+ "lizenz": "© OpenStreetMap-Mitwirkende (ODbL); AV Kanton Bern über geodienste.ch"
+}

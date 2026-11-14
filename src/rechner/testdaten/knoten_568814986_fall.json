@@ -1,0 +1,26 @@
+{
+ "knoten": 568814986,
+ "titel": "Schwarzenburgstrasse, Statuswechsel links aus A7",
+ "zufahrten": [
+  "1242757706:0:1",
+  "135171872:3:-1"
+ ],
+ "zufahrtHerkunft": "Zufahrten aus A7 (Statuswechsel links bei 1242757706:0:1)",
+ "avZentrum": [
+  2598596.093232893,
+  1197698.72240388
+ ],
+ "avRadius": 150,
+ "osmRadius": 300,
+ "eingaben": null,
+ "hindernisse": "knoten_568814986_park.json (amtliche Parkfelder Stadt Bern, ±150 m, aufbereitet als KatasterFeld[] wie PARKKATASTER.bernpark.laden); wie die App: { hindernisse: [], verworfen: [], park: { felder, quellenangabe }, baeume: null }, nur wenn parkQuelleAmOrt(BFS der AV) eine Quelle liefert; Baumkataster aus (Vorgabe der App)",
+ "hoehen": null,
+ "tempoAmtlich": "knoten_568814986_vsig.json (Geoportal Stadt Bern, Layer Signalisierte_Hoechstgeschwindigkeit, ±150 m um den Knoten, Rohantwort); wie die App: vsigRechnung(vsigAusGeoportal(roh), avZentrum, 150), nur wenn bernZustaendig(avZentrum, av)",
+ "einstellungen": "Standard der App ohne Handeingaben: KnotenFall { knoten, zufahrt, avZentrum, tempoAmtlich, hindernisse } mit avRadius; eingaben leer (KEINE_KNOTEN_EINGABEN), hoehen null. Nicht gesichert: Längsneigung (swisstopo bzw. DTM Stadt Bern, lädt die App nach der ersten Rechnung; ohne sie 0 %). Eigene Eingaben des Nutzers im Browser sind nicht bekannt.",
+ "abruf": {
+  "datum": "2026-11-14",
+  "osm": "overpass.osm.ch, overpassAbfrageKnoten(568814986, 300) wie ladeOsmUmKnoten",
+  "av": "geodienste.ch WFS av_0 LCSF, avUrl(E, N, 150) um den Knoten (kein Nachladen nötig: avBedarf ≤ 150); Eigenschaften auf Art, Kanton, Qualitaet, BFSNr gekürzt wie die Kreisel-Testdaten"
+ },
+ "lizenz": "© OpenStreetMap-Mitwirkende (ODbL); AV Kanton Bern über geodienste.ch"
+}
